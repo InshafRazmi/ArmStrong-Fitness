@@ -1,0 +1,32 @@
+# Preparation only: creating this Blueprint starts an initial deployment even
+# with autoDeployTrigger off. Do not create/publish without explicit authorization.
+# Select this file as the Blueprint path from the repository root.
+# The Free instance is for testing. Daily operation needs an appropriate paid
+# compute plan: free cold starts can exceed native enrollment/request deadlines.
+# Provision the restricted SQL login and database CA secret file before creation.
+# See docs/RENDER_SETUP.md; the local migration-owner URL cannot run production.
+services:
+  - type: web
+    name: armstrong-member-api
+    runtime: node
+    rootDir: server
+    plan: free
+    autoDeployTrigger: "off"
+    buildCommand: npm ci --include=dev --ignore-scripts --no-audit --no-fund && npm run typecheck && npm test
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: PUBLIC_API_ORIGIN
+        sync: false

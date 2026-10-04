@@ -1,0 +1,114 @@
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Modal, PageHeader } from '../components/ui/Modal'
+import { useGym } from '../context/GymContext'
+import { displayDate, money } from '../utils/format'
+import { errorText } from './DesktopGymProvider'
+import { minorUnits, type Snapshot, type ReceiptDocument } from './api'
+import { ReceiptView } from './ReceiptView'
+
+type Workflow = 'invoice' | 'receive' | 'allocate' | 'renew' | 'reverse'
+const titles: Record<Workflow, string> = { invoice: 'New invoice', receive: 'Receive membership payment', allocate: 'Allocate existing credit', renew: 'Renew membership', reverse: 'Reverse received payment' }
+const actions: Record<Workflow, string> = { invoice: 'Save invoice', receive: 'Save payment', allocate: 'Save allocation', renew: 'Save renewal and invoice', reverse: 'Confirm full reversal' }
+const amountText = (minor: number) => (minor / 100).toFixed(2)
+export function DesktopPaymentsPage() {
+  const { desktop } = useGym()
+  const native = desktop!.snapshot!
+  const [workflow, setWorkflow] = useState<Workflow | null>(null)
+  // Capture expected plan version/history at open, so a refresh cannot silently change the agreed renewal.
+  const [base, setBase] = useState<Snapshot | null>(null)
+  const [form, setForm] = useState({ requestId: '', memberId: '', periodId: '', invoiceId: '', paymentId: '', planId: '', amount: '', method: 'Cash' as 'Cash' | 'Card' | 'Transfer', description: '', startsOn: '', endsOn: '', reason: '' })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [receipt, setReceipt] = useState<ReceiptDocument | null>(null)
+  const [receiptBusy, setReceiptBusy] = useState(false)
+  const [receiptError, setReceiptError] = useState('')
+  const [receiptOpen, setReceiptOpen] = useState(false)
+  function open(kind: Workflow, memberId = native.members.find(member => member.active)?.id ?? '', invoiceId = '', paymentId = '') {
+    setBase(native); setWorkflow(kind); setError('')
+    const available = native.payments.find(payment => payment.memberId === memberId && payment.unallocatedMinor > 0)
+    setForm({ requestId: crypto.randomUUID(), memberId, periodId: '', invoiceId, paymentId: paymentId || available?.id || '', planId: native.plans.find(plan => plan.active && plan.priceMinor > 0)?.id ?? '', amount: '', method: 'Cash', description: '', startsOn: '', endsOn: '', reason: '' })
+  }
+  async function showReceipt(paymentId: string) {
+    setReceipt(null); setReceiptError(''); setReceiptOpen(true); setReceiptBusy(true)
+    try { setReceipt(await desktop!.paymentReceipt(paymentId)) }
+    catch (error) { setReceiptError(errorText(error)) }
+    finally { setReceiptBusy(false) }
+  }
+  function print() {
+    try { window.print() }
+    catch (error) { setReceiptError('Could not open the print dialog: ' + errorText(error)) }
+  }
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    if (busy || !workflow || !base) return
+    setBusy(true); setError('')
+    try {
+      const common = { requestId: form.requestId, memberId: form.memberId }
+      if (workflow === 'invoice') await desktop!.createInvoice({ ...common, membershipPeriodId: form.periodId || null, description: form.description, amountMinor: minorUnits(Number(form.amount)) })
+      if (workflow === 'receive') await desktop!.receivePayment({ ...common, invoiceId: form.invoiceId || null, amountMinor: minorUnits(Number(form.amount)), method: form.method })
+      if (workflow === 'allocate') await desktop!.allocatePayment({ requestId: form.requestId, paymentId: form.paymentId, invoiceId: form.invoiceId, amountMinor: minorUnits(Number(form.amount)) })
+      if (workflow === 'renew') {
+        const plan = base.plans.find(plan => plan.id === form.planId)
+        if (!plan) throw new Error('Select an active paid plan.')
+        const latest = base.periods.filter(period => period.memberId === form.memberId).sort((a, b) => b.endsOn.localeCompare(a.endsOn) || b.id.localeCompare(a.id))[0]
+        await desktop!.renewMembership({ ...common, planId: plan.id, planVersion: plan.version, expectedLastPeriodId: latest?.id ?? null, startsOn: form.startsOn, endsOn: form.endsOn })
+      }
+      if (workflow === 'reverse') await desktop!.reversePayment({ requestId: form.requestId, paymentId: form.paymentId, reason: form.reason })
+      setWorkflow(null)
+    } catch (error) { setError(errorText(error)) }
+    finally { setBusy(false) }
+  }
+  const capture = base ?? native
+  const invoices = capture.invoices.filter(invoice => invoice.memberId === form.memberId && invoice.outstandingMinor > 0)
+  const payments = capture.payments.filter(payment => payment.memberId === form.memberId && payment.unallocatedMinor > 0)
+  const periods = capture.periods.filter(period => period.memberId === form.memberId && period.priceMinor > 0 && !capture.invoices.some(invoice => invoice.membershipPeriodId === period.id))
+  const plan = capture.plans.find(plan => plan.id === form.planId)
+  const latest = capture.periods.filter(period => period.memberId === form.memberId).sort((a,b) => b.endsOn.localeCompare(a.endsOn) || b.id.localeCompare(a.id))[0]
+  const original = capture.payments.find(payment => payment.id === form.paymentId)
+  const invoice = invoices.find(invoice => invoice.id === form.invoiceId)
+  const credit = payments.find(payment => payment.id === form.paymentId)?.unallocatedMinor ?? 0
+  return <><PageHeader title="Payments" subtitle="Invoices, received payments, credit and saved receipts · SQLite" action="Receive payment" disabled={!native.members.some(member => member.active)} onAction={() => open('receive')}/>
+    <div className="finance-toolbar"><button className="secondary" disabled={!native.members.length} onClick={() => open('invoice')}>New invoice</button>
+      <button className="secondary" disabled={!native.payments.some(payment => payment.unallocatedMinor > 0)} onClick={() => { const payment = native.payments.find(payment => payment.unallocatedMinor > 0)!; open('allocate', payment.memberId, '', payment.id) }}>Allocate credit</button>
+      <button className="secondary" disabled={!native.members.some(member => member.active) || !native.plans.some(plan => plan.active && plan.priceMinor > 0)} onClick={() => open('renew')}>Renew membership</button></div>
+    {receiptError && !receiptOpen && <div role="alert" className="login-error">{receiptError}</div>}
+    <h3 className="finance-section">Member balances</h3>
+    <p className="form-note">Outstanding invoices and unallocated credit are shown separately. Credit settles an invoice only after allocation. Legacy received amounts create no invented invoice or membership.</p>
+    <div className="card table-card"><table><thead><tr><th>Member</th><th>Invoice outstanding</th><th>Unallocated credit</th><th>Net balance</th></tr></thead><tbody>{native.financialAccounts.map(account => <tr key={account.memberId}><td>{account.memberName}</td><td>{money(account.outstandingMinor / 100)}</td><td>{money(account.creditMinor / 100)}</td><td className={account.netBalanceMinor < 0 ? 'finance-credit' : ''}>{account.netBalanceMinor < 0 ? 'Credit ' : 'Due '}{money(Math.abs(account.netBalanceMinor) / 100)}</td></tr>)}</tbody></table></div>
+    <h3 className="finance-section">Invoices</h3>
+    <div className="card table-card"><table><thead><tr><th>Invoice</th><th>Member / description</th><th>Issued</th><th>Amount</th><th>Paid</th><th>Outstanding</th><th>Status</th><th>Action</th></tr></thead><tbody>{native.invoices.map(invoice => <tr key={invoice.id}>
+      <td className="finance-number">{invoice.number}</td><td>{invoice.memberName}<small className="foundation-id">{invoice.description}</small></td><td>{displayDate(invoice.issuedOn)}</td><td>{money(invoice.amountMinor / 100)}</td><td>{money(invoice.paidMinor / 100)}</td><td>{money(invoice.outstandingMinor / 100)}</td><td><span className={invoice.status === 'Paid' ? 'tag green' : 'tag amber'}>{invoice.status}</span></td><td>{invoice.memberId && invoice.outstandingMinor > 0 && <button className="link" onClick={() => open('receive', invoice.memberId!, invoice.id)}>Receive</button>}</td>
+    </tr>)}</tbody></table>{!native.invoices.length && <p className="foundation-empty">No invoices saved.</p>}</div>
+    <h3 className="finance-section">Received payments and reversals</h3>
+    <div className="card table-card"><table><thead><tr><th>Receipt</th><th>Member</th><th>Date / method</th><th>Cash effect</th><th>Allocated</th><th>Credit</th><th>Status</th><th>Actions</th></tr></thead><tbody>{native.payments.map(payment => <tr key={payment.id}>
+      <td className="finance-number">{payment.receiptNumber}</td><td>{payment.memberName}</td><td>{displayDate(payment.businessOn)}<small className="foundation-id">{payment.method}</small></td><td>{money(payment.netAmountMinor / 100)}</td><td>{money(payment.allocatedMinor / 100)}</td><td>{money(payment.unallocatedMinor / 100)}</td><td><span className={payment.status === 'Reversed' || payment.status === 'Reversal' ? 'tag red' : 'tag green'}>{payment.status}</span>{payment.reversalReason && <small className="foundation-id">{payment.reversalReason}</small>}</td>
+      <td><div className="finance-actions"><button className="link" disabled={receiptBusy} onClick={() => void showReceipt(payment.id)}>Receipt</button>{payment.unallocatedMinor > 0 && <button className="link" onClick={() => open('allocate', payment.memberId, '', payment.id)}>Allocate</button>}{!payment.reversesId && payment.status !== 'Reversed' && <button className="link" onClick={() => open('reverse', payment.memberId, '', payment.id)}>Reverse</button>}</div></td>
+    </tr>)}</tbody></table>{!native.payments.length && <p className="foundation-empty">No payments recorded.</p>}</div>
+    <h3 className="finance-section">Allocation history</h3>
+    <div className="card table-card"><table><thead><tr><th>Receipt</th><th>Invoice</th><th>Amount</th><th>Status</th></tr></thead><tbody>{native.allocations.map(allocation => <tr key={allocation.id}><td className="finance-number">{native.payments.find(payment => payment.id === allocation.paymentId)?.receiptNumber ?? allocation.paymentId}</td><td className="finance-number">{native.invoices.find(invoice => invoice.id === allocation.invoiceId)?.number ?? allocation.invoiceId}</td><td>{money(allocation.amountMinor / 100)}</td><td>{allocation.reversedBy ? 'Released by payment reversal' : 'Applied'}</td></tr>)}</tbody></table>{!native.allocations.length && <p className="foundation-empty">No allocations saved.</p>}</div>
+    {workflow && <Modal title={titles[workflow]} onClose={() => { if (!busy) setWorkflow(null) }}><form className="modal-form" onSubmit={event => void submit(event)}><fieldset className="foundation-fields" disabled={busy}>
+      {workflow !== 'reverse' && <label><span>Member</span><select value={form.memberId} onChange={event => { const memberId = event.target.value; setForm({ ...form, memberId, invoiceId: '', periodId: '', paymentId: capture.payments.find(payment => payment.memberId === memberId && payment.unallocatedMinor > 0)?.id ?? '', amount: '', description: '' }) }}>{capture.members.filter(member => member.active || (workflow !== 'renew' && member.id === form.memberId)).map(member => <option key={member.id} value={member.id}>{member.name}{!member.active ? ' (Archived — financial history)' : ''} — {member.id}</option>)}</select></label>}
+      {workflow === 'invoice' && <><label><span>Membership period (optional)</span><select value={form.periodId} onChange={event => { const period = periods.find(period => period.id === event.target.value); setForm({ ...form, periodId: period?.id ?? '', amount: period ? amountText(period.priceMinor) : '', description: period ? 'Membership: ' + period.planName : '' }) }}><option value="">General member invoice</option>{periods.map(period => <option key={period.id} value={period.id}>{period.planName} · {period.startsOn} – {period.endsOn}</option>)}</select></label>
+        <label><span>Description</span><input required maxLength={254} value={form.description} onChange={event => setForm({ ...form, description: event.target.value })}/></label></>}
+      {workflow === 'allocate' && <label><span>Received payment</span><select required value={form.paymentId} onChange={event => setForm({ ...form, paymentId: event.target.value, amount: '' })}><option value="">Select saved credit</option>{payments.map(payment => <option key={payment.id} value={payment.id}>{payment.receiptNumber} · credit {money(payment.unallocatedMinor / 100)}</option>)}</select></label>}
+      {(workflow === 'receive' || workflow === 'allocate') && <label><span>Invoice {workflow === 'receive' ? '(optional)' : ''}</span><select required={workflow === 'allocate'} value={form.invoiceId} onChange={event => setForm({ ...form, invoiceId: event.target.value })}><option value="">{workflow === 'receive' ? 'Leave received amount as credit' : 'Select outstanding invoice'}</option>{invoices.map(invoice => <option key={invoice.id} value={invoice.id}>{invoice.description} · outstanding {money(invoice.outstandingMinor / 100)} · {invoice.number}</option>)}</select></label>}
+      {['invoice','receive','allocate'].includes(workflow) && <label><span>Amount (Rs.)</span><input required type="number" min="0.01" step="0.01" max={workflow === 'allocate' ? Math.min(credit, invoice?.outstandingMinor ?? 0) / 100 : 1_000_000_000} readOnly={workflow === 'invoice' && Boolean(form.periodId)} value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value })}/></label>}
+      {workflow === 'receive' && <><label><span>Payment method</span><select value={form.method} onChange={event => setForm({ ...form, method: event.target.value as typeof form.method })}><option>Cash</option><option>Card</option><option>Transfer</option></select></label><p className="form-note">Only the selected invoice receives an allocation, up to its outstanding amount. Any excess remains credit. Receiving payment does not renew membership.</p></>}
+      {workflow === 'allocate' && <p className="form-note">Applies existing credit without recording cash again. Other members' invoices cannot receive this payment.</p>}
+      {workflow === 'renew' && <><label><span>Plan</span><select required value={form.planId} onChange={event => setForm({ ...form, planId: event.target.value })}>{capture.plans.filter(plan => plan.active && plan.priceMinor > 0).map(plan => <option key={plan.id} value={plan.id}>{plan.name} · {money(plan.priceMinor / 100)}</option>)}</select></label>
+        <p>Invoice amount: {money((plan?.priceMinor ?? 0) / 100)}{latest && <><br/>Latest last valid day: {displayDate(latest.endsOn)}</>}</p>
+        <label><span>Start date</span><input required type="date" min="1900-01-01" max="2200-12-31" value={form.startsOn} onChange={event => setForm({ ...form, startsOn: event.target.value })}/></label>
+        <label><span>Last valid day (inclusive)</span><input required type="date" min={form.startsOn || '1900-01-01'} max="2200-12-31" value={form.endsOn} onChange={event => setForm({ ...form, endsOn: event.target.value })}/></label>
+        <p className="form-note">Choose both dates explicitly; the start must follow the latest membership. Saves dates and invoice together. No automatic renewal or admission/debt policy is assumed. Zero-price plans use the existing date-only entry.</p></>}
+      {workflow === 'reverse' && <><p className="finance-number">{original?.receiptNumber}</p><p>{original?.memberName} · {money((original?.amountMinor ?? 0) / 100)} · {original?.method}</p>
+        <p className="form-note">Reverses the full received amount and releases all its allocations. Original payment, receipt and audit history are retained. Invoice balances reopen; membership dates remain in place. This does not execute a bank/card refund.</p>
+        <label><span>Reversal reason</span><input required maxLength={254} value={form.reason} onChange={event => setForm({ ...form, reason: event.target.value })}/></label></>}
+      <button className="primary" type="submit">{busy ? 'Saving…' : actions[workflow]}</button>
+    </fieldset>{error && <div role="alert" className="login-error">{error}</div>}</form></Modal>}
+    {receiptOpen && <Modal title="Saved receipt preview" onClose={() => { if (!receiptBusy) setReceiptOpen(false) }}>
+      {receiptBusy && <p>Reading saved receipt…</p>}{receiptError && <div role="alert" className="login-error">{receiptError}</div>}
+      {receipt && <><div className="finance-actions"><button className="primary" onClick={print}>Print / system preview</button></div><p className="form-note">Reprinting uses the saved receipt number and does not record another payment. Use the system dialog to preview, print or cancel.</p><ReceiptView document={receipt}/>{createPortal(<div className="finance-print-only"><ReceiptView document={receipt}/></div>, document.body)}</>}
+    </Modal>}
+  </>
+}

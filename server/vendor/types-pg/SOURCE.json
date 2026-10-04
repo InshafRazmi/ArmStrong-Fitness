@@ -1,0 +1,41 @@
+{
+  "repository": "https://github.com/DefinitelyTyped/DefinitelyTyped",
+  "commit": "97ba786e647c0899a2dd6d1b6807896762e725fa",
+  "upstreamVersion": "8.23.9999",
+  "files": [
+    {
+      "file": "index.d.mts",
+      "upstreamPath": "types/pg/index.d.mts",
+      "gitBlob": "a56545bab04faafe8dccdc59c0f0847aa1e101b5",
+      "sha256": "5aea76ab98173f2c230b1f78dc010da403da622c105c468ace9fe24e3b77883c"
+    },
+    {
+      "file": "index.d.ts",
+      "upstreamPath": "types/pg/index.d.ts",
+      "gitBlob": "9700c723c78a9ffc211445b012896962a7338950",
+      "sha256": "67f3d03f61a43f045851624e52ec438803ecf5d2247660f208bd9bcadb6ff298"
+    },
+    {
+      "file": "UPSTREAM.package.json",
+      "upstreamPath": "types/pg/package.json",
+      "gitBlob": "d66adc4343a59657cbd11934fca5619bed6c9f04",
+      "sha256": "66ff10dbee56ed3ab343c54cd951b088b7201efe613844a57db35b618260ebae"
+    },
+    {
+      "file": "lib/connection-parameters.d.ts",
+      "upstreamPath": "types/pg/lib/connection-parameters.d.ts",
+      "gitBlob": "951d48139a6eeab891e83753792000a34092edd3",
+      "sha256": "f347b7cc533c54be78d730df75fd6bbaf7af3d837d41b1659fe7d3e46524c08e"
+    },
+    {
+      "file": "lib/type-overrides.d.ts",
+      "upstreamPath": "types/pg/lib/type-overrides.d.ts",
+      "gitBlob": "972b5a984c3c6f064c76f84dc9723ee44d71dde8",
+      "sha256": "798367363a3274220cbed839b883fe2f52ba7197b25e8cb2ac59c1e1fd8af6b7"
+    }
+  ],
+  "license": {
+    "upstreamPath": "LICENSE",
+    "sha256": "0a48f63d7d32a49d196dce4b2e0cbc236c2cc8fef42cb20e005e4d5f813cc8f6"
+  }
+}

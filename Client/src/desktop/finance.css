@@ -1,0 +1,22 @@
+.finance-toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+.finance-section { margin: 24px 0 12px; }
+.finance-number { overflow-wrap: anywhere; font-size: 12px; max-width: 290px; }
+.finance-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.finance-credit { color: var(--amber); }
+.finance-print-only { display: none; }
+.finance-receipt { max-width: 320px; margin: 16px auto; padding: 16px; background: white; color: #111; font: 13px/1.4 Arial, sans-serif; }
+.finance-receipt h3, .finance-receipt h4 { color: #111; margin: 12px 0; text-align: center; }
+.finance-receipt p { color: #111; margin: 8px 0; }
+.finance-receipt dl { display: grid; grid-template-columns: 110px 1fr; gap: 6px; }
+.finance-receipt dd { margin: 0; overflow-wrap: anywhere; }
+.receipt-allocation { border-top: 1px dashed #777; padding-top: 6px; }
+.receipt-footnote { font-size: 11px; overflow-wrap: anywhere; }
+.receipt-status { border: 2px solid #111; padding: 8px; font-weight: bold; }
+@media print {
+  @page { margin: 4mm; }
+  html, body { min-width: 0 !important; }
+  body { background: white !important; margin: 0 !important; }
+  body > * { display: none !important; }
+  body > .finance-print-only { display: block !important; }
+  .finance-print-only .finance-receipt { width: 100%; max-width: 72mm; padding: 0; margin: 0 auto; box-sizing: border-box; }
+}

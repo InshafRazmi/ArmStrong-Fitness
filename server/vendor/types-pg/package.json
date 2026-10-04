@@ -1,0 +1,28 @@
+{
+  "name": "@types/pg",
+  "version": "8.23.9999",
+  "private": true,
+  "description": "Pinned DefinitelyTyped source snapshot for the installed pg 8.23 driver",
+  "license": "MIT",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./index.d.mts",
+      "require": "./index.d.ts"
+    },
+    "./lib/*": "./lib/*.d.ts"
+  },
+  "dependencies": {
+    "@types/node": "*",
+    "pg-protocol": "*",
+    "pg-types": "^2.2.0"
+  },
+  "files": [
+    "index.d.ts",
+    "index.d.mts",
+    "lib",
+    "LICENSE",
+    "SOURCE.json",
+    "UPSTREAM.package.json"
+  ]
+}

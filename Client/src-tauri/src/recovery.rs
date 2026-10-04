@@ -1,0 +1,621 @@
+use super::*;
+use rusqlite::{DatabaseName, OpenFlags};
+use sha2::{Digest, Sha256};
+use std::{fs, io::Write, path::PathBuf};
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BackupEnvelope {
+    pub format: String,
+    pub format_version: i64,
+    pub schema_version: i64,
+    pub created_at: String,
+    pub sha256: String,
+    pub data: Vec<u8>,
+}
+struct TemporaryFile(PathBuf);
+impl Drop for TemporaryFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+        let _ = fs::remove_file(format!("{}-wal", self.0.display()));
+        let _ = fs::remove_file(format!("{}-shm", self.0.display()));
+    }
+}
+pub(super) struct RestoreCandidate {
+    token: String,
+    file: TemporaryFile,
+    state: String,
+    checksum: String,
+}
+fn hash(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+fn io_error(error: std::io::Error) -> String {
+    format!("Backup/export operation failed: {error}")
+}
+fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
+    let mut options = fs::OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path).map_err(io_error)?;
+    file.write_all(bytes).map_err(io_error)?;
+    file.sync_all().map_err(io_error)?;
+    // Persist the directory entry before a recovery backup authorizes replacement.
+    #[cfg(unix)]
+    fs::File::open(path.parent().ok_or("Backup path has no parent")?)
+        .and_then(|directory| directory.sync_all())
+        .map_err(io_error)?;
+    Ok(())
+}
+fn schema(conn: &Connection) -> Result<Vec<(String, String)>> {
+    let mut stmt=conn.prepare("SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY name").map_err(db_error)?;
+    let values = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .map_err(db_error)?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(db_error);
+    values
+}
+fn verify_file(path: &Path, version: i64) -> Result<()> {
+    if !(1..=SCHEMA_VERSION).contains(&version) {
+        return Err("Unsupported backup schema version".into());
+    }
+    let conn = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(db_error)?;
+    if conn
+        .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+        .map_err(db_error)?
+        != version
+    {
+        return Err("Backup manifest/schema version mismatch".into());
+    }
+    integrity(&conn)?;
+    let expected = Connection::open_in_memory().map_err(db_error)?;
+    expected
+        .execute_batch(include_str!("../migrations/001_foundation.sql"))
+        .map_err(db_error)?;
+    if version >= 2 {
+        expected
+            .execute_batch(include_str!("../migrations/002_local_operations.sql"))
+            .map_err(db_error)?;
+    }
+    if version >= 3 {
+        expected
+            .execute_batch(include_str!("../migrations/003_finance.sql"))
+            .map_err(db_error)?;
+    }
+    if version >= 4 {
+        expected
+            .execute_batch(include_str!("../migrations/004_removal.sql"))
+            .map_err(db_error)?;
+    }
+    if version >= 5 {
+        expected
+            .execute_batch(include_str!("../migrations/005_member_sync.sql"))
+            .map_err(db_error)?;
+    }
+    if version >= 6 {
+        expected
+            .execute_batch(include_str!("../migrations/006_member_conflicts.sql"))
+            .map_err(db_error)?;
+    }
+    if schema(&conn)? != schema(&expected)? {
+        return Err("Backup contains an unrecognized schema, index or trigger".into());
+    }
+    // Validate legacy calendar fields too; SQL integrity alone cannot establish valid business dates.
+    let mut stmt=conn.prepare("SELECT joined_on FROM members UNION ALL SELECT starts_on FROM membership_periods UNION ALL SELECT ends_on FROM membership_periods").map_err(db_error)?;
+    for value in stmt
+        .query_map([], |r| r.get::<_, String>(0))
+        .map_err(db_error)?
+    {
+        date(&value.map_err(db_error)?)?;
+    }
+    Ok(())
+}
+fn summary(snapshot: &Value) -> Value {
+    json!({"members":snapshot["members"].as_array().map_or(0,Vec::len),"periods":snapshot["periods"].as_array().map_or(0,Vec::len),"payments":snapshot["payments"].as_array().map_or(0,Vec::len),"sales":snapshot["sales"].as_array().map_or(0,Vec::len),"expenses":snapshot["expenses"].as_array().map_or(0,Vec::len),"pending":snapshot["pending"],"auditCount":snapshot["auditCount"]})
+}
+impl Store {
+    fn files_dir(&self) -> Result<PathBuf> {
+        let path = self.path.with_extension("backups");
+        fs::create_dir_all(&path).map_err(io_error)?;
+        Ok(path)
+    }
+    pub fn backup_envelope(&self) -> Result<BackupEnvelope> {
+        let file = TemporaryFile(self.files_dir()?.join(format!("snapshot-{}.sqlite3", id())));
+        write_new(&file.0, &[])?;
+        self.conn
+            .backup(DatabaseName::Main, &file.0, None)
+            .map_err(db_error)?;
+        verify_file(&file.0, SCHEMA_VERSION)?;
+        let data = fs::read(&file.0).map_err(io_error)?;
+        Ok(BackupEnvelope {
+            format: "armstrong-sqlite-backup".into(),
+            format_version: 1,
+            schema_version: SCHEMA_VERSION,
+            created_at: Utc::now().to_rfc3339(),
+            sha256: hash(&data),
+            data,
+        })
+    }
+    pub fn export_backup(&self) -> Result<Value> {
+        let envelope = self.backup_envelope()?;
+        let path = self
+            .files_dir()?
+            .join(format!("armstrong-{}.armstrong-backup.json", id()));
+        write_new(
+            &path,
+            &serde_json::to_vec(&envelope).map_err(|e| e.to_string())?,
+        )?;
+        Ok(json!({"path":path,"sha256":envelope.sha256}))
+    }
+    pub fn preview_restore(&mut self, envelope: BackupEnvelope) -> Result<Value> {
+        self.restore_candidate = None;
+        if envelope.format != "armstrong-sqlite-backup"
+            || envelope.format_version != 1
+            || envelope.data.is_empty()
+            || envelope.data.len() > 64 * 1024 * 1024
+        {
+            return Err("Select a supported native SQLite backup (maximum 64 MiB database), not browser demo JSON".into());
+        }
+        if hash(&envelope.data) != envelope.sha256 {
+            return Err("Backup checksum mismatch; no data was changed".into());
+        }
+        let file = TemporaryFile(
+            self.files_dir()?
+                .join(format!("restore-preview-{}.sqlite3", id())),
+        );
+        write_new(&file.0, &envelope.data)?;
+        verify_file(&file.0, envelope.schema_version)?;
+        let candidate = Store::open(&file.0)?; // Migrate only the isolated copy, never the live store at preview.
+        let source_device: String = candidate
+            .conn
+            .query_row(
+                "SELECT value FROM metadata WHERE key='device_id'",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(db_error)?;
+        let device: String = self
+            .conn
+            .query_row(
+                "SELECT value FROM metadata WHERE key='device_id'",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(db_error)?;
+        let mut current = self.snapshot()?;
+        // Session capability is runtime state, not a storage-change fingerprint.
+        current
+            .as_object_mut()
+            .unwrap()
+            .remove("removalAuthorization");
+        current["memberSync"]
+            .as_object_mut()
+            .unwrap()
+            .remove("reviewAuthorization");
+        let backup = candidate.snapshot()?;
+        if source_device != device && current["auditCount"].as_i64().unwrap_or(1) != 0 {
+            return Err(
+                "Backup is from another device; device-transfer reconciliation is not implemented"
+                    .into(),
+            );
+        }
+        // A single-file candidate must include migrated WAL contents before it can be used by restore.
+        candidate
+            .conn
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
+            .map_err(db_error)?;
+        drop(candidate);
+        let token = id();
+        let result = json!({"token":token,"current":summary(&current),"backup":summary(&backup),"schemaVersion":SCHEMA_VERSION,"sha256":envelope.sha256});
+        self.restore_candidate = Some(RestoreCandidate {
+            token,
+            file,
+            state: hash(current.to_string().as_bytes()),
+            checksum: envelope.sha256,
+        });
+        Ok(result)
+    }
+    pub fn restore_backup(&mut self, token: String) -> Result<Value> {
+        self.restore_checked(token, |_| Ok(()))
+    }
+    pub(super) fn restore_checked(
+        &mut self,
+        token: String,
+        after_copy: impl FnOnce(&Connection) -> Result<()>,
+    ) -> Result<Value> {
+        let candidate = self
+            .restore_candidate
+            .take()
+            .ok_or("Select and preview a backup before restoring")?;
+        if token != candidate.token {
+            return Err("Storage changed or confirmation expired. Preview the backup again; no data was replaced.".into());
+        }
+        verify_file(&candidate.file.0, SCHEMA_VERSION)?;
+        // Prepare reconciliation marker/audit/outbox inside the candidate. They arrive atomically with replacement.
+        let mut staged = Store::open(&candidate.file.0)?;
+        let actor: Option<(String, String)> = self
+            .conn
+            .query_row(
+                "SELECT user_id,label FROM temp.native_actor LIMIT 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .map_err(db_error)?;
+        if let Some((user, label)) = actor {
+            let same: bool = staged
+                .conn
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM users WHERE id=?1 AND subject=?2)",
+                    params![
+                        user,
+                        self.conn
+                            .query_row("SELECT subject FROM users WHERE id=?1", [&user], |r| r
+                                .get::<_, String>(
+                                0
+                            ))
+                            .map_err(db_error)?
+                    ],
+                    |r| r.get(0),
+                )
+                .map_err(db_error)?;
+            if !same {
+                return Err("Backup does not contain the verified restoration actor; administrator reconciliation is required before replacement".into());
+            }
+            staged
+                .conn
+                .execute(
+                    "INSERT INTO temp.native_actor VALUES(?1,?2)",
+                    params![user, label],
+                )
+                .map_err(db_error)?;
+        }
+        let tx = staged
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(db_error)?;
+        tx.execute("INSERT INTO metadata VALUES('restore_requires_reconciliation','1') ON CONFLICT(key) DO UPDATE SET value='1'",[]).map_err(db_error)?;
+        let auth_required:bool=self.conn.query_row("SELECT EXISTS(SELECT 1 FROM metadata WHERE key IN ('native_auth_required','member_sync_scope'))",[],|r|r.get(0)).map_err(db_error)?;
+        if auth_required {
+            tx.execute("INSERT INTO metadata VALUES('native_auth_required','1') ON CONFLICT(key) DO NOTHING",[]).map_err(db_error)?;
+        }
+        record(
+            &tx,
+            "restore",
+            &id(),
+            None,
+            None,
+            json!({"backupSha256":candidate.checksum,"requiresReconciliation":true}),
+        )?;
+        tx.commit().map_err(db_error)?;
+        staged
+            .conn
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
+            .map_err(db_error)?;
+        drop(staged);
+        verify_file(&candidate.file.0, SCHEMA_VERSION)?;
+        // A read-only connection can capture the committed WAL snapshot while the live
+        // IMMEDIATE transaction excludes writers, including other app processes.
+        let recovery_store = Store {
+            conn: Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(db_error)?,
+            path: self.path.clone(),
+            restore_candidate: None,
+            removal_session: None,
+        };
+        self.conn
+            .execute(
+                "ATTACH DATABASE ?1 AS armstrong_restore",
+                [candidate.file.0.to_string_lossy().as_ref()],
+            )
+            .map_err(db_error)?;
+        let result = (|| {
+            let tx = self
+                .conn
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(db_error)?;
+            if hash(snapshot_on(&tx)?.to_string().as_bytes()) != candidate.state {
+                return Err("Storage changed or confirmation expired. Preview the backup again; no data was replaced.".into());
+            }
+            let recovery = recovery_store.export_backup()?;
+            let triggers = {
+                let mut stmt = tx
+                    .prepare(
+                        "SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name",
+                    )
+                    .map_err(db_error)?;
+                let values = stmt
+                    .query_map([], |row| {
+                        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                    })
+                    .map_err(db_error)?
+                    .collect::<std::result::Result<Vec<_>, _>>()
+                    .map_err(db_error)?;
+                values
+            };
+            let mut tables = {
+                let mut stmt = tx.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").map_err(db_error)?;
+                let values = stmt
+                    .query_map([], |row| row.get::<_, String>(0))
+                    .map_err(db_error)?
+                    .collect::<std::result::Result<Vec<_>, _>>()
+                    .map_err(db_error)?;
+                values
+            };
+            // Insert parents first and delete children first. This also avoids deferred
+            // FK counters spanning the schema changes that reinstate history triggers.
+            let order = [
+                "metadata",
+                "plans",
+                "gym_settings",
+                "roles",
+                "users",
+                "user_roles",
+                "members",
+                "nfc_cards",
+                "membership_periods",
+                "attendance",
+                "payments",
+                "products",
+                "sales",
+                "sale_items",
+                "stock_movements",
+                "expenses",
+                "expense_voids",
+                "invoices",
+                "payment_allocations",
+                "invoice_details",
+                "payment_reversal_details",
+                "allocation_reversals",
+                "payment_receipts",
+                "audit",
+                "outbox",
+                "member_deliveries",
+                "member_remote_heads",
+                "member_sync_cursor",
+                "member_sync_conflicts",
+                "member_conflict_resolutions",
+                "member_resolved_conflicts",
+                "member_resolved_operations",
+                "local_operations",
+            ];
+            if tables.len() != order.len()
+                || tables.iter().any(|table| !order.contains(&table.as_str()))
+            {
+                return Err("Unrecognized restore table set; no records were replaced".into());
+            }
+            tables.sort_by_key(|table| order.iter().position(|name| *name == table).unwrap());
+            // Explicit reviewed restore is the only operation allowed to replace history.
+            // Both databases have canonical matching schemas, verified before this point.
+            tx.execute_batch("PRAGMA defer_foreign_keys=ON")
+                .map_err(db_error)?;
+            for (name, _) in &triggers {
+                tx.execute_batch(&format!("DROP TRIGGER {}", identifier(name)))
+                    .map_err(db_error)?;
+            }
+            for table in tables.iter().rev() {
+                tx.execute_batch(&format!("DELETE FROM {}", identifier(table)))
+                    .map_err(db_error)?;
+            }
+            for table in &tables {
+                let quoted = identifier(table);
+                tx.execute_batch(&format!(
+                    "INSERT INTO {quoted} SELECT * FROM armstrong_restore.{quoted}"
+                ))
+                .map_err(db_error)?;
+            }
+            for (_, sql) in &triggers {
+                tx.execute_batch(sql).map_err(db_error)?;
+            }
+            integrity(&tx)?;
+            after_copy(&tx)?; // Internal verification hook also exercises rollback after all tables copy.
+            tx.commit()
+                .map_err(|error| format!("Restore transaction could not commit: {error}"))?;
+            Ok(json!({"recoveryPath":recovery["path"],"requiresReconciliation":true}))
+        })();
+        let detached = self
+            .conn
+            .execute_batch("DETACH DATABASE armstrong_restore")
+            .map_err(db_error);
+        match result {
+            Err(error) => Err(error),
+            Ok(value) => {
+                self.removal_session = None;
+                detached.map_err(|error| {
+                    format!(
+                        "Restore committed, but cleanup failed: {error}. Recovery: {}",
+                        value["recoveryPath"]
+                    )
+                })?;
+                Ok(value)
+            }
+        }
+    }
+    pub fn export_report(&self, kind: String) -> Result<Value> {
+        self.export_report_range(kind, ReportRange::default())
+    }
+    pub fn export_report_range(&self, kind: String, range: ReportRange) -> Result<Value> {
+        let mut s = self.snapshot()?;
+        super::reports::filter_snapshot(&mut s, &range)?;
+        let mut records: Vec<Vec<String>> = vec![];
+        let header: Vec<&str> = match kind.as_str() {
+            "Attendance report" => {
+                for row in s["attendance"].as_array().unwrap() {
+                    records.push(vec![
+                        text(row, "id"),
+                        text(row, "memberId"),
+                        text(row, "name"),
+                        text(row, "businessOn"),
+                        text(row, "occurredAt"),
+                        text(row, "type"),
+                        text(row, "source"),
+                    ]);
+                }
+                vec![
+                    "ID",
+                    "Member ID",
+                    "Member",
+                    "Business date",
+                    "UTC time",
+                    "Type",
+                    "Source",
+                ]
+            }
+            "Membership report" => {
+                for row in s["periods"].as_array().unwrap() {
+                    records.push(vec![
+                        text(row, "id"),
+                        text(row, "memberId"),
+                        text(row, "planName"),
+                        text(row, "startsOn"),
+                        text(row, "endsOn"),
+                        minor(row, "priceMinor"),
+                        text(row, "status"),
+                    ]);
+                }
+                vec![
+                    "ID",
+                    "Member ID",
+                    "Plan snapshot",
+                    "Start date",
+                    "Last valid day",
+                    "Price LKR",
+                    "Status",
+                ]
+            }
+            "Income report" => {
+                for (table, amount) in [("payments", "netAmountMinor"), ("sales", "totalMinor")] {
+                    for row in s[table].as_array().unwrap() {
+                        records.push(vec![
+                            table.into(),
+                            text(row, "id"),
+                            text(row, "businessOn"),
+                            text(row, "method"),
+                            minor(row, amount),
+                        ]);
+                    }
+                }
+                vec!["Source", "ID", "Business date", "Method", "Received LKR"]
+            }
+            "Inventory report" => {
+                for row in s["products"].as_array().unwrap() {
+                    records.push(vec![
+                        text(row, "id"),
+                        text(row, "name"),
+                        text(row, "sku"),
+                        row["stock"].to_string(),
+                        minor(row, "costMinor"),
+                        minor(row, "priceMinor"),
+                        row["reorderLevel"].to_string(),
+                    ]);
+                }
+                vec![
+                    "ID",
+                    "Product",
+                    "SKU",
+                    "Stock",
+                    "Cost LKR",
+                    "Price LKR",
+                    "Reorder level",
+                ]
+            }
+            "Expense report" => {
+                for row in s["expenses"].as_array().unwrap() {
+                    records.push(vec![
+                        text(row, "id"),
+                        text(row, "title"),
+                        text(row, "category"),
+                        text(row, "businessOn"),
+                        text(row, "method"),
+                        minor(row, "amountMinor"),
+                        minor(row, "effectiveAmountMinor"),
+                        text(row, "status"),
+                        text(row, "voidReason"),
+                        text(row, "voidedAt"),
+                        text(row, "voidedBy"),
+                        text(row, "actor"),
+                    ]);
+                }
+                vec![
+                    "ID",
+                    "Description",
+                    "Category",
+                    "Business date",
+                    "Method",
+                    "Amount LKR",
+                    "Effective amount LKR",
+                    "Status",
+                    "Void reason",
+                    "Voided at",
+                    "Voided by",
+                    "Recorded by",
+                ]
+            }
+            "Audit report" => {
+                for row in s["audit"].as_array().unwrap() {
+                    records.push(vec![
+                        text(row, "id"),
+                        text(row, "action"),
+                        text(row, "entity"),
+                        text(row, "entityId"),
+                        text(row, "user"),
+                        text(row, "timestamp"),
+                        text(row, "beforeJson"),
+                        text(row, "afterJson"),
+                    ]);
+                }
+                vec![
+                    "ID",
+                    "Action",
+                    "Entity",
+                    "Entity ID",
+                    "Actor",
+                    "UTC time",
+                    "Before JSON",
+                    "After JSON",
+                ]
+            }
+            _ => return Err("Unknown report".into()),
+        };
+        let mut output = header.iter().map(|v| csv(v)).collect::<Vec<_>>().join(",") + "\r\n";
+        for row in &records {
+            output += &(row.iter().map(|v| csv(v)).collect::<Vec<_>>().join(",") + "\r\n");
+        }
+        let path = self.files_dir()?.join(format!("report-{}.csv", id()));
+        write_new(&path, output.as_bytes())?;
+        Ok(json!({"path":path,"rows":records.len(),"fromOn":range.from_on,"toOn":range.to_on}))
+    }
+}
+fn text(row: &Value, key: &str) -> String {
+    row[key].as_str().unwrap_or("").to_string()
+}
+fn minor(row: &Value, key: &str) -> String {
+    let value = row[key].as_i64().unwrap_or(0);
+    format!(
+        "{}{}.{:02}",
+        if value < 0 { "-" } else { "" },
+        value.unsigned_abs() / 100,
+        value.unsigned_abs() % 100
+    )
+}
+fn csv(value: &str) -> String {
+    let safe = if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        format!("'{value}")
+    } else {
+        value.to_string()
+    };
+    format!("\"{}\"", safe.replace('"', "\"\""))
+}
+
+fn identifier(name: &str) -> String {
+    format!("\"{}\"", name.replace('"', "\"\""))
+}

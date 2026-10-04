@@ -1,0 +1,42 @@
+{
+  "name": "armstrong-member-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "build:koyeb": "npm run typecheck && npm test",
+    "typecheck": "npm run types:verify && tsc --project tsconfig.json",
+    "db:check": "node --env-file-if-exists=.env scripts/check-database.ts",
+    "db:verify": "node --env-file-if-exists=.env scripts/verify-runtime-schema.ts",
+    "auth:check": "node --env-file-if-exists=.env scripts/check-admin-auth.ts",
+    "registration:check": "node --env-file-if-exists=.env scripts/register-administrator.ts check",
+    "registration:apply": "node --env-file-if-exists=.env scripts/register-administrator.ts apply",
+    "setup:check": "node --env-file-if-exists=.env scripts/check-setup.ts",
+    "api:check": "node --env-file-if-exists=.env scripts/check-api.ts",
+    "desktop:config:check": "node --env-file-if-exists=.env scripts/provision-desktop-config.ts check",
+    "desktop:config:write": "node --env-file-if-exists=.env scripts/provision-desktop-config.ts write",
+    "test:db": "node --env-file-if-exists=.env.test scripts/check-database.ts test",
+    "test:inspect": "node --env-file-if-exists=.env.test scripts/check-database.ts test-schema",
+    "start": "node --env-file-if-exists=.env src/main.ts",
+    "test": "node --test --test-isolation=none test/*.test.ts",
+    "test:integration": "npm run test:integration:supabase",
+    "test:integration:supabase": "node --env-file-if-exists=.env.test --test --test-isolation=none test/supabase.integration.ts",
+    "test:integration:postgres": "node --env-file-if-exists=.env.test --test --test-isolation=none test/member.integration.ts",
+    "test:config": "node --env-file-if-exists=.env.test scripts/check-test-config.ts",
+    "migrate": "node --env-file-if-exists=.env src/migrate.ts",
+    "types:verify": "node scripts/check-vendored-types.ts"
+  },
+  "dependencies": {
+    "@supabase/server": "^1.9.0",
+    "fastify": "5.12.5",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.0",
+    "@types/pg": "file:vendor/types-pg",
+    "typescript": "5.9.3"
+  }
+}

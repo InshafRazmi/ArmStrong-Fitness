@@ -1,0 +1,3 @@
+import type { ReactNode } from 'react'
+export function Modal({title,onClose,children}:{title:string;onClose:()=>void;children:ReactNode}){return <div className="modal-backdrop" onMouseDown={onClose}><section className="member-modal form-modal" onMouseDown={e=>e.stopPropagation()}><button className="modal-close" onClick={onClose}>×</button><h2>{title}</h2>{children}</section></div>}
+export function PageHeader({title,subtitle,action,onAction,disabled}:{title:string;subtitle:string;action?:string;onAction?:()=>void;disabled?:boolean}){return <div className="page-header"><div><h2>{title}</h2><p>{subtitle}</p></div>{action&&<button className="primary" disabled={disabled} onClick={onAction}>{action}</button>}</div>}

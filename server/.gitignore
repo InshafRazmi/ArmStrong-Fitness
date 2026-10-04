@@ -1,0 +1,16 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+.koyeb-upload/
+armstrong-koyeb-source.zip
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+desktop-auth.json
+certs/
+*.crt
+*.pem
+*.cer
