@@ -103,6 +103,106 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn renewal_rotates_private_tokens_and_reverifies_online_identity_and_device_scope() {
+    let f = Fixture::new();
+    let mut first = f.mock();
+    let verified = f.login(&mut first).unwrap();
+    let mut state = verified.renewal().unwrap();
+    for (previous, next) in [
+        ("unused-refresh-token", "rotated-private-token-1"),
+        ("rotated-private-token-1", "rotated-private-token-2"),
+    ] {
+        let mut responses = f.responses();
+        responses[0]["refresh_token"] = json!(next);
+        responses[2]["device"]["canWrite"] = json!(false);
+        let mut mock = Mock {
+            replies: responses.into_iter().map(|v| Ok(reply(v))).collect(),
+            requests: vec![],
+        };
+        let verified = renew(&mut mock, &f.config, &state)
+            .unwrap_or_else(|_| panic!("Valid mocked renewal refused"));
+        assert!(!verified.can_write);
+        assert_eq!(mock.requests.len(), 3);
+        assert_eq!(
+            mock.requests[0].url,
+            "https://auth.example/auth/v1/token?grant_type=refresh_token"
+        );
+        assert_eq!(
+            serde_json::from_slice::<Value>(mock.requests[0].body.as_ref().unwrap()).unwrap(),
+            json!({"refresh_token":previous})
+        );
+        assert!(mock.requests[1].url.ends_with("/auth/v1/user"));
+        assert!(mock.requests[2].url.ends_with("/v1/enrollment"));
+        for request in &mock.requests {
+            assert!(!request.url.contains(previous));
+        }
+        state = verified.renewal().unwrap();
+    }
+    assert_eq!(f.count("users"), 0);
+    assert_eq!(f.count("audit"), 0);
+}
+
+#[test]
+fn renewal_refuses_account_substitution_demoted_roles_and_foreign_gyms_without_local_grants() {
+    let f = Fixture::new();
+    let state = f.login(&mut f.mock()).unwrap().renewal().unwrap();
+    for (stage, field, value, requests) in [
+        (0, "subject", json!(id()), 1),
+        (1, "subject", json!(id()), 2),
+        (2, "role", json!("Reception"), 3),
+        (2, "gym", json!(id()), 3),
+    ] {
+        let mut responses = f.responses();
+        match field {
+            "subject" if stage == 0 => responses[stage]["user"]["id"] = value,
+            "subject" => responses[stage]["id"] = value,
+            "role" => responses[stage]["staff"]["role"] = value,
+            _ => responses[stage]["gym"]["id"] = value,
+        }
+        let mut mock = Mock {
+            replies: responses.into_iter().map(|v| Ok(reply(v))).collect(),
+            requests: vec![],
+        };
+        assert!(renew(&mut mock, &f.config, &state).is_err());
+        assert_eq!(mock.requests.len(), requests);
+        assert_eq!(f.count("users"), 0);
+        assert!(f.store.removal_session.is_none());
+    }
+}
+
+#[test]
+fn renewal_distinguishes_remote_refusal_from_outages_and_never_extends_unverified_access() {
+    let f = Fixture::new();
+    let state = f.login(&mut f.mock()).unwrap().renewal().unwrap();
+    let expiry = state.expires_at;
+    for status in [400, 401, 403, 429, 503] {
+        let mut response = reply(json!({"message":"private provider payload"}));
+        response.status = status;
+        let mut mock = Mock {
+            replies: [Ok(response)].into(),
+            requests: vec![],
+        };
+        let result = renew(&mut mock, &f.config, &state);
+        assert!(matches!(
+            (&result, status),
+            (Err(RefreshFailure::Refused), 400 | 401 | 403)
+                | (Err(RefreshFailure::Unavailable), 429 | 503)
+        ));
+        assert_eq!(state.expires_at, expiry);
+        assert_eq!(mock.requests.len(), 1);
+        assert!(f.store.removal_session.is_none());
+    }
+    let mut mock = Mock {
+        replies: [Err(ExchangeError::Unavailable)].into(),
+        requests: vec![],
+    };
+    assert!(matches!(
+        renew(&mut mock, &f.config, &state),
+        Err(RefreshFailure::Unavailable)
+    ));
+}
+
+#[test]
 fn native_auth_mock_checks_online_identity_then_enrolls_persisted_device_without_role_claims() {
     let mut f = Fixture::new();
     let mut mock = f.mock();

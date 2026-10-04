@@ -23,6 +23,9 @@ services:
         value: production
       - key: HOST
         value: 0.0.0.0
+      # Enable true only after provisioning onboarding migration version 2.
+      - key: AUTOMATIC_DEVICE_ENROLLMENT
+        sync: false
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL
@@ -31,4 +34,4 @@ services:
         sync: false
 # Render supplies RENDER=true and RENDER_EXTERNAL_URL for the initial startup.
 # Add PUBLIC_API_ORIGIN explicitly only when selecting a custom API domain.
-# Secret Files: mount the actual DB CA as /etc/secrets/prod-ca-2021.crt separately.
+# Secret Files: the current database URL expects /etc/secrets/hi3.crt.

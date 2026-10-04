@@ -1,8 +1,28 @@
 # Armstrong Fitness Gym Management
 
+## Windows installer
+
+Windows desktop installation is required; Linux support is optional. The Windows
+builder and Actions workflow include the approved public API/Auth settings and
+an offline WebView2 installer. Fresh packaged builds start locked at account
+login without requiring a settings file on each computer. Follow
+[Windows build/download and remaining acceptance work](docs/WINDOWS_INSTALLER.md).
+Account-based computer enrollment, bounded offline restart and native member
+reconnect sync are implemented and tested locally. The approval SQL and the
+Administrator registration are ready; deploy the updated API before testing.
+Financial/attendance/inventory cloud sync and real Windows acceptance remain
+unfinished; this is an acceptance build until those release gates pass.
+
+## Arch package
+
+The native x86_64 package is in `dist-linux/` with `SHA256SUMS`. See
+[Arch installation and verification limits](docs/ARCH_LINUX.md). It embeds the
+frontend and public server settings; destination computers do not need Node or
+Rust. Build it on Arch with `npm run desktop:arch:build`.
+
 ## Local foundation test build
 
-The native Tauri build supports SQLite-backed members/cards, explicit membership dates, attendance, invoices/payment allocations and saved receipts, sales/stock, expenses, audit, validated backups and date-filtered CSV reports. It is **a local test build**: production login and live sync are not connected, and protected removal/void commands remain locked. See [STATUS.md](STATUS.md) and [PLAN.md](PLAN.md) for verified coverage and release gates.
+The native Tauri build supports SQLite-backed members/cards, explicit membership dates, attendance, invoices/payment allocations and saved receipts, sales/stock, expenses, audit, validated backups and date-filtered CSV reports. Packaged builds require verified Administrator sign-in and OS credential storage. Native member synchronization is wired; other modules remain local. The ordinary unconfigured development build is explicitly for local test records. See [STATUS.md](STATUS.md) and [PLAN.md](PLAN.md) for measured checks and release gates.
 
 ```bash
 npm run desktop:run    # build embedded frontend and launch Tauri

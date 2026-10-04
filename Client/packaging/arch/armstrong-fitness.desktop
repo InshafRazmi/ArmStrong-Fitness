@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ArmStrong Fitness
+Comment=Gym members, attendance, payments and inventory
+Exec=armstrong-fitness
+Icon=armstrong-fitness
+Terminal=false
+Categories=Office;Finance;
+StartupWMClass=armstrong-desktop

@@ -30,6 +30,16 @@ test('desktop login exposes only email/password IPC and logout/status remain nat
   assert.deepEqual(calls,[{command:'desktop_auth_status',args:undefined},{command:'desktop_login',args:{email:'admin@example.test',password:'private-test-password'}},{command:'desktop_logout',args:undefined}])
   delete globalThis.window
 })
+test('offline unlock, session renewal and member sync expose no client identity, scope, credential or database path',async()=>{
+  const api=await import('../src/desktop/api.ts')
+  const calls=[]
+  globalThis.window={__TAURI__:{core:{invoke:async(command,args)=>{calls.push({command,args});throw new Error('Native authorization refused')}}}}
+  await assert.rejects(api.desktopUnlockOffline(),/authorization refused/)
+  await assert.rejects(api.desktopRenewSession(),/authorization refused/)
+  await assert.rejects(api.synchronizeMembers(),/authorization refused/)
+  assert.deepEqual(calls,[{command:'desktop_unlock_offline',args:undefined},{command:'desktop_renew_session',args:undefined},{command:'synchronize_members',args:undefined}])
+  delete globalThis.window
+})
 
 const member = { id: 'member-1', version: 7, active: true, archivedAt: null, archivedByUserId: null, canDelete: false, name: 'Local Member', phone: '0771234567', email: '', nfcId: 'CARD', joinedOn: '2026-01-01' }
 const plan = { id: 'plan-1', version: 3, name: 'Renamed plan', durationMonths: 1, priceMinor: 600050, active: true, activeMembers: 1 }

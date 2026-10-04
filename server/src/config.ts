@@ -21,8 +21,9 @@ export function config(env = process.env) {
   }
   if (env.NODE_ENV === 'production' && !apiOrigin) throw new ServerConfigurationError('Configure PUBLIC_API_ORIGIN for production HTTPS');
   const port = Number(env.PORT || 3000);
+  if (env.AUTOMATIC_DEVICE_ENROLLMENT !== undefined && !['true','false'].includes(env.AUTOMATIC_DEVICE_ENROLLMENT)) throw new ServerConfigurationError('AUTOMATIC_DEVICE_ENROLLMENT must be true or false');
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new ServerConfigurationError('Invalid PORT');
-  return { databaseUrl: env.DATABASE_URL!, supabaseUrl: supabase.origin, publishableKey, apiOrigin, host: env.HOST || '127.0.0.1', port };
+  return { databaseUrl: env.DATABASE_URL!, supabaseUrl: supabase.origin, publishableKey, apiOrigin, automaticEnrollment: env.AUTOMATIC_DEVICE_ENROLLMENT === 'true', host: env.HOST || '127.0.0.1', port };
 }
 
 // API startup has an additional guard. Administrative registration/probes use

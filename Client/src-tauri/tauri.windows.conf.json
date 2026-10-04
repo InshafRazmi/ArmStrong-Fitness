@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ArmStrong Fitness",
+  "build": { "beforeBuildCommand": "npm run build:desktop" },
+  "app": {
+    "windows": [{ "label": "main", "title": "ArmStrong Fitness", "width": 1440, "height": 900, "minWidth": 960, "minHeight": 640 }]
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
+    "shortDescription": "ArmStrong Fitness gym management",
+    "windows": {
+      "webviewInstallMode": { "type": "offlineInstaller" },
+      "nsis": { "installMode": "currentUser", "languages": ["English"], "startMenuFolder": "ArmStrong Fitness" }
+    }
+  }
+}

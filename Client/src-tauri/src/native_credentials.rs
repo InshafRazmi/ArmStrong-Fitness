@@ -10,6 +10,14 @@ pub(super) trait CredentialVault {
     fn create(&mut self, device: &str, secret: &str) -> Result<()>;
 }
 pub(super) struct OsVault;
+// Separate OS credential item for a bounded authorization grant. It never
+// shares or replaces the device possession secret and is absent from backups.
+pub(super) trait OfflineVault {
+    fn read_access(&mut self, device: &str) -> Result<Option<String>>;
+    fn save_access(&mut self, device: &str, value: &str) -> Result<()>;
+    fn clear_access(&mut self, device: &str) -> Result<()>;
+}
+pub(super) const ACCESS_LIMIT: usize = 2048;
 
 pub(super) fn checked_device(device: &str) -> Result<()> {
     let uuid = Uuid::parse_str(device).map_err(|_| "Invalid saved device identity")?;
@@ -187,6 +195,18 @@ impl CredentialVault for OsVault {
         windows::WindowsVault.create(device, secret)
     }
 }
+#[cfg(windows)]
+impl OfflineVault for OsVault {
+    fn read_access(&mut self, device: &str) -> Result<Option<String>> {
+        windows::WindowsVault.read_access(device)
+    }
+    fn save_access(&mut self, device: &str, value: &str) -> Result<()> {
+        windows::WindowsVault.save_access(device, value)
+    }
+    fn clear_access(&mut self, device: &str) -> Result<()> {
+        windows::WindowsVault.clear_access(device)
+    }
+}
 // Also typecheck SDK binding code in Linux tests; this is not Windows execution.
 #[cfg(any(windows, test))]
 #[path = "native_credentials_windows.rs"]
@@ -197,6 +217,18 @@ impl CredentialVault for OsVault {
         Err(VAULT_ERROR.into())
     }
     fn create(&mut self, _: &str, _: &str) -> Result<()> {
+        Err(VAULT_ERROR.into())
+    }
+}
+#[cfg(not(any(target_os = "linux", windows)))]
+impl OfflineVault for OsVault {
+    fn read_access(&mut self, _: &str) -> Result<Option<String>> {
+        Err(VAULT_ERROR.into())
+    }
+    fn save_access(&mut self, _: &str, _: &str) -> Result<()> {
+        Err(VAULT_ERROR.into())
+    }
+    fn clear_access(&mut self, _: &str) -> Result<()> {
         Err(VAULT_ERROR.into())
     }
 }

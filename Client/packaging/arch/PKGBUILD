@@ -1,0 +1,19 @@
+# Packages the prebuilt native app. No source/env/database is included.
+pkgname=armstrong-fitness
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='ArmStrong Fitness desktop gym management (acceptance build)'
+arch=('x86_64')
+url='https://github.com/InshafRazmi/ArmStrong-Fitness'
+depends=('webkit2gtk-4.1' 'gtk3' 'glib2' 'glibc' 'gcc-libs' 'curl' 'libsecret')
+optdepends=('gnome-keyring: unlocked persistent Secret Service for native login and offline access')
+options=('!debug' '!strip')
+source=('armstrong-fitness' 'armstrong-fitness.desktop' 'icon.png' 'README.md')
+# Inputs are local build outputs; SHA256SUMS beside the package verifies delivery.
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+package() {
+  install -Dm755 "$srcdir/armstrong-fitness" "$pkgdir/usr/bin/armstrong-fitness"
+  install -Dm644 "$srcdir/armstrong-fitness.desktop" "$pkgdir/usr/share/applications/armstrong-fitness.desktop"
+  install -Dm644 "$srcdir/icon.png" "$pkgdir/usr/share/icons/hicolor/64x64/apps/armstrong-fitness.png"
+  install -Dm644 "$srcdir/README.md" "$pkgdir/usr/share/doc/armstrong-fitness/README.md"
+}

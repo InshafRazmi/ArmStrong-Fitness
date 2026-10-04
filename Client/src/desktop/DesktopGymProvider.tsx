@@ -9,6 +9,9 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
   const [authStatus, setAuthStatus] = useState<api.DesktopAuthStatus | null>(null)
   const [error, setError] = useState('')
   const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const [syncing, setSyncing] = useState(false)
+  const syncRunning = useRef(false)
+  const renewing = useRef(false)
   const generation = useRef(0)
   const notify = useCallback((message: string, tone: ToastMessage['tone'] = 'success') => {
     const id = crypto.randomUUID()
@@ -29,6 +32,41 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
       throw error
     }
   }, [])
+  const synchronize = useCallback(async (manual = false) => {
+    if (syncRunning.current || renewing.current) { if (manual) notify('Account verification or synchronization is already running.','info'); return }
+    syncRunning.current = true; setSyncing(true)
+    try {
+      await api.desktopRenewSession()
+      const outcome = await api.synchronizeMembers()
+      if (manual) notify(outcome.reason, outcome.state === 'complete' ? 'success' : outcome.state === 'failed' || outcome.state === 'blocked' ? 'error' : 'info')
+      await refresh()
+    } catch (error) {
+      if (manual) notify(errorText(error), 'error')
+      await refresh().catch(() => {})
+    } finally { syncRunning.current = false; setSyncing(false) }
+  }, [refresh, notify])
+  useEffect(() => {
+    if (!authStatus?.configured) return
+    const renew = async () => {
+      if (renewing.current || syncRunning.current) return
+      renewing.current = true
+      try { await api.desktopRenewSession(); await refresh() } catch { /* Existing access/data remain governed by native expiry. */ }
+      finally { renewing.current = false }
+    }
+    const timer=setInterval(() => { void renew() },30_000)
+    const reconnect=() => { void renew() }
+    window.addEventListener('online',reconnect)
+    return () => { clearInterval(timer); window.removeEventListener('online',reconnect) }
+  }, [authStatus?.configured,refresh])
+  const memberSyncAvailable = Boolean(native?.memberSync?.available && authStatus?.authenticated && !authStatus.offline)
+  useEffect(() => {
+    if (!memberSyncAvailable) return
+    const wake = () => { void synchronize() }
+    const first = setTimeout(wake, 0)
+    const timer = setInterval(wake, 30_000)
+    window.addEventListener('online', wake)
+    return () => { clearTimeout(first); clearInterval(timer); window.removeEventListener('online', wake) }
+  }, [memberSyncAvailable, synchronize])
   useEffect(() => {
     void refresh().catch(() => {})
     const timer = setInterval(() => { void refresh().catch(() => {}) }, 60_000)
@@ -56,14 +94,15 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
     return id
   }
   const value: GymContextValue = {
-    mode: 'desktop', data: native ? desktopData(native) : emptyDesktopData(), online: false, syncing: false, toasts, notify,
+    mode: 'desktop', data: native ? desktopData(native) : emptyDesktopData(), online: Boolean(memberSyncAvailable && native?.memberSync?.lastSuccessOn && !native.memberSync.lastError && Date.now() - Date.parse(native.memberSync.lastSuccessOn) < 90_000), syncing, toasts, notify,
     desktop: {
       authStatus,
-      login: async (email, password) => { await api.desktopLogin(email, password); await refresh() },
+      login: async (email, password) => { const status = await api.desktopLogin(email, password); await refresh(); if (status.reason) notify(status.reason, 'info') },
+      unlockOffline: async () => { await api.desktopUnlockOffline(); await refresh() },
       logout: async () => {
         generation.current++
         setNative(null)
-        setAuthStatus(old => old ? {...old, authenticated: false, userName: null, role: null, canWrite: false, expiresAt: null} : old)
+        setAuthStatus(old => old ? {...old, authenticated: false, userName: null, role: null, canWrite: false, expiresAt: null, offlineUntil: null, offline: false} : old)
         await api.desktopLogout()
         await refresh()
       },
@@ -104,7 +143,7 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
     adjustStock: (productId, amount, operationId) => commit(() => api.adjustStock({ requestId: request(operationId), productId, amount })),
     completeSale: (productId, quantity, method, operationId) => commit(() => api.completeSale({ requestId: request(operationId), productId, quantity, method }), 'Sale and stock movement committed in SQLite.'),
     restore: () => { notify('Browser demo JSON cannot replace SQLite. Use native Backup & restore.', 'error') },
-    syncNow: async () => { notify('No authenticated server is configured. Pending SQLite operations are retained.', 'info') },
+    syncNow: async () => { await synchronize(true) },
   }
   return <GymContext.Provider value={value}>{children}</GymContext.Provider>
 }

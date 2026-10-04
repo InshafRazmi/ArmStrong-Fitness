@@ -35,7 +35,7 @@ export interface ProductInput { requestId: string; id?: string; version?: number
 export interface WriteOutcome { id?: string; duplicate?: boolean }
 export interface FileResult { path: string; sha256?: string; rows?: number }
 export interface DeviceApproval { deviceId: string; sqlitePath: string; secretSha256: string }
-export interface DesktopAuthStatus { requiresLogin: boolean; configured: boolean; authenticated: boolean; canWrite: boolean; userName: string | null; role: string | null; expiresAt: string | null; reason: string }
+export interface DesktopAuthStatus { requiresLogin: boolean; configured: boolean; authenticated: boolean; canWrite: boolean; userName: string | null; role: string | null; expiresAt: string | null; offlineUntil?: string | null; offline?: boolean; reason: string }
 export interface ReportRange { fromOn?: string | null; toOn?: string | null }
 export interface ReportSummary { fromOn: string | null; toOn: string | null; incomeMinor: number; expenseMinor: number; netMinor: number; inventoryValueMinor: number; attendanceCount: number; membershipPeriodCount: number; auditCount: number; lowStockCount: number }
 export interface BackupEnvelope { format: 'armstrong-sqlite-backup'; formatVersion: number; schemaVersion: number; createdAt: string; sha256: string; data: number[] }
@@ -57,7 +57,11 @@ export const snapshot = async () => requireSnapshot(await invoke<Snapshot>('foun
 export const prepareNativeDevice = () => invoke<DeviceApproval>('prepare_native_device')
 export const desktopAuthStatus = () => invoke<DesktopAuthStatus>('desktop_auth_status')
 export const desktopLogin = (email: string, password: string) => invoke<DesktopAuthStatus>('desktop_login', { email, password })
+export const desktopRenewSession = () => invoke<DesktopAuthStatus>('desktop_renew_session')
 export const desktopLogout = () => invoke<void>('desktop_logout')
+export const desktopUnlockOffline = () => invoke<DesktopAuthStatus>('desktop_unlock_offline')
+export interface MemberSyncOutcome { state: 'complete' | 'yielded' | 'deferred' | 'failed' | 'blocked'; pushed: number; pages: number; reason: string }
+export const synchronizeMembers = () => invoke<MemberSyncOutcome>('synchronize_members')
 export const savePlan = (input: PlanInput) => invoke<void>('save_plan', { input })
 export const saveMember = (input: MemberInput) => invoke<void>('save_member', { input })
 export const addPeriod = (input: PeriodInput) => invoke<void>('add_membership_period', { input })

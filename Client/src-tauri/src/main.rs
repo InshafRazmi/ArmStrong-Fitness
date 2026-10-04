@@ -1,4 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#[cfg(all(feature = "packaged-auth", feature = "ui-smoke"))]
+compile_error!("Installer builds must not include UI smoke commands");
+#[cfg(all(windows, not(debug_assertions), not(feature = "packaged-auth")))]
+compile_error!("Windows release builds require the packaged-auth feature");
 use armstrong_core::{
     AllocationInput, AttendanceInput, BackupEnvelope, ExpenseInput, ExpenseVoidInput, InvoiceInput,
     MemberConflictInput, MemberInput, MemberRemovalInput, PaymentInput, PeriodInput, PlanInput,
@@ -24,7 +28,14 @@ fn desktop_auth_status(db: State<Database>) -> Result<armstrong_core::DesktopAut
 #[tauri::command]
 fn desktop_logout(db: State<Database>) -> Result<(), String> {
     let mut store = db.0.lock().map_err(|_| "Database unavailable")?;
-    db.1.lock(&mut store)
+    db.1.logout(&mut store)
+}
+#[tauri::command]
+fn desktop_unlock_offline(
+    db: State<Database>,
+) -> Result<armstrong_core::DesktopAuthStatus, String> {
+    let mut store = db.0.lock().map_err(|_| "Database unavailable")?;
+    db.1.unlock_offline(&mut store)
 }
 #[tauri::command]
 async fn desktop_login(
@@ -47,6 +58,24 @@ async fn desktop_login(
     db.1.finish(&mut store, pending)
 }
 #[tauri::command]
+async fn desktop_renew_session(
+    db: State<'_, Database>,
+) -> Result<armstrong_core::DesktopAuthStatus, String> {
+    let job = {
+        let store = db.0.lock().map_err(|_| "Database unavailable")?;
+        match db.1.prepare_session_renewal(&store)? {
+            Some(job) => job,
+            None => return db.1.status(&store),
+        }
+    };
+    let auth = db.1.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || auth.run_session_renewal(job))
+        .await
+        .map_err(|_| "Native session renewal unavailable; values withheld".to_string())??;
+    let mut store = db.0.lock().map_err(|_| "Database unavailable")?;
+    db.1.finish_session_renewal(&mut store, result)
+}
+#[tauri::command]
 async fn prepare_native_device(
     db: State<'_, Database>,
 ) -> Result<armstrong_core::DeviceApproval, String> {
@@ -60,7 +89,25 @@ async fn prepare_native_device(
 }
 #[tauri::command]
 fn foundation_snapshot(db: State<Database>) -> Result<serde_json::Value, String> {
-    db.access(false)?.snapshot()
+    let store = db.access(false)?;
+    let mut snapshot = store.snapshot()?;
+    db.1.member_sync_status(&store, &mut snapshot);
+    Ok(snapshot)
+}
+#[tauri::command]
+async fn synchronize_members(
+    db: State<'_, Database>,
+) -> Result<armstrong_core::MemberSyncOutcome, String> {
+    let job = {
+        let store = db.access(false)?;
+        db.1.prepare_member_sync(&store)?
+    };
+    let auth = db.1.clone();
+    let outcome = tauri::async_runtime::spawn_blocking(move || auth.run_member_sync(job))
+        .await
+        .map_err(|_| "Native member synchronization unavailable; values withheld".to_string())??;
+    let mut store = db.0.lock().map_err(|_| "Database unavailable")?;
+    db.1.finish_member_sync(&mut store, outcome)
 }
 #[tauri::command]
 fn save_plan(db: State<Database>, input: PlanInput) -> Result<(), String> {
@@ -218,6 +265,9 @@ fn main() {
         std::fs::create_dir_all(&dir)?;
         let mut store =
             Store::open(&dir.join("armstrong.sqlite3")).map_err(std::io::Error::other)?;
+        #[cfg(all(feature = "packaged-auth", not(feature = "ui-smoke")))]
+        let auth = Arc::new(armstrong_core::DesktopAuth::load_packaged(&dir));
+        #[cfg(any(not(feature = "packaged-auth"), feature = "ui-smoke"))]
         let auth = Arc::new(armstrong_core::DesktopAuth::load(&dir));
         auth.initialize(&mut store).map_err(std::io::Error::other)?;
         app.manage(Database(Mutex::new(store), auth));
@@ -227,9 +277,12 @@ fn main() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         desktop_auth_status,
         desktop_login,
+        desktop_renew_session,
         desktop_logout,
+        desktop_unlock_offline,
         prepare_native_device,
         foundation_snapshot,
+        synchronize_members,
         save_plan,
         save_member,
         add_membership_period,
@@ -262,9 +315,12 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             desktop_auth_status,
             desktop_login,
+            desktop_renew_session,
             desktop_logout,
+            desktop_unlock_offline,
             prepare_native_device,
             foundation_snapshot,
+            synchronize_members,
             save_plan,
             save_member,
             add_membership_period,

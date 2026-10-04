@@ -3,10 +3,11 @@ import { Icon } from "../components/ui/Icon";
 import { useGym } from "../context/GymContext";
 import { DevicePreparation } from "../desktop/DesktopSettingsPanel";
 import { errorText } from "../desktop/DesktopGymProvider";
+import { version } from '../../package.json';
 
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
        const { mode, desktop } = useGym();
-       const native = mode === "desktop";
+       const native = import.meta.env.VITE_DESKTOP_ONLY === 'true' || mode === "desktop";
        const [username, setUsername] = useState("");
        const [password, setPassword] = useState("");
        const [show, setShow] = useState(false);
@@ -130,12 +131,21 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
                                           <i>→</i>
                                    </button>
                             </form>
+                            {native && desktop?.authStatus?.offlineUntil && <div className="login-security"><div>
+                                   <button type="button" className="secondary" disabled={loading} onClick={async () => {
+                                          setLoading(true); setError("");
+                                          try { await desktop.unlockOffline(); onLogin(); }
+                                          catch (error) { setError(errorText(error)); }
+                                          finally { setLoading(false); }
+                                   }}>Continue offline</button>
+                                   <small>Unlock with this computer's OS account. Offline access ends {new Date(desktop.authStatus.offlineUntil).toLocaleString()}.</small>
+                            </div></div>}
                             <div className="login-security">
                                    <span>●</span>
                                    <div>
                                           <b>{native ? "VERIFIED ACCOUNT ACCESS" : "OFFLINE-READY ACCESS"}</b>
                                           <small>
-                                                 {native ? "Internet access is required to sign in. Signing out locks local records on this device." : "Your local gym data remains available securely on this device."}
+                                                 {native ? "Internet access is required for first sign-in. After verification, this computer can unlock offline for up to seven days. Signing out removes offline access." : "Your local gym data remains available securely on this device."}
                                           </small>
                                    </div>
                             </div>
@@ -143,7 +153,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
                      </section>
                      <footer className="login-footer">
                             ARMSTRONG FITNESS · MATALE <span>•</span> DESKTOP
-                            MANAGEMENT v0.6
+                            MANAGEMENT v{version}
                      </footer>
               </div>
        );

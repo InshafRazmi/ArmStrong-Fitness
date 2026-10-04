@@ -89,6 +89,7 @@ struct Identity {
 #[derive(Deserialize)]
 struct Tokens {
     access_token: String,
+    refresh_token: Option<String>,
     token_type: String,
     expires_in: i64,
     expires_at: Option<i64>,
@@ -145,8 +146,44 @@ pub(crate) struct VerifiedEnrollment {
     role: Role,
     can_write: bool,
     token: String,
+    refresh_token: Option<String>,
     secret: String,
     expires_at: DateTime<Utc>,
+}
+// Rotating Auth credentials remain in native memory. They are never serialized
+// into SQLite, a backup, the OS offline grant, IPC or diagnostic output.
+pub(super) struct RefreshState {
+    scope: SyncScope,
+    subject: String,
+    email: String,
+    secret: String,
+    refresh_token: String,
+    pub(super) expires_at: DateTime<Utc>,
+}
+pub(super) enum RefreshFailure {
+    Refused,
+    Unavailable,
+}
+struct RenewalExchange<'a, C> {
+    client: &'a mut C,
+    refused: bool,
+}
+impl<C: HttpsExchange> HttpsExchange for RenewalExchange<'_, C> {
+    fn send(
+        &mut self,
+        request: Request,
+    ) -> std::result::Result<Response, super::member_http::ExchangeError> {
+        let response = self.client.send(request)?;
+        self.refused |= matches!(response.status, 400 | 401 | 403 | 422);
+        Ok(response)
+    }
+}
+fn credential(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 8192
+        && value
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"._~-".contains(&c))
 }
 fn json(response: Response) -> Result<Vec<u8>> {
     match response.status {
@@ -233,15 +270,25 @@ pub(crate) fn login(
     )?;
     let tokens: Tokens =
         serde_json::from_slice(&bytes).map_err(|_| "Invalid account response; values withheld")?;
+    complete(exchange, config, device, secret, email, tokens, started)
+}
+fn complete(
+    exchange: &mut impl HttpsExchange,
+    config: &AuthConfig,
+    device: &str,
+    secret: String,
+    email: &str,
+    tokens: Tokens,
+    started: DateTime<Utc>,
+) -> Result<VerifiedEnrollment> {
     canonical_uuid(&tokens.user.id)?;
     if tokens.token_type != "bearer"
         || !(1..=86400).contains(&tokens.expires_in)
-        || tokens.access_token.is_empty()
-        || tokens.access_token.len() > 8192
-        || !tokens
-            .access_token
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || b"._~-".contains(&c))
+        || !credential(&tokens.access_token)
+        || tokens
+            .refresh_token
+            .as_deref()
+            .is_some_and(|token| !credential(token))
         || tokens.user.email.to_lowercase() != email.to_lowercase()
     {
         return Err("Invalid account response; values withheld".into());
@@ -309,11 +356,93 @@ pub(crate) fn login(
         role: enrollment.staff.role,
         can_write: enrollment.device.can_write,
         token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
         secret,
         expires_at,
     })
 }
+pub(super) fn renew(
+    exchange: &mut impl HttpsExchange,
+    config: &AuthConfig,
+    state: &RefreshState,
+) -> std::result::Result<VerifiedEnrollment, RefreshFailure> {
+    let mut exchange = RenewalExchange {
+        client: exchange,
+        refused: false,
+    };
+    let result = (|| {
+        let started = Utc::now();
+        let bytes = send(
+            &mut exchange,
+            "POST",
+            format!(
+                "{}/auth/v1/token?grant_type=refresh_token",
+                config.auth_origin
+            ),
+            vec![
+                ("apikey", config.publishable_key.clone()),
+                ("content-type", "application/json".into()),
+                ("accept", "application/json".into()),
+            ],
+            Some(json!({"refresh_token":state.refresh_token})),
+        )?;
+        let tokens: Tokens = serde_json::from_slice(&bytes)
+            .map_err(|_| "Invalid renewal response; values withheld")?;
+        if tokens.user.id != state.subject
+            || tokens
+                .refresh_token
+                .as_deref()
+                .is_none_or(|token| !credential(token))
+        {
+            return Err("Renewal identity or rotating credential mismatch; values withheld".into());
+        }
+        let verified = complete(
+            &mut exchange,
+            config,
+            &state.scope.device_id,
+            state.secret.clone(),
+            &state.email,
+            tokens,
+            started,
+        )?;
+        if verified.scope != state.scope || !verified.is_administrator() {
+            exchange.refused = true;
+            return Err("Renewal scope or Administrator permission changed".into());
+        }
+        Ok(verified)
+    })();
+    result.map_err(|_: String| {
+        if exchange.refused {
+            RefreshFailure::Refused
+        } else {
+            RefreshFailure::Unavailable
+        }
+    })
+}
 impl VerifiedEnrollment {
+    pub(super) fn renewal(&self) -> Option<RefreshState> {
+        Some(RefreshState {
+            scope: self.scope.clone(),
+            subject: self.subject.clone(),
+            email: self.email.clone(),
+            secret: self.secret.clone(),
+            refresh_token: self.refresh_token.clone()?,
+            expires_at: self.expires_at,
+        })
+    }
+    pub(super) fn offline_access(
+        &self,
+        store: &Store,
+        auth_origin: &str,
+    ) -> Result<super::offline_access::Grant> {
+        super::offline_access::Grant::new(
+            store,
+            &self.scope,
+            &self.subject,
+            self.can_write,
+            auth_origin,
+        )
+    }
     pub(super) fn is_administrator(&self) -> bool {
         matches!(self.role, Role::Administrator)
     }
@@ -370,11 +499,14 @@ impl Store {
         if verified.expires_at <= Utc::now() {
             return Err("Account session expired before local enrollment; sign in again".into());
         }
+        let native_nonce = id();
+        tx.execute("INSERT INTO metadata VALUES('native_session_nonce',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [&native_nonce]).map_err(db_error)?;
         tx.commit().map_err(db_error)?;
         self.removal_session = Some(removal::Session {
             user_id,
             expires_at: verified.expires_at,
             can_write: verified.can_write,
+            native_nonce: Some(native_nonce),
         });
         Ok(())
     }

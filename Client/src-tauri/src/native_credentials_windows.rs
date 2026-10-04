@@ -32,6 +32,7 @@ extern "system" {
         credential: *mut *mut Credential,
     ) -> i32;
     fn CredWriteW(credential: *const Credential, flags: u32) -> i32;
+    fn CredDeleteW(target: *const u16, kind: u32, flags: u32) -> i32;
     fn CredFree(buffer: *mut c_void);
 }
 #[cfg_attr(windows, link(name = "kernel32"))]
@@ -39,10 +40,85 @@ extern "system" {
     fn GetLastError() -> u32;
 }
 fn target(device: &str) -> Result<Vec<u16>> {
+    item_target(device, "device-v1")
+}
+fn item_target(device: &str, purpose: &str) -> Result<Vec<u16>> {
     checked_device(device)?;
-    Ok(format!("lk.armstrong.fitness/device-v1/{device}\0")
+    Ok(format!("lk.armstrong.fitness/{purpose}/{device}\0")
         .encode_utf16()
         .collect())
+}
+impl OfflineVault for WindowsVault {
+    fn read_access(&mut self, device: &str) -> Result<Option<String>> {
+        let target = item_target(device, "offline-access-v1")?;
+        let mut raw = ptr::null_mut();
+        // SAFETY: target is terminated UTF-16 and raw is a writable pointer.
+        if unsafe { CredReadW(target.as_ptr(), 1, 0, &mut raw) } == 0 {
+            return if unsafe { GetLastError() } == 1168 {
+                Ok(None)
+            } else {
+                Err(VAULT_ERROR.into())
+            };
+        }
+        if raw.is_null() {
+            return Err(VAULT_ERROR.into());
+        }
+        let allocation = ReadCredential(raw);
+        // SAFETY: the allocation remains live; blob length and pointer checked.
+        let credential = unsafe { &*allocation.0 };
+        if credential.kind != 1
+            || credential.blob_size == 0
+            || credential.blob_size as usize > ACCESS_LIMIT
+            || credential.blob.is_null()
+        {
+            return Err(RECONCILE.into());
+        }
+        let bytes =
+            unsafe { std::slice::from_raw_parts(credential.blob, credential.blob_size as usize) };
+        Ok(Some(
+            std::str::from_utf8(bytes)
+                .map_err(|_| RECONCILE)?
+                .to_owned(),
+        ))
+    }
+    fn save_access(&mut self, device: &str, value: &str) -> Result<()> {
+        if value.is_empty() || value.len() > ACCESS_LIMIT {
+            return Err(VAULT_ERROR.into());
+        }
+        let mut target = item_target(device, "offline-access-v1")?;
+        let mut blob = value.as_bytes().to_vec();
+        let credential = Credential {
+            flags: 0,
+            kind: 1,
+            target_name: target.as_mut_ptr(),
+            comment: ptr::null_mut(),
+            last_written: FileTime { low: 0, high: 0 },
+            blob_size: blob.len() as u32,
+            blob: blob.as_mut_ptr(),
+            persist: 2,
+            attribute_count: 0,
+            attributes: ptr::null_mut(),
+            target_alias: ptr::null_mut(),
+            user_name: ptr::null_mut(),
+        };
+        // SAFETY: the synchronous SDK call copies live target/blob pointers.
+        let ok = unsafe { CredWriteW(&credential, 0) };
+        wipe(&mut blob);
+        if ok != 0 {
+            Ok(())
+        } else {
+            Err(VAULT_ERROR.into())
+        }
+    }
+    fn clear_access(&mut self, device: &str) -> Result<()> {
+        let target = item_target(device, "offline-access-v1")?;
+        // SAFETY: target is a live terminated UTF-16 buffer.
+        if unsafe { CredDeleteW(target.as_ptr(), 1, 0) } != 0 || unsafe { GetLastError() } == 1168 {
+            Ok(())
+        } else {
+            Err(VAULT_ERROR.into())
+        }
+    }
 }
 struct ReadCredential(*mut Credential);
 impl Drop for ReadCredential {

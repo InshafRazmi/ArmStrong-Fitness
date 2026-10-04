@@ -9,6 +9,7 @@ export interface DesktopData {
   authStatus?: import('../desktop/api').DesktopAuthStatus | null
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  unlockOffline: () => Promise<void>
   archiveMember: (input: MemberRemovalInput) => Promise<void>
   deleteMember: (input: MemberRemovalInput) => Promise<void>
   voidExpense: (input: ExpenseVoidInput) => Promise<void>

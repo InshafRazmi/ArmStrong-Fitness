@@ -87,10 +87,10 @@ export function DevicePreparation() {
   }
   return <section className="form-card">
     <h3>Approve this computer</h3>
-    <p>Prepare a device credential in your OS credential store, then give the registration details to the server administrator. An existing credential is reused. Server approval and account sign-in are still required.</p>
+    <p>Account sign-in prepares this computer automatically when the server supports computer approval. This advanced action verifies the existing OS credential and shows details for older server versions or Administrator troubleshooting.</p>
     <button className="secondary" disabled={busy || restored} onClick={() => void prepare()}>{busy ? 'Opening credential storage…' : 'Prepare this computer'}</button>
     {error && <div role="alert" className="login-error">{error}</div>}
-    {approval && <><p role="status">Credential verified in OS storage. Server approval is pending.</p><details open><summary>Registration details</summary><div className="form-grid">
+    {approval && <><p role="status">Credential verified in OS storage. Sign in online to check account and server approval.</p><details open><summary>Registration details</summary><div className="form-grid">
       <label><span>Device ID</span><input readOnly value={approval.deviceId}/></label>
       <label><span>SQLite path</span><input readOnly value={approval.sqlitePath}/></label>
       <label><span>Device secret SHA-256</span><input readOnly value={approval.secretSha256}/></label>
@@ -98,7 +98,7 @@ export function DevicePreparation() {
   </section>
 }
 function MemberSyncPanel() {
-  const { desktop } = useGym()
+  const { desktop, syncing, syncNow } = useGym()
   const snapshot = desktop?.snapshot
   const sync = snapshot?.memberSync
   const authenticated = desktop?.authStatus?.authenticated
@@ -113,7 +113,7 @@ function MemberSyncPanel() {
     finally { setBusy(false) }
   }
   return <>
-    <p>{authenticated ? 'Account and computer verified online. Member synchronization remains disabled pending API acceptance.' : 'No authenticated backend is connected. SQLite operations remain pending until the server confirms them.'}</p>
+    <p>{authenticated ? sync?.available ? 'Member changes synchronize with your verified account. Changes made during an outage are retained and retried when the connection returns.' : 'Sign in online to synchronize members. Your offline changes are retained.' : 'No authenticated backend is connected. SQLite operations remain pending until the server confirms them.'}</p>
     <p>{authenticated ? 'Other modules are saved locally and do not yet synchronize.' : 'Member synchronization is being prepared. Staff sign-in and a secure server connection are still required.'}</p>
     {sync?.lastError && <p role="status" className="form-note">{sync.lastError}</p>}
     {snapshot?.restoreRequiresReconciliation && <p className="form-note">This database was restored and requires server reconciliation before synchronization can be enabled.</p>}
@@ -126,7 +126,8 @@ function MemberSyncPanel() {
     {!!sync?.resolved && <p>{sync.resolved} saved member review(s) · {sync.superseded ?? 0} discarded or superseded edits. These are separate from confirmed server operations.</p>}
     {error && <div role="alert" className="login-error">{error}</div>}
     {review && <MemberConflictDialog preview={review} onClose={() => setReview(null)}/>}
-    <button className="primary" disabled>Sync unavailable</button>
+    {sync?.lastSuccessOn && <p>Last member server confirmation: {new Date(sync.lastSuccessOn).toLocaleString()}.</p>}
+    <button className="primary" disabled={!sync?.available || syncing} onClick={() => void syncNow()}>{syncing ? 'Synchronizing members…' : sync?.available ? 'Sync members now' : 'Sync unavailable'}</button>
     <DevicePreparation/>
   </>
 }
@@ -134,9 +135,9 @@ export function DesktopSettingsPanel({ tab }: { tab: string }) {
   const { desktop, notify } = useGym()
   if (tab === 'Gym profile') return <GymProfile/>
   if (tab === 'Backup & restore') return <BackupActions/>
-  if (tab === 'Users & roles') return <><p>{desktop?.authStatus?.requiresLogin ? 'Native sign-in verifies the approved Administrator account and computer. Permissions are checked again when each command runs. Sign-in requires internet access; offline restart access is not implemented.' : 'Authentication is not configured. This local test operator has unrestricted access. Use test records only. Demo accounts are not enrolled users.'}</p>{desktop?.snapshot?.users.length ? desktop.snapshot.users.map(user => <div className="setting-line" key={user.id}><div><b>{user.name}</b><small>{user.roles.join(', ') || 'No roles'}</small></div><span>{user.active ? 'Active' : 'Inactive'}</span></div>) : <p>No users have been enrolled.</p>}</>
+  if (tab === 'Users & roles') return <><p>{desktop?.authStatus?.requiresLogin ? 'First sign-in verifies the Administrator account and computer online. After verification, Continue offline uses this computer’s unlocked OS account for up to seven days. Signing out removes offline access. Permissions are checked whenever you use the app.' : 'Authentication is not configured. This local test operator has unrestricted access. Use test records only. Demo accounts are not enrolled users.'}</p>{desktop?.authStatus?.offlineUntil && <p>Offline access until {new Date(desktop.authStatus.offlineUntil).toLocaleString()}.</p>}{desktop?.snapshot?.users.length ? desktop.snapshot.users.map(user => <div className="setting-line" key={user.id}><div><b>{user.name}</b><small>{user.roles.join(', ') || 'No roles'}</small></div><span>{user.active ? 'Active' : 'Inactive'}</span></div>) : <p>No users have been enrolled.</p>}</>
   if (tab === 'NFC reader') return <><p>Use a USB HID reader that types the card UID and Enter. Card linking and attendance logs are saved locally; no hardware has been detected or verified.</p><div className="setting-line"><div><b>Reader mode</b><small>Keyboard / HID input</small></div><span>Unverified</span></div><button className="primary" onClick={() => notify('Open NFC Attendance, focus the card field and scan. Verify the recorded UID and member; hardware has not been certified.', 'info')}>Test reader</button></>
   if (tab === 'Receipt printing') return <><p>Open a saved payment in Payments to preview or reprint its receipt. Print opens the webview system print dialog; Windows dialog and physical printer acceptance remain unverified. Direct printer selection is not implemented.</p><div className="setting-line"><div><b>Paper size</b><small>80 mm receipt layout; select the printer in the print dialog</small></div><span>Unverified</span></div></>
   if (tab === 'Server synchronization') return <MemberSyncPanel/>
-  return <><p>Update-server checks and installer delivery are not implemented.</p><div className="setting-line"><div><b>Installed version</b><small>{version}</small></div><span>Not checked</span></div><button className="primary" disabled>Check for updates</button></>
+  return <><p>Install an approved newer package to update this app. Gym records are stored separately from the application. Automatic update checks are not available.</p><div className="setting-line"><div><b>Installed version</b><small>{version}</small></div><span>Manual updates</span></div></>
 }

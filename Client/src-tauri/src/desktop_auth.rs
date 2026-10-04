@@ -3,11 +3,11 @@ use super::native_https::NativeHttps;
 use super::*;
 use std::io::Read;
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Mutex,
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ConfigFile {
     auth_origin: String,
@@ -24,6 +24,8 @@ pub struct DesktopAuthStatus {
     can_write: bool,
     role: Option<String>,
     expires_at: Option<DateTime<Utc>>,
+    offline_until: Option<DateTime<Utc>>,
+    offline: bool,
     reason: String,
 }
 // Opaque result passed between native threads, never serialized into the webview.
@@ -31,36 +33,103 @@ pub struct PendingDesktopLogin {
     epoch: u64,
     verified: VerifiedEnrollment,
 }
+// An opaque native job. The webview cannot supply its session, account, scope,
+// database path or credentials. A dedicated connection avoids I/O under UI locks.
+pub struct PendingMemberSync {
+    path: std::path::PathBuf,
+    session: super::removal::Session,
+    epoch: u64,
+}
+pub struct PendingSessionRenewal {
+    path: std::path::PathBuf,
+    session: super::removal::Session,
+    epoch: u64,
+}
+pub struct SessionRenewal {
+    epoch: u64,
+    verified: Option<VerifiedEnrollment>,
+    refused: bool,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberSyncOutcome {
+    state: &'static str,
+    pushed: usize,
+    pages: usize,
+    reason: String,
+    #[serde(skip)]
+    denied: bool,
+    #[serde(skip)]
+    epoch: u64,
+}
 pub struct DesktopAuth {
     config: Option<AuthConfig>,
     config_error: Option<String>,
     epoch: AtomicU64,
+    online_transport: AtomicBool,
     transport: Mutex<Option<super::member_http::MemberApi<NativeHttps>>>,
+    renewal: Mutex<Option<super::native_auth::RefreshState>>,
 }
 impl DesktopAuth {
     pub fn load(directory: &Path) -> Self {
+        Self::load_with_bundled(directory, None)
+    }
+    // Installers carry only HTTPS origins and a public Auth key. Never read a
+    // server env file or ask the person installing the app to configure one.
+    #[cfg(feature = "packaged-auth")]
+    pub fn load_packaged(directory: &Path) -> Self {
+        Self::load_with_bundled(
+            directory,
+            Some(include_str!("../../desktop-auth.production.json")),
+        )
+    }
+    fn parse_config(bytes: &[u8]) -> Result<ConfigFile> {
+        if bytes.len() > 16 * 1024 {
+            return Err("Native sign-in configuration exceeds its limit; values withheld".into());
+        }
+        let file: ConfigFile = serde_json::from_slice(bytes)
+            .map_err(|_| "Invalid native sign-in configuration; values withheld")?;
+        AuthConfig::new(&file.auth_origin, &file.publishable_key, &file.api_origin)?;
+        Ok(file)
+    }
+    fn load_with_bundled(directory: &Path, bundled: Option<&str>) -> Self {
         let path = directory.join("desktop-auth.json");
         let config = (|| -> Result<Option<AuthConfig>> {
+            let bundled = bundled
+                .map(|bytes| Self::parse_config(bytes.as_bytes()))
+                .transpose()?;
             let file = match std::fs::File::open(path) {
-                Ok(file) => file,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                Ok(file) => Some(file),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
                 Err(_) => {
                     return Err(
                         "Native sign-in configuration cannot be read; values withheld".into(),
                     )
                 }
             };
-            let mut bytes = Vec::new();
-            file.take(16 * 1024 + 1)
-                .read_to_end(&mut bytes)
-                .map_err(|_| "Native sign-in configuration cannot be read; values withheld")?;
-            if bytes.len() > 16 * 1024 {
-                return Err(
-                    "Native sign-in configuration exceeds its limit; values withheld".into(),
-                );
+            let local = file
+                .map(|file| {
+                    let mut bytes = Vec::new();
+                    file.take(16 * 1024 + 1)
+                        .read_to_end(&mut bytes)
+                        .map_err(|_| {
+                            "Native sign-in configuration cannot be read; values withheld"
+                        })?;
+                    Self::parse_config(&bytes)
+                })
+                .transpose()?;
+            // Preserve a pre-existing workstation configuration and refuse to
+            // redirect an installed gym build to another API/project/key.
+            if bundled
+                .as_ref()
+                .zip(local.as_ref())
+                .is_some_and(|(a, b)| a != b)
+            {
+                return Err("This computer's server settings differ from the installed app; contact the Administrator. Existing settings were retained.".into());
             }
-            let file: ConfigFile = serde_json::from_slice(&bytes)
-                .map_err(|_| "Invalid native sign-in configuration; values withheld")?;
+            let Some(file) = bundled.or(local) else {
+                return Ok(None);
+            };
             Ok(Some(AuthConfig::new(
                 &file.auth_origin,
                 &file.publishable_key,
@@ -75,7 +144,9 @@ impl DesktopAuth {
             config,
             config_error,
             epoch: AtomicU64::new(0),
+            online_transport: AtomicBool::new(false),
             transport: Mutex::new(None),
+            renewal: Mutex::new(None),
         }
     }
     pub fn initialize(&self, store: &mut Store) -> Result<()> {
@@ -115,6 +186,8 @@ impl DesktopAuth {
                     .as_ref()
                     .map(|session| session.expires_at)
             }),
+            offline_until: super::offline_access::available_until(store),
+            offline: identity.is_some() && !self.online_transport.load(Ordering::SeqCst),
             reason,
         })
     }
@@ -159,7 +232,8 @@ impl DesktopAuth {
             .config
             .as_ref()
             .ok_or("Native sign-in is not configured")?;
-        let store = Store::open(path)?;
+        let mut store = Store::open(path)?;
+        store.prepare_native_device()?;
         let (device, secret) = store.native_device_secret()?;
         drop(store);
         let mut exchange = NativeHttps::new(&config.auth_origin, &config.api_origin);
@@ -172,6 +246,14 @@ impl DesktopAuth {
         store: &mut Store,
         pending: PendingDesktopLogin,
     ) -> Result<DesktopAuthStatus> {
+        self.finish_with_vault(store, pending, &mut super::native_credentials::OsVault)
+    }
+    fn finish_with_vault(
+        &self,
+        store: &mut Store,
+        pending: PendingDesktopLogin,
+        vault: &mut impl super::native_credentials::OfflineVault,
+    ) -> Result<DesktopAuthStatus> {
         if pending.epoch != self.epoch.load(Ordering::SeqCst) {
             return Err("Sign-in was cancelled or superseded; permissions remain locked".into());
         }
@@ -180,9 +262,13 @@ impl DesktopAuth {
         }
         // Take lock before committing local enrollment; poisoning cannot leave a
         // new authorized session after the caller received a failure.
+        let mut renewal = self
+            .renewal
+            .try_lock()
+            .map_err(|_| "Native session renewal is running; retry shortly")?;
         let mut transport = self
             .transport
-            .lock()
+            .try_lock()
             .map_err(|_| "Native session unavailable")?;
         store.enroll_native(&pending.verified)?;
         // Only the agreed Administrator can operate this desktop. Reception
@@ -195,33 +281,293 @@ impl DesktopAuth {
             .config
             .as_ref()
             .ok_or("Native sign-in is not configured")?;
+        // Online access can continue if OS storage is locked, but the UI must
+        // not advertise offline restart access. Stale grants are invalidated.
+        super::offline_access::invalidate(store)?;
+        let saved = pending
+            .verified
+            .offline_access(store, &config.auth_origin)
+            .and_then(|grant| grant.save(store, vault));
+        *renewal = pending.verified.renewal();
         *transport = Some(
             pending
                 .verified
                 .member_transport(NativeHttps::new(&config.auth_origin, &config.api_origin))?,
         );
+        self.online_transport.store(true, Ordering::SeqCst);
+        drop(transport);
+        let mut status = self.status(store)?;
+        if saved.is_err() {
+            status.reason = "Signed in online. Offline access could not be saved; unlock the OS credential store and sign in again.".into();
+        }
+        Ok(status)
+    }
+    pub fn prepare_session_renewal(&self, store: &Store) -> Result<Option<PendingSessionRenewal>> {
+        let Some(session) = store.removal_session.as_ref() else {
+            return Ok(None);
+        };
+        super::removal::current_session(&store.conn, session)?;
+        let active: bool = store.conn.query_row("SELECT EXISTS(SELECT 1 FROM users u WHERE u.id=?1 AND u.active=1 AND EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.name='Administrator' COLLATE NOCASE))", [&session.user_id], |r| r.get(0)).map_err(db_error)?;
+        if !active {
+            return Err("An active enrolled Administrator account is required".into());
+        }
+        Ok(Some(PendingSessionRenewal {
+            path: store.database_path(),
+            session: session.clone(),
+            epoch: self.epoch.load(Ordering::SeqCst),
+        }))
+    }
+    pub fn run_session_renewal(&self, job: PendingSessionRenewal) -> Result<SessionRenewal> {
+        let mut slot = self
+            .renewal
+            .try_lock()
+            .map_err(|_| "Native session renewal is already running")?;
+        let unchanged = |store: &Store| -> Result<()> {
+            if job.epoch != self.epoch.load(Ordering::SeqCst) {
+                return Err("Session renewal cancelled".into());
+            }
+            super::removal::current_session(&store.conn, &job.session)
+        };
+        let store = Store::open(&job.path)?;
+        unchanged(&store)?;
+        let mut result = SessionRenewal {
+            epoch: job.epoch,
+            verified: None,
+            refused: false,
+        };
+        let Some(state) = slot.as_ref() else {
+            return Ok(result);
+        };
+        if state.expires_at > Utc::now() + chrono::Duration::seconds(120) {
+            return Ok(result);
+        }
+        let config = self
+            .config
+            .as_ref()
+            .ok_or("Native sign-in is not configured")?;
+        let mut exchange = NativeHttps::new(&config.auth_origin, &config.api_origin);
+        let refreshed = super::native_auth::renew(&mut exchange, config, state);
+        if let Err(error) = unchanged(&store) {
+            *slot = None;
+            return Err(error);
+        }
+        match refreshed {
+            Ok(verified) => {
+                // Retain the rotated credential even when committing the native
+                // result is interrupted; keep it due until finish succeeds.
+                let due = state.expires_at;
+                *slot = verified.renewal();
+                if let Some(next) = slot.as_mut() {
+                    next.expires_at = due;
+                }
+                result.verified = Some(verified);
+            }
+            Err(super::native_auth::RefreshFailure::Refused) => {
+                *slot = None;
+                result.refused = true;
+            }
+            Err(super::native_auth::RefreshFailure::Unavailable) => (), // do not extend access or discard offline data
+        }
+        Ok(result)
+    }
+    pub fn finish_session_renewal(
+        &self,
+        store: &mut Store,
+        result: SessionRenewal,
+    ) -> Result<DesktopAuthStatus> {
+        if result.epoch != self.epoch.load(Ordering::SeqCst) {
+            return Err("Session renewal cancelled".into());
+        }
+        if result.refused {
+            self.logout(store)?;
+        }
+        if let Some(verified) = result.verified {
+            return self.finish(
+                store,
+                PendingDesktopLogin {
+                    epoch: result.epoch,
+                    verified,
+                },
+            );
+        }
         self.status(store)
+    }
+    pub fn unlock_offline(&self, store: &mut Store) -> Result<DesktopAuthStatus> {
+        self.lock(store)?;
+        let config = self
+            .config
+            .as_ref()
+            .ok_or("Native sign-in is not configured")?;
+        // Verify that the separate device possession secret still matches this
+        // database before accepting the cached OS authorization item.
+        store.native_device_secret()?;
+        super::offline_access::unlock(
+            store,
+            &mut super::native_credentials::OsVault,
+            &config.auth_origin,
+            &config.api_origin,
+            Utc::now(),
+        )?;
+        self.status(store)
+    }
+    pub fn logout(&self, store: &mut Store) -> Result<()> {
+        self.lock(store)?;
+        super::offline_access::invalidate(store)?;
+        let device: String = store
+            .conn
+            .query_row(
+                "SELECT value FROM metadata WHERE key='device_id'",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(db_error)?;
+        use super::native_credentials::OfflineVault;
+        super::native_credentials::OsVault.clear_access(&device)
+    }
+    pub fn prepare_member_sync(&self, store: &Store) -> Result<PendingMemberSync> {
+        store.native_identity(false)?;
+        if !self.online_transport.load(Ordering::SeqCst) {
+            return Err(
+                "Connect and sign in online to synchronize members. Offline changes were retained."
+                    .into(),
+            );
+        }
+        Ok(PendingMemberSync {
+            path: store.database_path(),
+            session: store
+                .removal_session
+                .as_ref()
+                .ok_or("Verified sign-in is required")?
+                .clone(),
+            epoch: self.epoch.load(Ordering::SeqCst),
+        })
+    }
+    pub fn run_member_sync(&self, job: PendingMemberSync) -> Result<MemberSyncOutcome> {
+        use super::member_worker::{Limits, Run};
+        if job.epoch != self.epoch.load(Ordering::SeqCst) {
+            return Err("Synchronization cancelled because the account session changed".into());
+        }
+        let mut slot = self
+            .transport
+            .try_lock()
+            .map_err(|_| "Member synchronization is already running or unavailable")?;
+        let transport = slot
+            .as_mut()
+            .ok_or("Sign in online before synchronizing members")?;
+        let mut worker = Store::open(&job.path)?;
+        worker.removal_session = Some(job.session);
+        // The durable session nonce is rechecked inside every receipt/page
+        // transaction, so a logout or another app cannot commit a late reply.
+        let run = worker.run_member_sync(
+            transport,
+            Utc::now(),
+            Limits {
+                pushes: 10,
+                pages: 5,
+            },
+        );
+        if job.epoch != self.epoch.load(Ordering::SeqCst) {
+            *slot = None;
+            return Err("Synchronization cancelled because the account session changed; unconfirmed changes were retained".into());
+        }
+        let (state, pushed, pages, reason) = match run? {
+            Run::Complete { pushed, pages } => (
+                "complete",
+                pushed,
+                pages,
+                "Member changes confirmed by the server. Other modules remain local.".into(),
+            ),
+            Run::Yielded { pushed, pages } => (
+                "yielded",
+                pushed,
+                pages,
+                "Member synchronization will continue on the next run.".into(),
+            ),
+            Run::Deferred { .. } => (
+                "deferred",
+                0,
+                0,
+                "Waiting before retrying the server. Local changes were retained.".into(),
+            ),
+            Run::Failed => (
+                "failed",
+                0,
+                0,
+                "Member synchronization failed. Local changes were retained.".into(),
+            ),
+            Run::Blocked => (
+                "blocked",
+                0,
+                0,
+                "Review pending member conflicts before synchronization can continue.".into(),
+            ),
+        };
+        let denied = worker.removal_session.is_none();
+        if denied {
+            *slot = None;
+            self.online_transport.store(false, Ordering::SeqCst);
+        }
+        Ok(MemberSyncOutcome {
+            state,
+            pushed,
+            pages,
+            reason,
+            denied,
+            epoch: job.epoch,
+        })
+    }
+    pub fn finish_member_sync(
+        &self,
+        store: &mut Store,
+        outcome: MemberSyncOutcome,
+    ) -> Result<MemberSyncOutcome> {
+        if outcome.epoch != self.epoch.load(Ordering::SeqCst) {
+            return Err("Synchronization account session changed".into());
+        }
+        if outcome.denied {
+            self.logout(store)?;
+        }
+        Ok(outcome)
+    }
+    pub fn member_sync_status(&self, store: &Store, snapshot: &mut Value) {
+        let available =
+            self.online_transport.load(Ordering::SeqCst) && store.native_identity(false).is_ok();
+        snapshot["memberSync"]["available"] = json!(available);
+        snapshot["memberSync"]["reason"] = json!(if available {
+            "Member synchronization is connected. Other modules remain local."
+        } else {
+            "Sign in online to synchronize members. Offline changes are retained."
+        });
     }
     pub fn lock(&self, store: &mut Store) -> Result<()> {
         self.epoch.fetch_add(1, Ordering::SeqCst);
+        self.online_transport.store(false, Ordering::SeqCst);
         store.lock_native_session();
+        store.conn.execute("INSERT INTO metadata VALUES('native_session_nonce',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [id()]).map_err(db_error)?;
         store
             .conn
             .execute("DELETE FROM temp.native_actor", [])
             .map_err(db_error)?;
-        *self
-            .transport
-            .lock()
-            .map_err(|_| "Native session unavailable")? = None;
+        match self.transport.try_lock() {
+            Ok(mut transport) => *transport = None,
+            Err(std::sync::TryLockError::WouldBlock) => (), // running job sees the epoch/nonce revocation
+            Err(_) => return Err("Native session unavailable".into()),
+        }
+        match self.renewal.try_lock() {
+            Ok(mut renewal) => *renewal = None,
+            Err(std::sync::TryLockError::WouldBlock) => (),
+            Err(_) => return Err("Native session renewal unavailable".into()),
+        }
         Ok(())
     }
 }
 impl Store {
-    fn native_identity(&self, write: bool) -> Result<(String, String)> {
+    pub(super) fn native_identity(&self, write: bool) -> Result<(String, String)> {
         let session = self
             .removal_session
             .as_ref()
             .ok_or("Verified Administrator sign-in is required")?;
+        super::removal::current_session(&self.conn, session)?;
         if session.expires_at <= Utc::now() {
             return Err("Account session expired; sign in again".into());
         }

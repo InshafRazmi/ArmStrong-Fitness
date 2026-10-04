@@ -7,7 +7,10 @@ use uuid::Uuid;
 
 mod desktop_auth;
 mod finance;
-pub use desktop_auth::{DesktopAuth, DesktopAuthStatus};
+pub use desktop_auth::{
+    DesktopAuth, DesktopAuthStatus, MemberSyncOutcome, PendingMemberSync, PendingSessionRenewal,
+    SessionRenewal,
+};
 mod member_conflicts;
 pub use member_conflicts::MemberConflictInput;
 mod member_http;
@@ -17,6 +20,7 @@ mod native_auth;
 mod native_credentials;
 mod native_https;
 mod native_process;
+mod offline_access;
 pub use native_credentials::DeviceApproval;
 mod removal;
 pub use removal::{ExpenseVoidInput, MemberRemovalInput};

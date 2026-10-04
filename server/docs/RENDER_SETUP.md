@@ -9,9 +9,11 @@ build followed by a failed API startup; no live API has been verified here.
 
 The installation name is **ArmStrong Fitness** and the existing account's
 Administrator display name is **ArmStrong**. Those names and a stable new gym
-UUID are prepared in ignored local `server/.env`. They are configuration only;
-no server gym/staff/device record has been inserted. Existing `Test gym` and
-`Unrelated gym` records remain intact.
+UUID are prepared in ignored local `server/.env`. The confirmed account
+`armstrong@gmail.com` is now registered against that gym as Administrator.
+Account-authorized computer approval SQL is provisioned; the API source/feature
+flag still needs deployment. Existing unrelated records remain intact. Follow
+[automatic computer setup](AUTOMATIC_COMPUTERS.md).
 
 Render hosts this Node/Fastify API; Supabase remains the database/Auth service
 and the Tauri application runs on the gym computer. Render supplies an HTTPS
@@ -53,8 +55,8 @@ the earlier Koyeb zip predates the Render startup changes.
    connection; use it in Render instead of the owner connection. Keep the password
    private. See [runtime database setup](RUNTIME_DATABASE_SETUP.md).
 2. Provision the configured Supabase database CA on Render as a secret file.
-   Render makes a file named `prod-ca-2021.crt` available at
-   `/etc/secrets/prod-ca-2021.crt`; use the actual required CA contents. Set the
+   The current prepared connection uses the user's configured filename `hi3.crt`,
+   available at `/etc/secrets/hi3.crt`; use the actual required CA contents. Set the
    deployed database URL's `sslrootcert` to that path (URL-encoded as needed) and
    retain `sslmode=verify-full`, Session pooler port 5432 and the correct project
    username/host. The local upload copy is `server/certs/prod-ca-2021.crt`.
@@ -85,6 +87,7 @@ Use these prepared settings:
 | Health check | `/health` |
 | Node version | `NODE_VERSION=24` |
 | Environment | `NODE_ENV=production`, `HOST=0.0.0.0` |
+| Computer approval | `AUTOMATIC_DEVICE_ENROLLMENT=true` after deploying migration version 2 |
 | Automatic deploy | Off |
 
 Add only runtime `DATABASE_URL` (restricted login and deployed CA path),

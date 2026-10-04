@@ -9,21 +9,24 @@ use std::{
 // Absolute executable, no shell, no credential in argv/env/temp files. The
 // Secret Service's default persistent collection is mandatory; no file fallback.
 fn command(device: &str, store: bool) -> Command {
+    item_command(device, "device-v1", if store { "store" } else { "lookup" })
+}
+fn item_command(device: &str, purpose: &str, action: &str) -> Command {
     let mut command = Command::new("/usr/bin/secret-tool");
-    if store {
+    if action == "store" {
         command.args([
             "store",
             "--label=Armstrong native device",
             "--collection=default",
         ]);
     } else {
-        command.arg("lookup");
+        command.arg(action);
     }
     command.args([
         "application",
         "lk.armstrong.fitness",
         "purpose",
-        "device-v1",
+        purpose,
         "device",
         device,
     ]);
@@ -56,14 +59,22 @@ fn read_bounded(mut stream: impl Read, limit: usize) -> Result<Vec<u8>> {
         bytes.extend_from_slice(&chunk[..length]);
     }
 }
-fn run(mut command: Command, input: &[u8], deadline: Duration) -> Result<Output> {
+fn run(command: Command, input: &[u8], deadline: Duration) -> Result<Output> {
+    run_bounded(command, input, deadline, 64)
+}
+fn run_bounded(
+    mut command: Command,
+    input: &[u8],
+    deadline: Duration,
+    limit: usize,
+) -> Result<Output> {
     let mut child = command.spawn().map_err(|_| VAULT_ERROR)?;
     let stdout = child.stdout.take().ok_or(VAULT_ERROR)?;
     let stderr = child.stderr.take().ok_or(VAULT_ERROR)?;
     let (sender, receiver) = mpsc::channel();
     let out_sender = sender.clone();
     let out = std::thread::spawn(move || {
-        let _ = out_sender.send((true, read_bounded(stdout, 64)));
+        let _ = out_sender.send((true, read_bounded(stdout, limit)));
     });
     let err = std::thread::spawn(move || {
         let _ = sender.send((false, read_bounded(stderr, 4096)));
@@ -155,6 +166,65 @@ impl CredentialVault for OsVault {
         let ok = output.status.success() && output.stdout.is_empty() && output.stderr.is_empty();
         wipe(&mut output.stdout);
         if ok {
+            Ok(())
+        } else {
+            Err(VAULT_ERROR.into())
+        }
+    }
+}
+
+impl OfflineVault for OsVault {
+    fn read_access(&mut self, device: &str) -> Result<Option<String>> {
+        checked_device(device)?;
+        if Path::new("/.flatpak-info").exists() {
+            return Err(VAULT_ERROR.into());
+        }
+        let mut output = run_bounded(
+            item_command(device, "offline-access-v1", "lookup"),
+            &[],
+            Duration::from_secs(15),
+            ACCESS_LIMIT,
+        )?;
+        if output.status.code() == Some(1) && output.stdout.is_empty() && output.stderr.is_empty() {
+            return Ok(None);
+        }
+        if !output.status.success() || !output.stderr.is_empty() {
+            wipe(&mut output.stdout);
+            return Err(VAULT_ERROR.into());
+        }
+        String::from_utf8(output.stdout)
+            .map(Some)
+            .map_err(|_| RECONCILE.into())
+    }
+    fn save_access(&mut self, device: &str, value: &str) -> Result<()> {
+        checked_device(device)?;
+        if value.is_empty() || value.len() > ACCESS_LIMIT || Path::new("/.flatpak-info").exists() {
+            return Err(VAULT_ERROR.into());
+        }
+        let output = run_bounded(
+            item_command(device, "offline-access-v1", "store"),
+            value.as_bytes(),
+            Duration::from_secs(15),
+            ACCESS_LIMIT,
+        )?;
+        if output.status.success() && output.stdout.is_empty() && output.stderr.is_empty() {
+            Ok(())
+        } else {
+            Err(VAULT_ERROR.into())
+        }
+    }
+    fn clear_access(&mut self, device: &str) -> Result<()> {
+        checked_device(device)?;
+        let output = run_bounded(
+            item_command(device, "offline-access-v1", "clear"),
+            &[],
+            Duration::from_secs(15),
+            ACCESS_LIMIT,
+        )?;
+        if matches!(output.status.code(), Some(0 | 1))
+            && output.stdout.is_empty()
+            && output.stderr.is_empty()
+        {
             Ok(())
         } else {
             Err(VAULT_ERROR.into())

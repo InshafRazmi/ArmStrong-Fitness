@@ -165,6 +165,7 @@ impl MemberTransport for MockServer {
 }
 fn reauthenticate(store: &mut Store) {
     store.removal_session = Some(removal::Session {
+        native_nonce: None,
         can_write: true,
         user_id: "test-admin".into(),
         expires_at: Utc::now() + chrono::Duration::hours(1),
@@ -549,6 +550,40 @@ fn sync_engine_mock_server_session_revoked_during_push_preserves_unacknowledged_
     assert_eq!(f.store.snapshot().unwrap()["pending"], 1);
     assert_eq!(sync_status(&f.store)["cursor"], 0);
     assert_eq!(sync_status(&f.store)["acknowledged"], 0);
+}
+#[test]
+fn sync_engine_mock_reply_after_native_logout_cannot_acknowledge_or_advance_cursor() {
+    let mut f = Fixture::new();
+    let mut server = MockServer::fixture(&mut f.store);
+    let nonce = id();
+    f.store
+        .conn
+        .execute(
+            "INSERT INTO metadata VALUES('native_session_nonce',?1)",
+            [&nonce],
+        )
+        .unwrap();
+    f.store.removal_session.as_mut().unwrap().native_nonce = Some(nonce);
+    f.store.save_member(member("")).unwrap();
+    let path = f.path.clone();
+    server.after_push = Some(Box::new(move || {
+        let other = Store::open(&path).unwrap();
+        other
+            .conn
+            .execute(
+                "UPDATE metadata SET value=?1 WHERE key='native_session_nonce'",
+                [id()],
+            )
+            .unwrap();
+    }));
+    assert!(f
+        .store
+        .run_member_sync(&mut server, Utc::now(), Limits::default())
+        .is_err());
+    assert_eq!(server.events.len(), 1);
+    assert_eq!(f.store.snapshot().unwrap()["pending"], 1);
+    assert_eq!(sync_status(&f.store)["acknowledged"], 0);
+    assert_eq!(sync_status(&f.store)["cursor"], 0);
 }
 #[test]
 fn sync_engine_mock_server_retry_error_and_deadline_are_one_atomic_commit() {

@@ -6,10 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:desktop": "tsc -b && vite build --mode desktop && node scripts/check-packaged-frontend.mjs",
     "preview": "vite preview",
     "test:core": "cargo test --manifest-path src-tauri/Cargo.toml --locked",
     "desktop:build": "npm run build && cargo build --manifest-path src-tauri/Cargo.toml --features desktop,custom-protocol --locked",
     "desktop:run": "npm run desktop:build && cargo run --manifest-path src-tauri/Cargo.toml --features desktop,custom-protocol --locked",
+    "desktop:windows:check": "node scripts/windows-installer.mjs --check",
+    "desktop:windows:build": "node scripts/windows-installer.mjs",
+    "desktop:arch:build": "node scripts/arch-package.mjs",
     "test:desktop": "node tests/desktop-smoke.mjs",
     "test:ui": "node tests/desktop-adapter.test.mjs && node tests/interface-render.mjs"
   },

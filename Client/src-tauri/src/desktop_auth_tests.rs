@@ -1,4 +1,228 @@
 use super::*;
+const BUNDLED: &str = r#"{"authOrigin":"https://auth.example","apiOrigin":"https://api.example","publishableKey":"sb_publishable_mock"}"#;
+#[derive(Default)]
+struct AccessVault {
+    value: Option<String>,
+}
+impl super::super::native_credentials::OfflineVault for AccessVault {
+    fn read_access(&mut self, _: &str) -> Result<Option<String>> {
+        Ok(self.value.clone())
+    }
+    fn save_access(&mut self, _: &str, value: &str) -> Result<()> {
+        self.value = Some(value.into());
+        Ok(())
+    }
+    fn clear_access(&mut self, _: &str) -> Result<()> {
+        self.value = None;
+        Ok(())
+    }
+}
+#[test]
+fn verified_native_login_saves_bounded_offline_access_without_bearer_or_password() {
+    let mut f = Fixture::new();
+    let auth = f.configured();
+    let mut vault = AccessVault::default();
+    auth.initialize(&mut f.store).unwrap();
+    f.store
+        .conn
+        .execute(
+            "INSERT INTO metadata VALUES('native_device_secret_sha256',?1)",
+            [super::super::native_credentials::digest(&"a".repeat(64))],
+        )
+        .unwrap();
+    let epoch = auth.begin(&mut f.store).unwrap();
+    let verified = f.verified(&auth, "Administrator");
+    let status = auth
+        .finish_with_vault(
+            &mut f.store,
+            PendingDesktopLogin { epoch, verified },
+            &mut vault,
+        )
+        .unwrap();
+    assert!(status.authenticated && status.offline_until.is_some() && !status.offline);
+    let saved = vault.value.unwrap();
+    for secret in [
+        "mock-private-access",
+        "mock-private-password",
+        "access_token",
+        "refresh_token",
+    ] {
+        assert!(!saved.contains(secret));
+    }
+    assert!(saved.len() <= super::super::native_credentials::ACCESS_LIMIT);
+    let mut snapshot = f.store.snapshot().unwrap();
+    auth.member_sync_status(&f.store, &mut snapshot);
+    assert_eq!(snapshot["memberSync"]["available"], true);
+}
+#[test]
+fn native_logout_invalidates_dedicated_worker_and_queued_job_before_network() {
+    let mut f = Fixture::new();
+    let auth = f.configured();
+    let mut vault = AccessVault::default();
+    auth.initialize(&mut f.store).unwrap();
+    let epoch = auth.begin(&mut f.store).unwrap();
+    let verified = f.verified(&auth, "Administrator");
+    auth.finish_with_vault(
+        &mut f.store,
+        PendingDesktopLogin { epoch, verified },
+        &mut vault,
+    )
+    .unwrap();
+    let job = auth.prepare_member_sync(&f.store).unwrap();
+    let mut worker = Store::open(&job.path).unwrap();
+    worker.removal_session = Some(job.session.clone());
+    assert!(worker.native_identity(false).is_ok());
+    auth.lock(&mut f.store).unwrap();
+    assert!(worker.native_identity(false).is_err());
+    assert!(auth.run_member_sync(job).is_err());
+    assert!(!auth.online_transport.load(Ordering::SeqCst));
+}
+
+#[test]
+fn logout_cancels_queued_and_completed_session_renewal_without_unlocking_or_network() {
+    let mut f = Fixture::new();
+    let auth = f.configured();
+    let mut vault = AccessVault::default();
+    auth.initialize(&mut f.store).unwrap();
+    assert!(auth.prepare_session_renewal(&f.store).unwrap().is_none());
+    let epoch = auth.begin(&mut f.store).unwrap();
+    let verified = f.verified(&auth, "Administrator");
+    auth.finish_with_vault(
+        &mut f.store,
+        PendingDesktopLogin { epoch, verified },
+        &mut vault,
+    )
+    .unwrap();
+    let queued = auth.prepare_session_renewal(&f.store).unwrap().unwrap();
+    let completed = SessionRenewal {
+        epoch,
+        verified: Some(f.verified(&auth, "Administrator")),
+        refused: false,
+    };
+    auth.lock(&mut f.store).unwrap();
+    assert!(auth.run_session_renewal(queued).is_err());
+    assert!(auth
+        .finish_session_renewal(&mut f.store, completed)
+        .is_err());
+    assert!(!auth.status(&f.store).unwrap().authenticated);
+    assert!(auth.renewal.lock().unwrap().is_none());
+    assert!(auth.transport.lock().unwrap().is_none());
+}
+
+#[test]
+fn fresh_installed_app_requires_login_without_a_workstation_config_file() {
+    let mut f = Fixture::new();
+    let device: String = f
+        .store
+        .conn
+        .query_row(
+            "SELECT value FROM metadata WHERE key='device_id'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let auth = DesktopAuth::load_with_bundled(&f.directory, Some(BUNDLED));
+    auth.initialize(&mut f.store).unwrap();
+    let status = auth.status(&f.store).unwrap();
+    assert!(status.configured && status.requires_login && !status.authenticated);
+    assert!(auth.authorize(&mut f.store, false).is_err());
+    assert!(auth.authorize(&mut f.store, true).is_err());
+    assert!(!f.directory.join("desktop-auth.json").exists());
+    let unchanged: String = f
+        .store
+        .conn
+        .query_row(
+            "SELECT value FROM metadata WHERE key='device_id'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(device, unchanged);
+}
+
+#[test]
+fn installed_app_preserves_matching_config_and_refuses_other_server_settings() {
+    let mut f = Fixture::new();
+    let path = f.directory.join("desktop-auth.json");
+    std::fs::write(&path, BUNDLED).unwrap();
+    let auth = DesktopAuth::load_with_bundled(&f.directory, Some(BUNDLED));
+    assert!(auth.status(&f.store).unwrap().configured);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), BUNDLED);
+    for other in [
+        BUNDLED.replace("https://api.example", "https://other.example"),
+        BUNDLED.replace("sb_publishable_mock", "sb_publishable_other"),
+    ] {
+        std::fs::write(&path, &other).unwrap();
+        let auth = DesktopAuth::load_with_bundled(&f.directory, Some(BUNDLED));
+        auth.initialize(&mut f.store).unwrap();
+        let status = auth.status(&f.store).unwrap();
+        assert!(status.requires_login && !status.configured && !status.authenticated);
+        assert!(status.reason.contains("settings differ"));
+        assert!(auth.authorize(&mut f.store, false).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), other);
+    }
+}
+
+#[test]
+fn malformed_or_privileged_bundled_settings_never_fall_back_to_local_access() {
+    let mut f = Fixture::new();
+    std::fs::write(f.directory.join("desktop-auth.json"), BUNDLED).unwrap();
+    for invalid in [
+        "private-invalid-config".into(),
+        BUNDLED.replace("sb_publishable_mock", "sb_secret_private"),
+        BUNDLED.replace("https://api.example", "http://api.example"),
+        BUNDLED.replace("{", "{\"databaseUrl\":\"private-sql-password\","),
+    ] {
+        let auth = DesktopAuth::load_with_bundled(&f.directory, Some(&invalid));
+        auth.initialize(&mut f.store).unwrap();
+        let status = auth.status(&f.store).unwrap();
+        assert!(status.requires_login && !status.configured && !status.authenticated);
+        assert!(auth.begin(&mut f.store).is_err());
+        assert!(!serde_json::to_string(&status).unwrap().contains("private"));
+        assert_eq!(
+            std::fs::read_to_string(f.directory.join("desktop-auth.json")).unwrap(),
+            BUNDLED
+        );
+    }
+}
+
+#[test]
+fn invalid_existing_settings_cannot_be_hidden_by_a_valid_installer_default() {
+    let mut f = Fixture::new();
+    for invalid in [
+        "invalid-local".into(),
+        BUNDLED.replace("{", "{\"apiOrigin\":\"https://api.example\","),
+    ] {
+        std::fs::write(f.directory.join("desktop-auth.json"), &invalid).unwrap();
+        let auth = DesktopAuth::load_with_bundled(&f.directory, Some(BUNDLED));
+        auth.initialize(&mut f.store).unwrap();
+        assert!(!auth.status(&f.store).unwrap().configured);
+        assert!(auth.authorize(&mut f.store, false).is_err());
+        assert_eq!(
+            std::fs::read_to_string(f.directory.join("desktop-auth.json")).unwrap(),
+            invalid
+        );
+    }
+}
+
+#[cfg(feature = "packaged-auth")]
+#[test]
+fn packaged_build_has_the_approved_public_endpoints_and_starts_locked() {
+    let mut f = Fixture::new();
+    let auth = DesktopAuth::load_packaged(&f.directory);
+    auth.initialize(&mut f.store).unwrap();
+    assert_eq!(
+        auth.config.as_ref().unwrap().api_origin,
+        "https://armstrong-fitness.onrender.com"
+    );
+    assert_eq!(
+        auth.config.as_ref().unwrap().auth_origin,
+        "https://pxhnvhiaesapykivsopa.supabase.co"
+    );
+    assert!(auth.status(&f.store).unwrap().configured);
+    assert!(auth.authorize(&mut f.store, false).is_err());
+}
+
 struct Fixture {
     directory: std::path::PathBuf,
     store: Store,
@@ -67,6 +291,7 @@ impl Fixture {
             .execute("INSERT INTO user_roles VALUES(?1,?2)", params![user, role])
             .unwrap();
         self.store.removal_session = Some(removal::Session {
+            native_nonce: None,
             user_id: user,
             expires_at: Utc::now() + chrono::Duration::minutes(5),
             can_write,

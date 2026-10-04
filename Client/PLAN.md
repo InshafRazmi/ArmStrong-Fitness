@@ -1,5 +1,112 @@
 # Core release plan
 
+## Active release gates — 2026-10-05
+
+The requested final all-features release remains open. The latest milestone
+supersedes the historical status/sequence below. Installed Windows is mandatory,
+Arch optional; retain black/amber UI, native SQLite history and existing queues.
+
+Completed locally: packaged public connection settings, native account login,
+automatic credential preparation, tested account-authorized computer approval
+SQL/API path, bounded OS-vault offline restart, logout/late-reply fencing, native
+member scheduling/retries and in-memory online token renewal. The actual approved
+Administrator/gym are registered in production; onboarding migration version 2
+is applied. The native Arch acceptance package is built. No production desktop
+or Windows installer acceptance is claimed.
+
+1. Apply the prepared source to the verified GitHub baseline using a writable
+   checkout; the connector's content write is blocked by 403. Preserve private
+   env/certificates; remove tracked server env and rotate exposed credentials.
+2. Deploy updated Render source and set `AUTOMATIC_DEVICE_ENROLLMENT=true` with
+   the existing restricted runtime login/TLS CA. Verify current revision,
+   actual password Auth, real native enrollment, new-computer member download,
+   dropped-response/restart retries, logout, token renewal and device revocation.
+3. Run the Windows Actions workflow and retrieve its actual NSIS setup. Test
+   fresh installation, Credential Manager, upgrade/data preservation, cached
+   offline access/restart, NFC HID and physical receipt printing.
+4. Complete cloud persistence/download/receipts for membership plans/periods,
+   attendance, invoices/allocations/payments/receipts/reversals, products/sales/
+   stock, expenses/voids, settings and audit. Preserve integer minor units,
+   FK/history/actor mappings and atomic groups. Never clear a queue for an
+   unconfirmed commit or overwrite conflicting financial/stock histories.
+5. Verify all-module outage/reconnect/idempotency and safe restore reconciliation
+   against real services on supported desktops; build final installers only
+   after these pass. Additional computers currently have read-only access;
+   keep the single-writer rule until multi-writer reconciliation is designed,
+   owner-approved and tested. The topology question is still unanswered.
+
+See [delivery guide](docs/DELIVERY.md) and current [STATUS](STATUS.md) for actual
+checks and limitations. An Arch package or successful frontend build alone does
+not close these release gates.
+
+## Windows installation required; Linux optional, 2026-10-05
+
+User chose an installed desktop app, with Windows mandatory and Linux optional,
+and supplied `InshafRazmi/ArmStrong-Fitness`. Current public settings are bundled
+into the Windows build so login requires no per-computer configuration file.
+The NSIS builder includes WebView2 for installation without destination internet;
+Windows Actions/build and acceptance artifacts are being prepared/verified.
+
+GitHub's connector rejected file creation with 403 despite the account's push
+permission. Deliver the tested source patch preserving the latest main/backend
+changes; apply/push it from a writable checkout or restore connector write scope
+before the actual Windows Actions run and artifact download. No PR was opened.
+
+Next: finish account-authorized device onboarding, new-computer data download,
+secure offline unlock/restart/renewal and genuine reconnect sync for all required
+modules. Preserve stored records/queues and verify multi-computer conflicts,
+financial/inventory consistency, Windows hardware/printing and upgrades.
+The API's current approved-device/one-writer gates remain until their replacement
+is implemented and tested. Packaging is not full offline/sync release acceptance.
+
+The public repository currently tracks a populated server env file. Remove that
+tracked file in the proposed change, preserve the local private copy and rotate
+exposed database/Administrator/privileged Auth credentials through the account.
+Keep server credentials out of build inputs/artifacts and the desktop client.
+
+## Revised target: login from any desktop and continue during network outages
+
+The latest user clarification requires account-based access from supported
+desktops with durable offline work and actual synchronization on reconnect.
+Manual per-computer server file edits and the existing one-writer pilot are not
+the requested final experience. Browser website versus installed app versus both
+is awaiting the user's response; preserve offline access in every selected mode.
+
+Before extending the current onboarding path, select delivery mode, implement
+real Administrator/gym access with automatic or in-app computer setup, finish
+durable shared-data synchronization and define offline unlock/restart behavior.
+First use of a new computer requires internet to authenticate/download data.
+Cover cross-computer data visibility, persisted offline queues, dropped-response
+retries, conflicts, logout/expiry, reconnect and financial/inventory invariants.
+The browser demo is not a production frontend and the current cloud API is
+member-only; retain these gaps in the release scope. Do not silently clear local
+data, pending operations or the existing authorization guards to simplify login.
+
+## Hosted API responds — desktop registration and sign-in next, 2026-10-05
+
+The user supplied the exact expected live `/health` service/protocol response
+from `https://armstrong-fitness.onrender.com`. Record this as user-reported
+process health; independent HTTP status/revision checks remain unavailable in
+this DNS-restricted environment. The public origin is saved in the private local
+runtime configuration with existing credentials and registration settings intact.
+
+Prepare the actual desktop's OS-stored credential, add its existing SQLite path
+and verified hash locally, review/apply Administrator/device registration, then
+provision the three public desktop fields and verify native sign-in/enrollment.
+Keep member scheduling disabled until genuine synthetic sync acceptance passes.
+Remaining modules, restore reconciliation, offline restart policy and Windows/
+hardware/printing/installer acceptance are still required for the full release.
+
+## Render role-refusal cause confirmed — owner URL still active
+
+The supplied Render setting uses `postgres.<project-ref>`. The existing runtime
+role is already provisioned; replace the complete deployed DATABASE_URL with the
+prepared `armstrong_api` connection. Its CA path now matches the supplied
+`/etc/secrets/hi3.crt`, and production validation passes. Confirm that certificate
+secret, save/deploy, restore `npm start` after diagnosis and verify actual
+Node/pg password/TLS/HTTPS/health before native enrollment and release work.
+No remote SQL/credential rotation or business-data changes were needed.
+
 ## Restricted runtime login ready — Render settings pending, 2026-10-05
 
 The reported production role error is handled by provisioning the previously

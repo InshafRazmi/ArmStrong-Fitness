@@ -10,20 +10,21 @@ import { displayDate } from "./utils/format";
 
 export default function App() {
        const { mode, desktop, toasts, notify } = useGym();
+       const native = import.meta.env.VITE_DESKTOP_ONLY === 'true' || mode === 'desktop';
        const [authenticated, setAuthenticated] = useState(
               () =>
-                     mode === "desktop" ||
+                     native ||
                      sessionStorage.getItem("armstrong-demo-auth") === "true",
        );
        const [page, setPage] = useState<Page>("Dashboard");
        const [selected, setSelected] = useState<Member | null>(null);
-       if (!authenticated || (mode === "desktop" && desktop?.authStatus?.requiresLogin && !desktop.authStatus.authenticated))
+       if (!authenticated || (native && desktop?.authStatus?.requiresLogin && !desktop.authStatus.authenticated))
               return <LoginPage onLogin={() => setAuthenticated(true)} />;
        const content = <PageContent page={page} navigate={setPage} />;
        const logout = () => {
-              if (mode === "desktop") {
+              if (native) {
                      setSelected(null);
-                     void desktop!.logout().catch(() => notify("Sign-out failed. Restart the application to lock the session.", "error"));
+                     void desktop!.logout().catch(() => notify("Account locked. Offline credential cleanup needs the OS credential store to be unlocked.", "error"));
                      return;
               }
               sessionStorage.removeItem("armstrong-demo-auth");
@@ -45,7 +46,7 @@ export default function App() {
                                                  role="note"
                                           >
                                                  <b>{desktop.authStatus?.authenticated ? `Signed in as ${desktop.authStatus.userName}` : "Desktop SQLite — local test build"}</b>
-                                                 {desktop.authStatus?.authenticated ? `${desktop.authStatus.canWrite ? "Administrator access" : "Read-only computer"}. Server synchronization remains unavailable.` : "Authentication is not configured. This local test operator has unrestricted access. Use test records only."}
+                                                 {desktop.authStatus?.authenticated ? `${desktop.authStatus.canWrite ? "Administrator access" : "Read-only computer"}${desktop.authStatus.offline ? " · Offline session" : ""}. ${desktop.snapshot?.memberSync?.available ? "Member sync connected; other modules remain local." : "Connect and sign in online to sync members."}` : "Authentication is not configured. This local test operator has unrestricted access. Use test records only."}
                                           </div>
                                           {desktop.error && (
                                                  <div

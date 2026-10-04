@@ -4,10 +4,28 @@ use rusqlite::Transaction;
 
 // This is a native-only session seam for verified enrollment/login integration.
 // Store::open and restore never grant it. No IPC accepts a user ID or grants a session.
+#[derive(Clone)]
 pub(super) struct Session {
     pub(super) user_id: String,
     pub(super) expires_at: DateTime<Utc>,
     pub(super) can_write: bool,
+    pub(super) native_nonce: Option<String>,
+}
+pub(super) fn current_session(conn: &Connection, session: &Session) -> Result<()> {
+    if let Some(expected) = &session.native_nonce {
+        let actual: Option<String> = conn
+            .query_row(
+                "SELECT value FROM metadata WHERE key='native_session_nonce'",
+                [],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db_error)?;
+        if actual.as_ref() != Some(expected) {
+            return Err("Native account session changed; sign in again".into());
+        }
+    }
+    Ok(())
 }
 pub(super) struct Actor {
     pub(super) user_id: String,
@@ -29,6 +47,7 @@ pub struct ExpenseVoidInput {
 }
 pub(super) fn authorized(conn: &Connection, session: Option<&Session>) -> Result<Actor> {
     let session = session.ok_or("Removal requires an authenticated Administrator session")?;
+    current_session(conn, session)?;
     if session.expires_at <= Utc::now() {
         return Err("Staff session expired; authenticate again".into());
     }

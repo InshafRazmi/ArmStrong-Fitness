@@ -1635,6 +1635,7 @@ fn removal_admin(store: &mut Store) {
     // Test-only trusted session setup. This helper is never built into the desktop binary.
     store.conn.execute_batch("INSERT INTO users VALUES('test-admin','verified-test-subject','admin@example.test','Verified test administrator',1,1); INSERT INTO roles VALUES('test-administrator','Administrator'); INSERT INTO user_roles VALUES('test-admin','test-administrator');").unwrap();
     store.removal_session = Some(removal::Session {
+        native_nonce: None,
         can_write: true,
         user_id: "test-admin".into(),
         expires_at: Utc::now() + chrono::Duration::hours(1),
@@ -1815,6 +1816,7 @@ fn removal_unlinked_member_deletion_retains_actor_audit_outbox_and_durable_retry
     let mut reopened = Store::open(&f.path).unwrap();
     assert!(reopened.delete_member(input.clone()).is_err());
     reopened.removal_session = Some(removal::Session {
+        native_nonce: None,
         can_write: true,
         user_id: "test-admin".into(),
         expires_at: Utc::now() + chrono::Duration::hours(1),
@@ -1986,6 +1988,7 @@ fn removal_authorization_denies_unauthenticated_expired_inactive_nonadmin_revoke
     removal_admin(&mut f.store);
     for denied in ["expired", "inactive", "nonadmin"] {
         f.store.removal_session = Some(removal::Session {
+            native_nonce: None,
             can_write: true,
             user_id: "test-admin".into(),
             expires_at: if denied == "expired" {
@@ -2195,6 +2198,7 @@ fn removal_backup_restore_preserves_archived_user_fk_void_history_and_never_rest
     let preview = f.store.preview_restore(backup).unwrap();
     // Expiry changes runtime capability, not the persisted confirmation fingerprint.
     f.store.removal_session = Some(removal::Session {
+        native_nonce: None,
         can_write: true,
         user_id: "test-admin".into(),
         expires_at: Utc::now() - chrono::Duration::seconds(1),

@@ -1,11 +1,30 @@
 # Native Administrator sign-in
 
+Windows is the required installed-app platform; Linux is optional. Windows builds
+using `packaged-auth` include the approved three public connection settings, so
+users do not need to create `desktop-auth.json`. Existing conflicting settings
+are preserved and access stays locked. The configuration-file instructions below
+describe the separate local development path. See
+[Windows delivery and unfinished account/offline gates](WINDOWS_INSTALLER.md).
+The approved Administrator is `armstrong@gmail.com`, display name **ArmStrong**,
+gym **ArmStrong Fitness**. Account-based computer approval SQL is provisioned;
+deploy the updated API and enable `AUTOMATIC_DEVICE_ENROLLMENT=true` before using
+it. See [automatic computer setup](../../server/docs/AUTOMATIC_COMPUTERS.md).
+
 This is implemented desktop wiring with local tests, **not live acceptance**.
 The HTTPS API, approved registration, usable OS credential storage and a GUI
-session are still required. Member sync remains disabled. The separate browser
+session are still required. Native member sync is wired to the HTTPS worker and
+scheduler; other modules remain local. The separate browser
 login is a demo and cannot grant a native session.
 
-## Prepare and register this computer
+## Automatic preparation and the older-server fallback
+
+Normal online login prepares this computer's OS credential and asks the API to
+approve it against the existing verified Administrator/gym. One active computer
+can edit; additional approved computers are read-only. Exact retries keep their
+identity/hash/permissions, and revoked computers cannot register themselves again.
+No caller-supplied role, gym or writer flag is accepted. The following manual
+workflow remains for older deployed API versions and Administrator diagnostics.
 
 In the desktop, open Settings → Server synchronization → **Prepare this computer**.
 The same action is available under Computer registration on the native login page.
@@ -70,13 +89,22 @@ Administrator role and device writer permission. Read-only approved computers
 can browse/export while writes are refused. New records, audit entries and saved
 receipt actor labels use the verified local actor. Existing history is retained.
 
-Account tokens remain in native process memory, outside SQLite/backups/webview.
-The app retains no password or refresh token. Sign out locks local access and
-cancels pending sign-in results; it does not revoke other Supabase sessions.
-Restart and token expiry require another online sign-in. An offline restart
-grant/PIN policy and automatic token refresh are not implemented. An authenticated
-restore retains the auth requirement, checks its actor mapping and locks the
-session; server reconciliation remains necessary afterward.
+Account and rotating refresh tokens remain in native process memory, outside
+SQLite/backups/webview/OS offline grants. The open app checks for renewal every
+30 seconds, starts two minutes before expiry, and re-verifies the online identity
+and device enrollment before extending access. Denials lock access and remove
+offline approval; outages do not extend a session. Restart requires online sign-in
+to resume synchronization because refresh tokens are not persisted.
+
+After verified login, a separate grant in the current OS user's credential store
+permits Continue offline for seven days, including restart. It contains scoped
+identity/permission/expiry data, not a password or server token. It checks the
+existing device credential, database marker, API/Auth/gym scope, active local
+Administrator, expiry and clock rollback. It never renews itself while offline.
+Signing out invalidates the SQLite marker before clearing the OS item and cancels
+queued sign-in/sync/renewal. A durable nonce stops late replies from committing.
+Offline revocation cannot be checked until reconnect. An authenticated restore
+locks the session; server reconciliation remains required before reuse.
 
 ## Native HTTPS implementation and checks
 
@@ -113,4 +141,4 @@ secret. Here it observed unavailable/locked storage with a redacted error. The
 second needs a loopback listener; here binding failed `Operation not permitted`.
 Parser/config/mocked login tests do not prove TLS acceptance, actual device
 storage, GUI login/logout/restart or Windows behavior. Complete real synthetic
-Auth/API/desktop acceptance in the usable environment before enabling sync.
+Auth/API/desktop acceptance in the usable environment before release.

@@ -7,7 +7,8 @@ export type Pool = { connect(): Promise<any> };
 const projection = `jsonb_build_object('id',m.id,'name',m.name,'phone',m.phone,'email',m.email,'nfcId',m.nfc_id,'joinedOn',to_char(m.joined_on,'YYYY-MM-DD'),'revision',m.revision,'archivedAt',CASE WHEN m.archived_at IS NULL THEN NULL ELSE to_char(m.archived_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END,'archivedBy',CASE WHEN m.archived_at IS NULL THEN NULL ELSE jsonb_build_object('id',s.user_id,'name',s.display_name) END)`;
 export class MemberService {
   pool: Pool;
-  constructor(pool: Pool) { this.pool = pool; }
+  automaticEnrollment: boolean;
+  constructor(pool: Pool, automaticEnrollment = false) { this.pool = pool; this.automaticEnrollment = automaticEnrollment; }
   private async transaction(scope: Omit<Scope, 'gymId'> & { gymId?: string }, write: boolean, run: (db: any, role: string, gymId: string) => Promise<unknown>) {
     if (scope.gymId !== undefined) uuid(scope.gymId);
     uuid(scope.deviceId); uuid(scope.userId);
@@ -34,6 +35,19 @@ export class MemberService {
   }
   async enroll(userId: string, body: unknown) {
     const enrollment = parseEnrollment(body);
+    uuid(userId);
+    if (this.automaticEnrollment) {
+      const db = await this.pool.connect();
+      try {
+        const hash = createHash('sha256').update(enrollment.deviceSecret).digest('hex');
+        const reply = await db.query('SELECT armstrong.enroll_desktop($1::uuid,$2::uuid,$3::text) AS enrollment', [userId,enrollment.deviceId,hash]);
+        if (reply.rows.length !== 1 || !reply.rows[0]?.enrollment) throw new ApiError(503,'service_unavailable');
+        return reply.rows[0].enrollment;
+      } catch (error) {
+        if ((error as {code?: string}).code === '42501') throw new ApiError(403,'registration_not_authorized');
+        throw error;
+      } finally { db.release(); }
+    }
     // Verification of owner-approved registration only. Runtime SQL credentials
     // cannot create staff, approve devices or grant roles. No client gym selector.
     return this.transaction({ userId, deviceId: enrollment.deviceId, deviceSecret: enrollment.deviceSecret }, false, async (db, role, gymId) => {

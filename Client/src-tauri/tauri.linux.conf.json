@@ -1,0 +1,6 @@
+{
+  "productName": "ArmStrong Fitness",
+  "app": {
+    "windows": [{ "label": "main", "title": "ArmStrong Fitness", "width": 1440, "height": 900, "minWidth": 960, "minHeight": 640 }]
+  }
+}

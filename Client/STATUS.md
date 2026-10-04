@@ -1,5 +1,220 @@
 # Status — 2026-10-05
 
+## Current milestone: Administrator registered, Arch artifact and offline/member wiring
+
+The latest request is to finish all features and build the final app. That goal
+is **not complete**. Windows remains required; Arch is an optional native build.
+The paragraphs below this milestone are historical and do not override this
+current account/offline/sync state.
+
+The owner confirmed `armstrong@gmail.com`. A real read-only Auth lookup verified
+the existing confirmed, unbanned subject; a guarded owner transaction linked it
+to **ArmStrong Fitness** as Administrator **ArmStrong**, preserving unrelated
+registrations. No computer, credential, synthetic writer or local login was
+fabricated. A CLI-generated private computer-enrollment function was applied to
+the existing test project and production. Production's application ledger now
+records version 2 with the exact source checksum. Runtime EXECUTE is granted,
+public/anon/authenticated execution and direct staff/device DML remain denied.
+Real PostgreSQL fixture transactions passed first writer, exact retry, second
+read-only computer and secret/revocation/role/inactive/unknown-subject refusals;
+those fixture writes were rolled back. SQL verification is not a live Auth/API
+password sign-in or a newly deployed Render endpoint.
+
+Packaged login now prepares its own persistent OS credential automatically.
+Deploy current API source with `AUTOMATIC_DEVICE_ENROLLMENT=true` to enable
+account-based computer approval. The flag defaults off; startup checks function
+permission. The private prepared Render env has the flag, restricted runtime
+connection and `/etc/secrets/hi3.crt`; it is not included in source/artifacts.
+The first active computer edits; later computers are read-only. The optional
+topology question remains unanswered, so the existing single-writer rule is
+retained. Concurrent offline financial writers have not been approved/tested.
+
+Verified online sign-in saves a separate seven-day scoped authorization item in
+Windows Credential Manager or Linux Secret Service. Continue offline unlocks
+existing records after restart using the OS account, existing credential proof,
+scope/subject/active Administrator, expiry/clock and restore checks. The item
+contains no bearer, refresh token or password. SQLite holds only its random
+marker/expiry. Logout invalidates that marker before OS cleanup. Revocation is
+unavailable offline; cached authority expires and is never extended offline.
+
+The native HTTPS member worker now has narrow IPC, a dedicated SQLite connection,
+bounded runs, 30-second scheduling, reconnect wakeup and persistent backoff.
+Only actual matching server receipts acknowledge member operations. Native epoch
+and durable nonce checks prevent queued/late work from committing after logout.
+Open-app session renewal rotates credentials in native memory, re-verifies online
+identity/enrollment and updates permissions before extending access. Refusals
+lock access/remove offline approval; outages do not extend an unverified session.
+An offline restart still needs online sign-in to resume sync. All other business
+modules and their queues remain local; shared financial/stock/attendance/expense
+data download and synchronization are still required for the final release.
+
+The real optimized Arch x86_64 `.pkg.tar.zst` is built with embedded public
+settings/frontend, no smoke features, a launcher/icon/README and SHA-256 delivery
+manifest. Package archive allowlist and dynamic-library resolution passed.
+The separate desktop Vite mode removes browser-demo login/session/storage code
+from packaged assets. A build check rejects those markers; a missing/broken
+native bridge shows a locked error screen without loading browser demo records.
+The final artifact is under `Client/dist-linux/`; build with
+`npm run desktop:arch:build`. This is an acceptance build, not the final release.
+An isolated launch failed at GTK initialization before creating any app files;
+this execution session cannot certify GUI/keyring/login behavior.
+
+Measured final source checks: **161 packaged native tests PASS / 2 OS/TLS probes
+ignored**, **17 adapter checks PASS**, all interface route/settings/login renders
+PASS, frontend build PASS and native Clippy PASS with warnings denied. Backend
+strict typing/provenance and **70 unit checks PASS / 1 sandbox child-process skip**
+also passed. Unit/HTTP mocks do not prove live Render/native HTTPS acceptance;
+Windows SDK layout tests do not prove real Credential Manager operation.
+
+GitHub main is still `d7e659cccf1f9d19fea5fd4f3f4596645d9f43fa`. Connector writes
+remain rejected with 403; no remote source update, Windows workflow run/installer,
+PR or Render redeploy has been made. The refreshed desktop patch/source bundle
+and Render source archive are prepared for a writable checkout. Next: deploy
+this concrete source, enable computer approval, run the Windows workflow, verify
+real sign-in/offline/reconnect and complete all-module protocols/download before
+calling the build final. NFC/printer/upgrade acceptance and exposed-credential
+rotation remain open. See [delivery steps](docs/DELIVERY.md).
+
+## Windows installer/public configuration milestone; full offline onboarding open
+
+User selected an installed app with Windows required and Linux optional, and
+provided the repository `InshafRazmi/ArmStrong-Fitness`. Connected GitHub access
+confirms its public visibility, default `main` and push permission. Inspected
+the immutable base `45117fe1740fe97b763454b257c85112f8a2a930`; applicable AGENTS
+and modified native/package sources match the workspace before this change.
+
+The account's push permission does not establish the connector's write scope:
+the attempted Git blob creation was rejected with **403 Resource not accessible
+by integration**. No remote file, branch, PR or workflow run was created. During
+inspection main advanced to `d7e659cccf1f9d19fea5fd4f3f4596645d9f43fa`; preserve
+that backend change and its latest milestone documents in the prepared patch.
+Windows changes will be delivered as a source patch/bundle for a writable
+checkout. A build artifact still requires the Windows workflow to run there.
+
+Prepared `armstrong-windows-changes.zip`: sixteen allowlisted changed sources,
+binary-capable Git patch, guide and per-file SHA-256 manifest. Real `git apply
+--check` and application against exact baseline files PASS; all resulting files
+match staged sources. ZIP CRC/SHA-256 readback PASS. Private env data, old
+credential values and the source upload ZIP itself are excluded. The env removal
+is a separate `git rm --cached` so deleted passwords do not enter the patch.
+
+Added `packaged-auth`: native builds include exactly the approved public Auth
+origin/key and actual Render API origin. Fresh packaged installations require
+login without a per-computer configuration file. Existing matching files remain
+intact; invalid/conflicting files or bundled values keep access locked rather
+than redirecting the gym or bypassing Auth. Compile guards reject production
+Windows builds without packaged Auth and reject packaged builds with UI smoke
+commands. SQLite/device identities, business data and pending operations are
+unchanged. Public values are validated separately from any server env file.
+
+Added an NSIS Windows x64 builder/config using per-user install and an embedded
+WebView2 offline installer, a converted existing-brand ICO, pinned Node/Rust/CLI
+and action versions, and a Windows Actions workflow that runs core/interface
+checks and uploads only the setup executable. No release is published or API
+deployed by that workflow. Windows build/installer acceptance and an actual
+artifact remain pending until its first remote run. Linux has no Windows target
+or Tauri CLI; the local installer command intentionally refuses that host.
+
+Measured locally: **146 core tests PASS / 2 environment probes ignored**;
+**14 packaged Auth checks PASS** including the actual bundled origins/login
+lock; **16 adapter checks PASS** and interface renders PASS; frontend build PASS;
+native packaged desktop `cargo check` PASS; public build preflight PASS.
+Native Clippy with warnings denied and workflow YAML parsing also PASS. Default
+and packaged suites use SQLite and mocked online enrollment, not real Windows
+Credential Manager or live account/device acceptance.
+
+Security inspection found populated database and Administrator probe passwords
+plus a privileged Auth key in tracked `server/.env` on the public repository.
+Values were withheld. The proposed change removes that tracked file and adds
+root ignore rules while preserving the private local copy. Its Git history still
+contains exposed credentials: reset the owner database password, Administrator
+password/sessions and privileged Auth key through Supabase, then update private
+administrative settings. No credentials were rotated by this packaging change;
+the separate prepared runtime password was not in the tracked file.
+
+Next: obtain/verify the Windows artifact; finish account-authorized computer
+onboarding without server file edits, multi-computer data download, secure offline
+session/restart/renewal and real sync scheduling/all-module protocols. The server
+still requires existing device approval and one writer; native sessions still
+expire/restart online. No guards were removed or full offline/sync release claimed.
+Windows fresh-install/upgrade/NFC/printing and actual outage/reconnect acceptance
+remain required. See [Windows delivery](docs/WINDOWS_INSTALLER.md).
+
+## Access requirement clarified: any desktop, account login and offline work
+
+The user wants to open the frontend on any desktop, sign in and use it, and
+continue working when the network is down with synchronization after reconnect.
+This supersedes treating manual per-computer env/configuration steps or a
+single approved editing computer as the intended final user experience. An
+access-mode question is pending: browser website, installed desktop app or both.
+Do not assume an installed app solely from the word desktop.
+
+Inspection confirms browser login is still hardcoded demo access, browser data
+is seeded/localStorage-only and browser sync is simulated. Native data uses
+transactional SQLite and an outbox, but real member scheduling is disabled,
+sign-in depends on manual public settings and approved device registration,
+and sessions expire/restart into online sign-in. The API exposes only member
+enrollment/push/pull and currently permits one active writer per gym.
+
+Required outcome: one real Administrator account accesses the same gym from
+supported computers; onboarding does not require users to edit server files;
+first sign-in/data download needs internet; local data and pending changes are
+durable during outages; reconnect retries acknowledge actual server commits
+without duplicate financial/attendance records and surface conflicting changes.
+Offline unlock/restart/expiry must be designed explicitly. Concurrent offline
+stock changes need a defined reconciliation policy. Browser delivery additionally
+needs a production data/auth provider and offline application/data storage;
+hosting the existing demo frontend would not provide the requested behavior.
+
+No authentication, device/writer guard, schema, registration or live-sync behavior
+was changed during this inspection. Delivery choice will determine the next
+implementation; keep existing records and pending operations intact.
+
+## Render health response confirmed by user; desktop setup next
+
+The user opened `https://armstrong-fitness.onrender.com/health` and supplied the
+exact expected body: `{"status":"ok","service":"armstrong-member-api","protocolVersion":1}`.
+This is user-reported live process/protocol evidence. This environment could not
+independently reach Render because DNS resolution failed, including for
+`render.com`; no independently observed HTTP status or deployed revision is
+claimed. Current source checks its first database connection before listening,
+but health alone does not verify Administrator/device enrollment or member sync.
+
+Saved the confirmed public API origin in ignored `server/.env`, preserving all
+existing values and mode 0600. Gym/Administrator names, stable gym UUID, local
+database/TLS configuration and Auth probe credentials already validate locally.
+Actual desktop SQLite path/native credential hash and native public configuration
+remain pending. No registration, business data or sync scheduling changed.
+
+Next: use **Prepare this computer** in the actual desktop, configure its displayed
+SQLite path and verified hash locally, review/apply Administrator/device
+registration, provision desktop public settings, and verify native sign-in and
+enrollment. Synthetic member-sync acceptance, other-module sync, restore/offline
+policy and Windows/hardware/installer acceptance remain open.
+
+## Active Render owner URL confirmed; corrected runtime URL supplied
+
+The user supplied Render's actual DATABASE_URL. Its username is
+`postgres.<project-ref>`, confirming the exact cause of the repeated production
+role refusal. Its certificate setting uses `/etc/secrets/hi3.crt`. Credentials
+from the supplied owner URL are deliberately absent from this status/source.
+
+Updated only the certificate path in the private `.env.render` to match `hi3.crt`,
+retaining the already-provisioned `armstrong_api` login/password, Session pooler,
+project and verified TLS. Full production configuration validation PASS; the
+private file is still 0600 and replacement was atomic. The complete corrected
+runtime URL was supplied for the user's authorized Render configuration update.
+The original administrative `.env`, remote grants/passwords and business rows
+were not changed. The local CA upload copy retains its filename but can be added
+to Render with secret-file name `hi3.crt`.
+
+Runtime/Render guides and source-only archive are updated to the actual secret
+filename. No new backend/frontend behavior or broad tests are needed for this
+private setting/documentation correction. Next: replace the active service's
+DATABASE_URL with the full runtime connection, confirm the `hi3.crt` secret file,
+save/deploy and verify real login/TLS/startup/health. Restore normal `npm start`
+if the temporary diagnostic command was used. Actual hosted health remains open.
+
 ## Repeated role refusal confirmed in Render logs; active env diagnosis pending
 
 The user confirms the repeated production-role refusal comes from Render's

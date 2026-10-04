@@ -43,7 +43,7 @@ try {
     assert.ok(markup.includes('Local operator') && !markup.includes('Prinzz'), 'no demo administrator in native shell')
     assert.ok(!markup.includes('storage unavailable') && !markup.includes('storage not implemented'), `${page.name} reads implemented storage`)
     if (page.name === 'Dashboard') {
-      assert.ok(markup.includes('Total Members') && markup.includes('Server sync is not configured'))
+      assert.ok(markup.includes('Total Members') && markup.includes('Sign in online to synchronize members.'))
       assert.ok(!markup.includes('Auto-sync on reconnection') && markup.includes('last 28 business days') && markup.includes('Payments + retail sales'))
       assert.ok(markup.includes('524.45'), 'today received amounts include native payments and sales')
     }
@@ -66,8 +66,9 @@ try {
       assert.ok(markup.includes('type="file"') && markup.includes('.armstrong-backup.json') && !markup.includes('disabled=""'))
     } else if (tab === 'NFC reader') assert.ok(markup.includes('Unverified'))
     else if (tab === 'Users & roles') assert.ok(markup.includes('Authentication is not configured') && markup.includes('Use test records only'))
-    else if (tab === 'Server synchronization') assert.ok(markup.includes('Prepare this computer') && markup.includes('OS credential store') && markup.includes('Server approval and account sign-in are still required') && markup.includes('Sync unavailable'))
-    else assert.ok(markup.includes('not implemented') || markup.includes('No authenticated backend'), tab+' accurately reports its capability')
+    else if (tab === 'Server synchronization') assert.ok(markup.includes('Prepare this computer') && markup.includes('Account sign-in prepares this computer automatically') && markup.includes('Sync unavailable'))
+    else if (tab === 'Application updates') assert.ok(markup.includes('Manual updates') && markup.includes('Gym records are stored separately') && !markup.includes('Check for updates'))
+    else assert.ok(markup.includes('Unverified') || markup.includes('No authenticated backend'), tab+' accurately reports its capability')
   }
   console.log('PASS all seven desktop settings panels')
   const restoredMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,desktop:{...value.desktop,snapshot:{...native,restoreRequiresReconciliation:true}}}},h(DesktopSettingsPanel,{tab:'Server synchronization'})))
@@ -105,6 +106,9 @@ try {
   const nativeLogin = renderToStaticMarkup(h(GymContext.Provider,{value:lockedValue},h(App)))
   assert.ok(nativeLogin.includes('login-page') && nativeLogin.includes('Administrator email') && nativeLogin.includes('Internet access is required') && nativeLogin.includes('Computer registration'))
   assert.ok(!nativeLogin.includes('SQLite member') && !nativeLogin.includes('OFFLINE-READY ACCESS'))
+  assert.ok(!nativeLogin.includes('Continue offline'), 'fresh computers cannot invent offline authorization')
+  const offlineLogin = renderToStaticMarkup(h(GymContext.Provider,{value:{...lockedValue,desktop:{...lockedValue.desktop,authStatus:{...lockedAuth,offlineUntil:'2026-10-12T10:00:00Z'}}}},h(App)))
+  assert.ok(offlineLogin.includes('Continue offline') && offlineLogin.includes('OS account') && !offlineLogin.includes('SQLite member'))
   const configuredMissing = renderToStaticMarkup(h(GymContext.Provider,{value:{...lockedValue,desktop:{...lockedValue.desktop,authStatus:{...lockedAuth,configured:false}}}},h(App)))
   assert.ok(/class="login-submit" disabled=""/.test(configuredMissing),'missing native configuration cannot submit a demo login')
   const signedIn = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,desktop:{...value.desktop,authStatus:{...lockedAuth,authenticated:true,canWrite:true,userName:'Verified Administrator',role:'Administrator',expiresAt:'2026-10-04T12:00:00Z'}}}},h(App)))

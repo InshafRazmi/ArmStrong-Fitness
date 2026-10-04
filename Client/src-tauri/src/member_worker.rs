@@ -106,6 +106,7 @@ fn subject(store: &Store) -> Result<String> {
 }
 fn subject_on(conn: &Connection, session: Option<&super::removal::Session>) -> Result<String> {
     let session = session.ok_or("Verified native staff sign-in is required for sync")?;
+    super::removal::current_session(conn, session)?;
     if session.expires_at <= Utc::now() {
         return Err("Staff session expired; sign in again".into());
     }

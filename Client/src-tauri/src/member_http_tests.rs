@@ -330,6 +330,7 @@ fn http_mock_adapter_with_sqlite_acknowledges_only_matching_receipt_and_pulls_af
         )
         .unwrap();
     store.removal_session = Some(crate::removal::Session {
+        native_nonce: None,
         can_write: true,
         user_id: client.subject.clone(),
         expires_at: client.expires_at,
