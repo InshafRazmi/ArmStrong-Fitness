@@ -1,5 +1,8 @@
 # Koyeb setup for ArmStrong Fitness
 
+**Alternative only:** the user subsequently selected Render. Current setup is
+in [RENDER_SETUP.md](RENDER_SETUP.md); the Koyeb source zip is an older snapshot.
+
 The selected deployment target is **Koyeb Eco Micro in Singapore**, with one
 instance kept running. The Node/Fastify API runs on Koyeb, Supabase continues to
 provide PostgreSQL and Auth, and the desktop application runs on the gym computer.

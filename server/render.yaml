@@ -1,5 +1,5 @@
-# Preparation only: creating this Blueprint starts an initial deployment even
-# with autoDeployTrigger off. Do not create/publish without explicit authorization.
+# Selected Render setup: creation starts an initial deployment even with
+# autoDeployTrigger off. Configure account/source access and SQL/CA prerequisites.
 # Select this file as the Blueprint path from the repository root.
 # The Free instance is for testing. Daily operation needs an appropriate paid
 # compute plan: free cold starts can exceed native enrollment/request deadlines.
@@ -10,9 +10,10 @@ services:
     name: armstrong-member-api
     runtime: node
     rootDir: server
+    region: singapore
     plan: free
     autoDeployTrigger: "off"
-    buildCommand: npm ci --include=dev --ignore-scripts --no-audit --no-fund && npm run typecheck && npm test
+    buildCommand: npm ci --include=dev --ignore-scripts --no-audit --no-fund && npm run build:verify
     startCommand: npm start
     healthCheckPath: /health
     envVars:
@@ -28,5 +29,6 @@ services:
         sync: false
       - key: SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: PUBLIC_API_ORIGIN
-        sync: false
+# Render supplies RENDER=true and RENDER_EXTERNAL_URL for the initial startup.
+# Add PUBLIC_API_ORIGIN explicitly only when selecting a custom API domain.
+# Secret Files: mount the actual DB CA as /etc/secrets/prod-ca-2021.crt separately.

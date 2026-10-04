@@ -1,34 +1,48 @@
 # Render API hosting preparation
 
+Render is now the selected provider. Following the free-hosting discussion,
+the setup target is **Free in Singapore** for testing. The latest user selection
+authorizes this Render setup and supersedes the earlier hosting decision gate.
+Finishing live setup still needs account/repository access and restricted database
+credentials with the mounted CA. User-supplied Render logs confirm a successful
+build followed by a failed API startup; no live API has been verified here.
+
 The installation name is **ArmStrong Fitness** and the existing account's
 Administrator display name is **ArmStrong**. Those names and a stable new gym
 UUID are prepared in ignored local `server/.env`. They are configuration only;
 no server gym/staff/device record has been inserted. Existing `Test gym` and
 `Unrelated gym` records remain intact.
 
-Render can host this Node/Fastify API; Supabase remains the database/Auth service
+Render hosts this Node/Fastify API; Supabase remains the database/Auth service
 and the Tauri application runs on the gym computer. Render supplies an HTTPS
 `onrender.com` origin after service creation. That actual origin becomes
-`PUBLIC_API_ORIGIN` and the native `apiOrigin`.
+`PUBLIC_API_ORIGIN` and the native `apiOrigin`. For the first hosted startup,
+the API can use Render's automatic `RENDER_EXTERNAL_URL` while `RENDER=true`.
+It accepts only a canonical HTTPS `onrender.com` origin without a non-default
+port; explicit `PUBLIC_API_ORIGIN` takes precedence for custom domains. Local
+desktop setup still requires the actual origin copied explicitly into `.env`.
 Sources: [Node web service setup](https://render.com/docs/deploy-node-express-app),
-[managed TLS](https://render.com/docs/tls).
+[managed TLS](https://render.com/docs/tls),
+[automatic environment](https://render.com/docs/environment-variables).
 
 ## Instance choice
 
-Use Free for short experiments. Render documents that free services spin down
+Free is selected for initial testing. Render documents that free services spin down
 after 15 minutes without requests and can take about a minute to wake. Native
 HTTPS requests have a 15-second request timeout (18-second outer process limit);
 backend probes have ten-second deadlines. A sleeping free service can therefore
-make sign-in/enrollment fail. Choose a paid web-service instance for normal daily
-operation. Current small web-service compute starts at $7/month; workspace,
-bandwidth and Supabase costs are separate as applicable. This recommendation is
-not a service creation or spending approval.
-Sources: [free limitations](https://render.com/docs/free),
-[current pricing](https://render.com/pricing).
+make the first sign-in/enrollment request fail. Free services can also restart
+at any time and share 750 monthly free hours per workspace. Check actual cold
+starts before daily use; a paid instance remains an option later.
+Source: [free limitations](https://render.com/docs/free).
 
-The existing `render.yaml` still selects Free as a testing template. Select the
-appropriate paid compute plan before a production deployment. Automatic deploys
-are off, but creating a Blueprint still triggers its first deployment.
+`render.yaml` selects Free in Singapore and disables automatic deploys. Creating
+a Blueprint still triggers its first deployment. The source upload bundle
+`server/armstrong-render-source.zip` includes `server/render.yaml` and all code
+required for the locked build, with credentials/certificates/native data excluded.
+Extract it into a separate folder and upload its `server/` directory to a private
+GitHub repository if no project repository exists yet. Use this current snapshot;
+the earlier Koyeb zip predates the Render startup changes.
 
 ## Complete before service creation
 
@@ -37,19 +51,21 @@ are off, but creating a Blueprint still triggers its first deployment.
    The planned `armstrong_api` login was absent in the last real catalog check.
    Keep role/password preparation out of Git and chat. Requirements are in
    [README](../README.md) and [local setup](LOCAL_SETUP.md).
-2. Register the one verified Administrator and actual prepared desktop device
-   through the reviewed registration commands. Preserve unrelated registrations.
-   See [single-account setup](STAFF_DEVICE_SETUP.md).
-3. Provision the configured Supabase database CA on Render as a secret file.
+2. Provision the configured Supabase database CA on Render as a secret file.
    Render makes a file named `prod-ca-2021.crt` available at
    `/etc/secrets/prod-ca-2021.crt`; use the actual required CA contents. Set the
    deployed database URL's `sslrootcert` to that path (URL-encoded as needed) and
    retain `sslmode=verify-full`, Session pooler port 5432 and the correct project
    username/host. A developer-workstation CA path cannot be used remotely.
    [Render secret files](https://render.com/docs/configure-environment-variables#secret-files)
-4. Have the project source in the Git repository connected to Render. Include
+3. Have the project source in the Git repository connected to Render. Include
    `server/vendor/types-pg` and its license/provenance because the locked dev
    dependency uses it. Keep populated env, credentials and SQLite files local.
+
+Actual Administrator/device registration follows verified API hosting and native
+preparation. The API can start before enrollment; no fake registration is needed
+for a health check. Preserve unrelated registrations and follow
+[single-account setup](STAFF_DEVICE_SETUP.md).
 
 ## Service form, after prerequisites
 
@@ -59,8 +75,10 @@ Use these prepared settings:
 | Setting | Value |
 | --- | --- |
 | Runtime | Node |
+| Region | Singapore |
+| Instance | Free |
 | Root directory | `server` |
-| Build command | `npm ci --include=dev --ignore-scripts --no-audit --no-fund && npm run typecheck && npm test` |
+| Build command | `npm ci --include=dev --ignore-scripts --no-audit --no-fund && npm run build:verify` |
 | Start command | `npm start` |
 | Health check | `/health` |
 | Node version | `NODE_VERSION=24` |
@@ -68,8 +86,9 @@ Use these prepared settings:
 | Automatic deploy | Off |
 
 Add only runtime `DATABASE_URL` (restricted login and deployed CA path),
-`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` and the actual `PUBLIC_API_ORIGIN`
-through Render's environment settings. Registration/probe account credentials
+`SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` through Render's environment settings.
+The default `onrender.com` origin comes from Render automatically. Set
+`PUBLIC_API_ORIGIN` explicitly only for a custom API domain. Registration/probe account credentials
 and workstation paths stay in the local administrative setup.
 Sources: [Node version](https://render.com/docs/node-version),
 [environment settings](https://render.com/docs/configure-environment-variables).
@@ -77,7 +96,47 @@ Sources: [Node version](https://render.com/docs/node-version),
 Alternatively select `server/render.yaml` as the Blueprint path after reviewing
 the chosen compute plan, environment values and certificate provisioning.
 Creating the service publishes an endpoint; the user's previous no-public-
-deployment instruction remains until they explicitly authorize this change.
+deployment gate is superseded by the current request to set up Render. Account
+access and the actual runtime database prerequisites still need completion.
+
+## Troubleshoot a successful build with failed startup
+
+The supplied October 4 logs show **66 tests passed**, **Build successful**, then
+`API startup failed (details_withheld)` and exit 1. Keep the build/start commands;
+the failure is during process startup. `.env not found. Continuing without it.`
+is expected with the optional env-file flag: runtime values come from Render's
+Environment settings, and a populated `.env` stays local.
+
+Verify `DATABASE_URL`, `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are present
+and contain real values. On older source, also set `PUBLIC_API_ORIGIN` to the
+actual service HTTPS origin without a trailing slash, path or query. The supplied
+test count predates the current Render-origin test, which suggests older source;
+the count alone does not establish the deployed commit. Setting an explicit
+origin also works with current source. Keep `NODE_ENV=production` and
+`HOST=0.0.0.0`. Use **Save and deploy** after changing runtime settings.
+[Environment settings](https://render.com/docs/configure-environment-variables)
+
+The refreshed `armstrong-render-source.zip` includes safe configuration
+diagnostics. Replace the repository's source from this bundle and deploy its
+latest commit to receive the fix; changing local files cannot update Render.
+Missing/placeholder values now identify the variable name, and missing HTTPS
+origin, invalid port or disabled TLS report their fixed configuration messages.
+Unexpected errors and provider payloads remain withheld. Database login
+restrictions and readable CA/TLS verification are still required; do not copy
+the administrative owner connection into the service. If startup still fails,
+share the new error and deployed repository/commit without credential values.
+
+## Optional external uptime monitor
+
+After real deployment, an external monitor can request the public `/health`
+endpoint every 5–10 minutes without credentials. Based on Render's documented
+inbound-traffic idle rule, this should reset its idle timer; the interval is an
+inference, not an uptime guarantee. Exactly 15 minutes leaves no delay margin.
+Render's internal health checks test process readiness; configuring them does
+not remove the Free instance limits. Monitoring still uses running-instance
+hours and does not prevent provider restarts. No external monitor was created.
+[Free idle behavior](https://render.com/docs/free),
+[platform health checks](https://render.com/docs/health-checks)
 
 After an authorized deployment, save the actual HTTPS origin in local `.env`,
 run `npm run api:check`, finish native public configuration and restart/sign in.

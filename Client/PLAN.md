@@ -1,5 +1,43 @@
 # Core release plan
 
+## Render startup failure — current diagnostic fix verified, 2026-10-05
+
+Supplied cloud logs confirm a successful build and 66 passing tests followed by
+a failed API startup. Missing required env/origin and invalid port/TLS settings
+now report fixed configuration messages without private values; unrelated
+errors remain redacted. Current local strict typing/provenance and 68 tests pass
+with one sandbox subprocess skip, and the frontend build passes. The source-only
+Render zip is refreshed; cloud source/settings and the exact failure remain
+unconfirmed. Logs suggest older source lacking the Render-origin fallback,
+so explicit actual `PUBLIC_API_ORIGIN` is a compatible setup step if needed.
+
+Inspect variable names and repository/branch/commit, complete restricted login
+and CA mounting, deploy current source and verify actual HTTPS/database startup.
+Do not treat local diagnostic correction or cloud build success as a live API
+pass. Continue native enrollment and remaining release work after these gates.
+
+## Render setup selected — Free testing preparation complete
+
+The user switched to Render after asking about free hosting and is completing
+the dashboard's build form. Target Free in Singapore; retain Supabase/PostgreSQL
+Auth and the desktop app. The selected Blueprint/guide, provider-neutral
+`build:verify`, native env example and current source-upload zip are prepared.
+Render startup now validates and uses its automatically assigned HTTPS origin;
+explicit custom origins keep precedence and local desktop setup remains explicit.
+Full strict typing/provenance, **66 checks PASS / 1 sandbox subprocess skip**
+and the frontend build pass. Real Render/Node 24/HTTPS/database/restart acceptance
+remains pending; the prior Koyeb archive predates these changes.
+
+Continue through Render dashboard or the discovered integration once connected.
+No integration installation/connection or remote service has been verified here;
+the repository URL is requested. Restricted API SQL access is still absent in
+the last real catalog query; mount the actual CA and preserve verified TLS and
+the refusal of owner runtime logins. Then deploy, verify/copy the actual origin,
+finish native preparation and Administrator/device registration/enrollment.
+No fresh publication approval is needed for this selected setup; missing external
+access and actual prerequisites remain concrete dependencies. Keep production
+member scheduling disabled and the remaining release milestones open.
+
 ## Koyeb setup selected — local preparation complete
 
 User selection/request now authorizes Koyeb setup, superseding the earlier

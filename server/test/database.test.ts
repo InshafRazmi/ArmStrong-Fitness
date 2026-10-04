@@ -9,8 +9,39 @@ import { Socket } from 'node:net';
 import pg from 'pg';
 import ConnectionParameters from 'pg/lib/connection-parameters';
 import { authorizedDatabaseTls, databaseOptions, sessionDatabaseUrl, databaseFailure } from '../src/database.ts';
+import { config } from '../src/config.ts';
+import { ServerConfigurationError } from '../src/configuration-error.ts';
 
 const fixture = (cert: string) => `postgresql://postgres.abcdefghijklmnopqrst:synthetic%40password@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=verify-full&sslrootcert=${encodeURIComponent(cert)}`;
+
+test('startup diagnostics identify missing configuration without logging environment values; no network', () => {
+  const env = { DATABASE_URL: fixture('synthetic-private-path.pem'), SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_synthetic-private-key', PUBLIC_API_ORIGIN: 'https://fixture-api.onrender.com', NODE_ENV: 'production' };
+  const check = (input: NodeJS.ProcessEnv, expected: string) => assert.throws(() => config(input), error => {
+    assert.ok(error instanceof ServerConfigurationError);
+    assert.equal(databaseFailure(error, 'API startup'), expected);
+    return true;
+  });
+  for (const key of ['DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY']) {
+    for (const value of [undefined, '', 'REPLACE-synthetic-secret']) {
+      check({ ...env, [key]: value }, `Configure ${key}; environment value is missing or still a placeholder`);
+    }
+  }
+  check({ ...env, PUBLIC_API_ORIGIN: undefined }, 'Configure PUBLIC_API_ORIGIN for production HTTPS');
+  check({ ...env, NODE_TLS_REJECT_UNAUTHORIZED: '0' }, 'TLS verification must not be disabled');
+  for (const port of ['0', '65536', '1.5', 'synthetic-secret-port']) check({ ...env, PORT: port }, 'Invalid PORT');
+});
+
+test('startup diagnostics keep unexpected errors and look-alike configuration errors private', () => {
+  const expected = 'API startup failed (details_withheld); connection values and driver details withheld';
+  for (const error of [
+    new Error('synthetic-secret-password'),
+    Object.assign(new Error('synthetic-secret-token'), { name: 'ServerConfigurationError' }),
+    { message: 'synthetic-secret-path', code: 'synthetic-secret-code' },
+    { cause: { message: 'synthetic-secret-provider-payload' } },
+    undefined, null
+  ]) assert.equal(databaseFailure(error, 'API startup'), expected);
+  assert.equal(databaseFailure({ cause: { code: 'EAI_AGAIN', message: 'synthetic-secret-host' } }, 'API startup'), 'API startup failed (EAI_AGAIN); connection values and driver details withheld');
+});
 
 test('database local/driver: CA and mandatory verification survive pg option parsing; no network', () => {
   const dir = mkdtempSync(join(tmpdir(), 'armstrong-ca-test-'));

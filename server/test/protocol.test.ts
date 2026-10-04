@@ -42,6 +42,19 @@ test('production configuration refuses migration owners and built-in roles; no d
   assert.equal(config(env).port,3000); // Administrative checks keep owner access even in a production shell.
   assert.equal(runtimeConfig({...env,NODE_ENV:'development'}).port,3000);
 });
+test('Render startup uses only the verified-form platform origin and preserves explicit configuration; no network',()=>{
+  const env={DATABASE_URL:databaseUrl.replace('postgres.','armstrong_api.'),SUPABASE_URL:'https://abcdefghijklmnopqrst.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fixture',NODE_ENV:'production',RENDER:'true',RENDER_EXTERNAL_URL:'https://assigned-api.onrender.com'};
+  assert.equal(runtimeConfig(env).apiOrigin,env.RENDER_EXTERNAL_URL);
+  assert.equal(runtimeConfig({...env,PUBLIC_API_ORIGIN:'https://api.example.invalid'}).apiOrigin,'https://api.example.invalid');
+  assert.throws(()=>runtimeConfig({...env,RENDER:'false'}),/PUBLIC_API_ORIGIN/);
+  assert.throws(()=>runtimeConfig({...env,RENDER:undefined}),/PUBLIC_API_ORIGIN/);
+  assert.throws(()=>runtimeConfig({...env,RENDER_EXTERNAL_URL:undefined}),/PUBLIC_API_ORIGIN/);
+  for(const origin of ['http://assigned-api.onrender.com','https://assigned-api.onrender.com/','https://user:password@assigned-api.onrender.com','https://assigned-api.onrender.com/path','https://assigned-api.onrender.com?token=private','https://assigned-api.onrender.com#private','https://assigned-api.onrender.com:8443','https://onrender.com','https://assigned-api.onrender.com.example.invalid','https://example.invalid']) {
+    assert.throws(()=>runtimeConfig({...env,RENDER_EXTERNAL_URL:origin}));
+  }
+  assert.throws(()=>runtimeConfig({...env,PUBLIC_API_ORIGIN:'http://api.example.invalid'}));
+  assert.throws(()=>runtimeConfig({...env,DATABASE_URL:databaseUrl}),/restricted database runtime login/);
+});
 test('runtime configuration rejects privileged Auth keys and identical API/Auth endpoints before network',()=>{
   const env={DATABASE_URL:databaseUrl,SUPABASE_URL:'https://abcdefghijklmnopqrst.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fixture'};
   const legacy=(role:string)=>`header.${Buffer.from(JSON.stringify({role})).toString('base64url')}.signature`;

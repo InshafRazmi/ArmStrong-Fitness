@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { X509Certificate } from 'node:crypto';
 import { TLSSocket } from 'node:tls';
 import { PublicAuthConfigurationError } from './public-auth-config.ts';
+import { ServerConfigurationError } from './configuration-error.ts';
 
 export class DatabaseConfigurationError extends Error {}
 function fail(message: string): never { throw new DatabaseConfigurationError(message); }
@@ -47,7 +48,7 @@ export function databaseOptions(value: string) {
 }
 
 export function databaseFailure(error: unknown, stage: string): string {
-  if (error instanceof DatabaseConfigurationError || error instanceof PublicAuthConfigurationError) return error.message;
+  if (error instanceof DatabaseConfigurationError || error instanceof PublicAuthConfigurationError || error instanceof ServerConfigurationError) return error.message;
   const code = (error as { code?: unknown; cause?: { code?: unknown } })?.code ?? (error as { cause?: { code?: unknown } })?.cause?.code;
   const safe = typeof code === 'string' && /^[A-Z0-9_]{3,32}$/.test(code) ? code : 'details_withheld';
   return `${stage} failed (${safe}); connection values and driver details withheld`;

@@ -7,7 +7,8 @@
     "node": "24.x"
   },
   "scripts": {
-    "build:koyeb": "npm run typecheck && npm test",
+    "build:verify": "npm run typecheck && npm test",
+    "build:koyeb": "npm run build:verify",
     "typecheck": "npm run types:verify && tsc --project tsconfig.json",
     "db:check": "node --env-file-if-exists=.env scripts/check-database.ts",
     "db:verify": "node --env-file-if-exists=.env scripts/verify-runtime-schema.ts",
@@ -20,7 +21,7 @@
     "desktop:config:write": "node --env-file-if-exists=.env scripts/provision-desktop-config.ts write",
     "test:db": "node --env-file-if-exists=.env.test scripts/check-database.ts test",
     "test:inspect": "node --env-file-if-exists=.env.test scripts/check-database.ts test-schema",
-    "start": "node --env-file-if-exists=.env src/main.ts",
+    "start": "node --env-file-if-exists=.env --experimental-strip-types src/main.ts",
     "test": "node --test --test-isolation=none test/*.test.ts",
     "test:integration": "npm run test:integration:supabase",
     "test:integration:supabase": "node --env-file-if-exists=.env.test --test --test-isolation=none test/supabase.integration.ts",

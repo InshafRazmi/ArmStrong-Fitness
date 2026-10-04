@@ -1,8 +1,8 @@
 # Armstrong member API
 
 Backend source for the existing `ArmStrong/server/` folder, beside `Client/`.
-The selected architecture is Fastify on Koyeb, with Supabase PostgreSQL/Auth.
-See [Koyeb setup](docs/KOYEB_SETUP.md) for the selected Singapore/Eco Micro target,
+The selected architecture is Fastify on Render, with Supabase PostgreSQL/Auth.
+See [Render setup](docs/RENDER_SETUP.md) for the Singapore/Free testing target,
 build settings, certificate mounting and remaining live deployment requirements.
 The protocol covers **member creates, updates and archives only**.
 It does not synchronize payments, memberships, attendance, inventory, expenses,
@@ -132,8 +132,12 @@ enrollment, deployed HTTPS or desktop sync. It never migrates, repairs or seeds.
 Local certificate files are ignored. Provision the CA file separately in a future
 deployment and point `sslrootcert` to its deployed location; no deployment occurred.
 
-Production (`NODE_ENV=production`) also requires `PUBLIC_API_ORIGIN`, a canonical
-HTTPS origin with no credentials, path, query or fragment. Supabase must likewise
+Production (`NODE_ENV=production`) requires a canonical HTTPS API origin with no
+credentials, path, query or fragment. Set `PUBLIC_API_ORIGIN` explicitly, or let
+Render supply its actual `RENDER_EXTERNAL_URL` while `RENDER=true`; the automatic
+fallback accepts only HTTPS `onrender.com` origins without non-default ports.
+Local setup/native provisioning still require explicit `PUBLIC_API_ORIGIN`.
+Supabase must likewise
 use a canonical HTTPS origin distinct from the API. Native and server settings
 share public publishable/legacy-anon key validation; privileged keys are refused.
 Production startup rejects owner/reserved role names while administrative
@@ -328,22 +332,26 @@ with a **mock Auth verifier**. It remains skipped here. `npm test` remains unit/
 mock evidence. Neither suite substitutes for desktop/Render HTTPS acceptance;
 no API listener/deployment or live desktop sync has been verified.
 
-Koyeb is now the selected hosting provider. `npm run build:koyeb` runs the strict
+Render is now the selected hosting provider. `npm run build:verify` runs the strict
 typecheck and unit/mock suite; `Procfile` defines the startup command. The package
 and lockfile pin the supported runtime major to `24.x`. See
-[Koyeb setup](docs/KOYEB_SETUP.md) before creating the service. Account/source
+[Render setup](docs/RENDER_SETUP.md) before creating the service. Account/source
 access, a separately provisioned runtime database login and the mounted CA are
-still required; no Koyeb service or live URL has been verified in this workspace.
+still required. Supplied Render logs confirm a successful build followed by a
+failed process startup; no live API URL has been verified in this workspace.
+See the guide's startup troubleshooting for the refreshed source bundle and
+safe variable-name diagnostics. Unexpected errors still withhold private details.
 
-The alternative prepared `server/render.yaml` uses repository-relative `rootDir: server`, Node 24,
+The selected `server/render.yaml` uses repository-relative `rootDir: server`, Node 24,
 locked `npm ci --ignore-scripts --no-audit --no-fund` plus unit tests, `npm start`,
 `HOST=0.0.0.0`, Render's `PORT`, `/health`, and environment-only configuration.
 Select that file as the Blueprint path; do not move backend files into Client.
 No migrations or database-owner secrets are run from the runtime build. The
-template uses the free plan and turns automatic deploys off. Creating a Blueprint
-still causes an initial deployment; no service creation/public deployment is
-authorized or performed here. Render handles edge HTTPS; set `PUBLIC_API_ORIGIN`
-to the actual HTTPS origin and verify its certificate before desktop use. This
+template uses Singapore and the free plan, with automatic deploys off. Creating a
+Blueprint still causes an initial deployment. The user selected Render setup;
+successful startup still needs source/settings and database runtime access. Render handles
+edge HTTPS; copy the actual origin into local `PUBLIC_API_ORIGIN` and verify its
+certificate before desktop use. This
 file has not been validated by Render or deployed. See the official
 [Blueprint specification](https://render.com/docs/blueprint-spec) and
 [Render TLS documentation](https://render.com/docs/tls).

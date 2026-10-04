@@ -1,4 +1,118 @@
-# Status — 2026-10-04
+# Status — 2026-10-05
+
+## Render logs confirm build success; safe startup diagnostics fixed locally
+
+Supplied October 4 Render logs show **66 PASS / 0 FAIL / 0 SKIP**, successful
+build upload, then `npm start`, the expected optional-env notice, sanitized
+`API startup failed (details_withheld)` and exit 1. This resolves the reported
+build failure: the actual issue is process startup. The service's current env,
+source commit, URL and root are not visible here; the exact remote cause is
+still unconfirmed. Variable names only and the repository/branch are requested.
+
+Found a local diagnostic defect: missing runtime credentials, missing production
+API origin, invalid port and disabled TLS used generic errors, so startup hid
+their fixed safe messages. They now use `ServerConfigurationError`, recognized
+by the existing sanitized logger. Only application-authored text and variable
+names are exposed; unknown errors, look-alikes and provider payloads stay private.
+No runtime permission, CA/TLS validation or build gate was relaxed.
+
+The supplied log lacks the Render-origin test and totals 66 tests; the previous
+current source had 67. The older Koyeb bundle also lacks Render URL fallback.
+This suggests older source but does not establish the deployed commit. Setting
+the actual canonical HTTPS `PUBLIC_API_ORIGIN` explicitly works with both source
+versions. Missing env is another possible startup cause; neither is claimed as
+the confirmed cloud failure without the settings/source evidence.
+
+Measured: strict typing/provenance and **68 PASS / 1 sandbox subprocess skip**
+(**69 tests total**); frontend build **PASS**, 54 modules. A direct real
+`src/main.ts` invocation with all three required variables unset exits 1 and
+prints only `Configure DATABASE_URL; environment value is missing or still a
+placeholder`, before network access. Checks use local Node 26.10.0; actual
+Render Node version/HTTPS/runtime database remain unverified. Refreshed the
+source-only Render archive with per-file hashes/readback and private exclusions;
+the deploy must receive the updated repository commit to use this correction.
+The Render guide/README now include startup troubleshooting and actual log evidence.
+
+**Next:** verify runtime variable names and actual source/commit, set the real
+HTTPS origin explicitly if deploying older code, complete restricted runtime
+login/grants and mounted CA, deploy current source and verify HTTPS startup.
+No populated env, SQL grants/records, Auth accounts or native configuration changed.
+Native enrollment, member scheduling and remaining release milestones stay open.
+
+## Reported Render build failure — local package passes; cloud error pending
+
+The user reports `build:verify` failed on Render. The first actual error and
+configured Root Directory have been requested. Render logs/source branch are
+not available here: its integration is not confirmed connected, and an accessible
+GitHub repository search for ArmStrong returned no matches. No cloud cause or
+fix is claimed before that evidence arrives.
+
+Fresh current-source `npm run build:verify` **PASS**, with strict/provenance
+checks and **66 PASS / 1 sandbox subprocess skip**. The Render zip's hash manifest
+matches both its extracted bytes and current source; it contains `build:verify`,
+Node `24.x`, the local pg declarations and all nine vendored files.
+
+A separate `/tmp/armstrong-render-repro-*` extraction also completes a clean
+locked install with `NODE_ENV=production`, `--include=dev --ignore-scripts` and
+offline copies of 77 already cached public locked tarballs (**78 packages
+installed**). Its strict/unit build also **PASS**, 66 checks and one subprocess
+skip, with synthetic Render metadata and no populated env or real SQL/Auth.
+Both checks use local Node **26.10.0**, npm **12.2.0**; Node 24/actual Render
+remains unverified. The install's Node-engine warning is expected for this local
+version and is not the user's unknown cloud error. No verification gate,
+provenance hash, compiler setting, runtime secret or active dependency changed.
+
+**Next:** inspect the first Render error and actual build root/source/version.
+If it specifically reports a missing `build:verify` script, the direct equivalent
+is `npm run typecheck && npm test` after the existing locked install; this keeps
+both checks and does not establish that source/settings match. Missing files,
+compiler errors, failed tests and runtime startup errors require their actual
+log and appropriate correction. Hosting/runtime-role/CA/native enrollment and
+the remaining release gates are still open.
+
+## Render selected — Free/Singapore preparation verified; deployment pending
+
+The user switched from Koyeb to Render after discussing free hosting and is now
+entering Render's build settings. Free in Singapore is the stated testing target;
+the current selection supersedes the prior hosting decision gate for this setup.
+No service or actual HTTPS origin has been created/verified by Codex.
+
+Updated the selected [Render guide](../server/docs/RENDER_SETUP.md), Blueprint,
+README and env example. `build:verify` is the provider-neutral strict/unit build
+command; the Koyeb command remains a compatible alias. The Blueprint selects
+Singapore/Free, disables automatic deploys and omits the initial explicit API
+origin because runtime startup can now use Render's actual `RENDER_EXTERNAL_URL`
+when `RENDER=true`. Canonical HTTPS/onrender.com/no non-default-port validation
+applies to that fallback. Explicit origin/custom domain still takes precedence,
+and local native setup still requires the actual copied `PUBLIC_API_ORIGIN`.
+Owner-role refusal, verified database TLS and private settings remain enforced.
+
+Measured: `npm run build:verify` **PASS** (full strict typing/provenance and
+**66 PASS / 1 sandbox subprocess skip**, 67 checks total); frontend build **PASS**,
+54 modules. Added origin tests reject missing/non-Render metadata, plaintext,
+credentials, paths, queries/fragments, non-default ports and substituted domains,
+and retain explicit-origin precedence and owner-login refusal. Checks ran on
+local Node 26.10.0; real Render/Node 24/HTTPS/database/restart acceptance is pending.
+A fresh source-only `armstrong-render-source.zip` includes the Blueprint and
+current startup changes, with source hashes/zip readback and private-file
+exclusions checked. The Koyeb zip is an older snapshot; use the Render bundle.
+
+The Render integration was discovered and suggested but is not confirmed
+installed/connected. No Render CLI/API token is configured here. Repository URL
+has been requested; the local `.git` still has no repository metadata/remote.
+The user can continue in Render's dashboard while connection/source access is
+resolved. The last real catalog query still reports no `armstrong_api` login;
+the existing owner connection cannot run production. Actual CA mounting,
+restricted login/grants and deployment need completion. No populated env,
+remote grants/records, Auth accounts or native device settings were changed.
+
+**Next:** use the current source/build settings; configure restricted runtime
+SQL access and the Render CA secret file; deploy and verify the actual HTTPS
+origin; save the origin locally; finish native preparation, Administrator/device
+registration and enrollment. Optional external `/health` monitoring is documented
+as an inference from idle traffic rules, without uptime guarantees or a created
+monitor. Scheduling and remaining sync/restore/Windows/hardware milestones stay
+open. No paid compute or third-party monitoring service was created.
 
 ## Koyeb selected — deployment preparation verified; account/runtime access pending
 
