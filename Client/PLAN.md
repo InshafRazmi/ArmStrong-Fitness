@@ -1,5 +1,23 @@
 # Core release plan
 
+## Restricted runtime login ready — Render settings pending, 2026-10-05
+
+The reported production role error is handled by provisioning the previously
+absent `armstrong_api` with the private API's exact table/column grants. Real SQL
+checks pass for required reads/locks/zero-row writes and 16 denied operations.
+LOGIN is enabled with a fresh private password; existing owner settings and
+business rows remain intact. Production validation accepts the prepared
+`server/.env.render`; the CA upload copy is `server/certs/prod-ca-2021.crt`.
+Role attributes, lack of other-role memberships/table ownership/schema creation,
+six RLS flags and no anon/authenticated access are confirmed from the real catalog.
+
+Update Render's DATABASE_URL from the prepared private file, mount the CA under
+the deployed filename, save/deploy and verify actual Node/pg password/TLS/API
+health. The local new-login probe remains blocked at DNS; SQL SET ROLE checks
+cannot establish a password/TLS login. Preserve the runtime guard, finish
+native enrollment and remaining release gates, and review the recorded existing
+security advisor findings. The guide and source-only upload bundle are current.
+
 ## Render startup failure — current diagnostic fix verified, 2026-10-05
 
 Supplied cloud logs confirm a successful build and 66 passing tests followed by

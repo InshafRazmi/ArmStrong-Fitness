@@ -48,15 +48,17 @@ the earlier Koyeb zip predates the Render startup changes.
 
 1. Provision and verify the restricted API database login/grants. The local owner
    connection is for registration/migration/probes; production startup refuses it.
-   The planned `armstrong_api` login was absent in the last real catalog check.
-   Keep role/password preparation out of Git and chat. Requirements are in
-   [README](../README.md) and [local setup](LOCAL_SETUP.md).
+   `armstrong_api` is now provisioned on the connected project, with actual
+   grants/denials verified. The ignored local `.env.render` contains its new
+   connection; use it in Render instead of the owner connection. Keep the password
+   private. See [runtime database setup](RUNTIME_DATABASE_SETUP.md).
 2. Provision the configured Supabase database CA on Render as a secret file.
    Render makes a file named `prod-ca-2021.crt` available at
    `/etc/secrets/prod-ca-2021.crt`; use the actual required CA contents. Set the
    deployed database URL's `sslrootcert` to that path (URL-encoded as needed) and
    retain `sslmode=verify-full`, Session pooler port 5432 and the correct project
-   username/host. A developer-workstation CA path cannot be used remotely.
+   username/host. The local upload copy is `server/certs/prod-ca-2021.crt`.
+   A developer-workstation CA path cannot be used remotely.
    [Render secret files](https://render.com/docs/configure-environment-variables#secret-files)
 3. Have the project source in the Git repository connected to Render. Include
    `server/vendor/types-pg` and its license/provenance because the locked dev

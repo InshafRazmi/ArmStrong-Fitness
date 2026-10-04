@@ -149,11 +149,18 @@ Apply `npm run migrate` with a migration-owner connection in a controlled sessio
 The migration is transactional, advisory-locked and checksummed; a changed applied
 migration stops. It creates a private `armstrong` schema. Configure a separate
 server-only runtime role with `USAGE` on that schema, `SELECT` on its tables,
-`UPDATE(change_sequence)` on `gyms`, `INSERT/UPDATE` on `members`, and `INSERT` on
+`UPDATE(change_sequence)` on `gyms`, `INSERT` and updates of editable/archive
+columns on `members`, and `INSERT` on
 `member_operations/member_changes`. It needs RLS bypass **only in combination with
 these restricted grants**; do not grant access to public/anon/authenticated Data API
 roles. The runtime role must not administer staff/devices, delete history, create
 schemas or run migrations. No public RLS policies are supplied.
+
+The connected project's restricted `armstrong_api` login has now been provisioned
+and its actual SQL grants/denials checked. Use the private local `.env.render`
+connection for Render and preserve the owner connection in `.env` for administrative
+work. See [runtime database setup](docs/RUNTIME_DATABASE_SETUP.md) for the prepared
+CA, dashboard steps and the limits of the connection verification.
 
 Normal operation uses **one Administrator login** for attendance and all existing
 controls. The account is authenticated through Supabase Auth and internally mapped

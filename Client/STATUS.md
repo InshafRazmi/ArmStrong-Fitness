@@ -1,5 +1,88 @@
 # Status — 2026-10-05
 
+## Repeated role refusal confirmed in Render logs; active env diagnosis pending
+
+The user confirms the repeated production-role refusal comes from Render's
+deployment log. The private prepared settings still pass production validation
+with `armstrong_api`, correct project/TLS/CA path and the actual API origin; a
+fresh catalog recheck confirms LOGIN enabled and restricted role attributes.
+Render's active DATABASE_URL username is requested without its password.
+
+Prepared a temporary inline Start Command that logs only predefined database
+role labels (or fixed other/missing/invalid labels), then imports the existing
+API entrypoint with all validation intact. It uses only Render's process env
+and requires no source upload. Actual local execution with administrative
+settings prints `postgres` and reproduces the exact guard error; the prepared
+runtime settings print `armstrong_api`, pass that guard and stop on the remotely
+mounted CA path missing locally. Malformed/encoded/private username fixtures
+confirm credential-safe output. No database connection or health pass is claimed.
+
+No env, credentials, SQL grants or server/frontend behavior changed. Next:
+apply the diagnostic Start Command in the service for the actual supplied URL,
+redeploy and inspect its new role line alongside the next startup error. Correct
+the active service variable/override as needed; restore `npm start` after diagnosis.
+
+## Restricted runtime login provisioned; Render environment update pending
+
+The latest supplied startup error confirms the deployed database role is refused
+by the production owner/reserved-role guard. A fresh connected Supabase catalog
+query confirmed no `armstrong_api` role, PostgreSQL 17.11, owner-managed six
+private RLS tables with no policies and no public business-data grants. Current
+official roles/RLS/17 CREATE ROLE docs and changelog were consulted; the markdown
+changelog was unsupported by the browser, so its HTML index was used.
+
+Applied the password-free `armstrong_restricted_runtime_role` migration. It
+creates `armstrong_api` initially NOLOGIN, NOSUPERUSER/NOCREATEDB/NOCREATEROLE,
+NOINHERIT/NOREPLICATION, with BYPASSRLS for the existing private-API access model,
+12 connections, 10-second statements and `pg_catalog` search path. Grants are
+SELECT on six tables, UPDATE(change_sequence) on gyms, INSERT and updates only
+to editable/archive member columns, and INSERT on operations/changes. There are
+no inherited role memberships, owned relations, schema CREATE, Auth/Storage
+usage or new Data API/public role grants. Existing owner/table/RLS data are intact.
+
+**Real SQL permission verification PASS**: SELECT/row-lock and required zero-row
+writes succeed as `armstrong_api`; 16 unauthorized zero-row writes fail, including
+staff/device approval, gym creation/name changes, member scope/join-date changes,
+history rewriting and deletions. Initial SET ROLE failed because the creator's
+automatic ADMIN membership has SET false. The adaptive verification temporarily
+enables SET within its transaction and rolls it back; the final catalog confirms
+the original SET=false/INHERIT=false membership. No business row was modified.
+
+Then enabled LOGIN with a newly generated 256-bit password through a separate
+credential operation, with no password in source/migration SQL or displayed
+output. The complete connection is in ignored `server/.env.render` (0600), with
+only seven runtime settings and the actual supplied API origin. Its syntax passes
+the production guard. Original administrative `.env` was preserved byte-for-byte.
+Copied the same readable/unexpired CA to ignored `server/certs/prod-ca-2021.crt`;
+the deploy URL points to `/etc/secrets/prod-ca-2021.crt`. First private preparation
+needed its missing certificate directory; creation then succeeded without
+overwriting an existing environment/certificate file.
+
+Final catalog confirms LOGIN=true and restricted role attributes/grants; all six
+RLS flags remain enabled, anon/authenticated schema access remains false and no
+private policies were added. Node/pg restricted-login probe with the local CA
+still fails `EAI_AGAIN` before TLS/authentication. This is **not** actual login,
+deployed certificate or HTTPS/health evidence. User must update Render's current
+DATABASE_URL and secret file through its dashboard; no connected Render tool is
+available here. No new publication approval is needed for the selected setup.
+
+Security advisors returned their existing observed October 4 findings: seven
+no-policy INFOs (intentional private tables/ledger), three
+[mutable trigger search paths](https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable),
+public `rls_auto_enable()` definer execution warnings for
+[anon](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable)
+and [authenticated](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable),
+and [Auth password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+These are recorded as release-review work; no clean/fresh security audit is claimed.
+No functions, public grants or Auth settings were changed during this role setup.
+
+Updated runtime/Render documentation and refreshed the allowlisted, hash-verified
+source zip with private settings/CA excluded. Existing strict/unit/frontend
+evidence is retained; no server/frontend behavior changed in this milestone.
+**Next:** copy prepared runtime DATABASE_URL, mount the prepared CA, save/deploy
+and verify actual HTTPS/TLS/startup/health. Native registration/enrollment, member
+scheduling and remaining release milestones still remain open.
+
 ## Render logs confirm build success; safe startup diagnostics fixed locally
 
 Supplied October 4 Render logs show **66 PASS / 0 FAIL / 0 SKIP**, successful
