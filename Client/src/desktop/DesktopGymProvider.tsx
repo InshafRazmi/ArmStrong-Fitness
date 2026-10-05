@@ -58,7 +58,7 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
     window.addEventListener('online',reconnect)
     return () => { clearInterval(timer); window.removeEventListener('online',reconnect) }
   }, [authStatus?.configured,refresh])
-  const memberSyncAvailable = Boolean(native?.memberSync?.available && authStatus?.authenticated && !authStatus.offline)
+  const memberSyncAvailable = Boolean((native?.businessSync ?? native?.memberSync)?.available && authStatus?.authenticated && !authStatus.offline)
   useEffect(() => {
     if (!memberSyncAvailable) return
     const wake = () => { void synchronize() }
@@ -94,7 +94,7 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
     return id
   }
   const value: GymContextValue = {
-    mode: 'desktop', data: native ? desktopData(native) : emptyDesktopData(), online: Boolean(memberSyncAvailable && native?.memberSync?.lastSuccessOn && !native.memberSync.lastError && Date.now() - Date.parse(native.memberSync.lastSuccessOn) < 90_000), syncing, toasts, notify,
+    mode: 'desktop', data: native ? desktopData(native) : emptyDesktopData(), online: Boolean(memberSyncAvailable && (native?.businessSync ?? native?.memberSync)?.lastSuccessOn && !(native?.businessSync ?? native?.memberSync)?.lastError && Date.now() - Date.parse((native?.businessSync ?? native?.memberSync)!.lastSuccessOn!) < 90_000), syncing, toasts, notify,
     desktop: {
       authStatus,
       login: async (email, password) => { const status = await api.desktopLogin(email, password); await refresh(); if (status.reason) notify(status.reason, 'info') },

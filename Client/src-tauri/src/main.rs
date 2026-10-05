@@ -244,6 +244,11 @@ fn void_expense(db: State<Database>, input: ExpenseVoidInput) -> Result<serde_js
 }
 #[cfg(feature = "ui-smoke")]
 #[tauri::command]
+fn smoke_progress(stage: String) {
+    println!("ARMSTRONG_UI_SMOKE stage: {stage}");
+}
+#[cfg(feature = "ui-smoke")]
+#[tauri::command]
 fn smoke_finished(app: tauri::AppHandle, error: Option<String>) {
     if let Some(error) = error {
         eprintln!("ARMSTRONG_UI_SMOKE FAILED: {error}");
@@ -347,7 +352,8 @@ fn main() {
             restore_backup,
             export_report,
             report_summary,
-            smoke_finished
+            smoke_finished,
+            smoke_progress
         ])
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Finished {

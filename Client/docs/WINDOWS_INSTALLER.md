@@ -47,9 +47,9 @@ The connected GitHub integration currently rejects content writes with
 `403 Resource not accessible by integration`; no branch/PR/run has been created.
 Use `armstrong-desktop-changes.zip` from a writable checkout, or give that
 connection contents/workflow write access. The bundle's patch preserves the
-latest inspected main at `d7e659cccf1f9d19fea5fd4f3f4596645d9f43fa` and contains
-no server env file or old secret values. Removing tracked `server/.env` is a
-separate `git rm --cached --ignore-unmatch server/.env`, preserving the local file.
+latest inspected main at `ef1faa0a729db3c74aa21c8c4dd5d6a498bbc9df` and contains
+no server env file or old secret values. Earlier packaging/onboarding changes
+and removal of tracked `server/.env` are already committed on that baseline.
 
 On a Windows x64 developer machine with Rust/MSVC and Node installed:
 
@@ -81,15 +81,20 @@ Continue offline can unlock existing data after restart; signing out removes tha
 grant. No password/bearer/refresh token is saved to SQLite or that grant. The open
 app rotates refresh tokens in native memory and re-verifies identity/enrollment
 before renewing. Offline restart still needs online sign-in to start server sync.
-Native member scheduling retries every 30 seconds and on reconnect, respecting
+Native gym scheduling retries every 30 seconds and on reconnect, respecting
 durable backoff and server receipts. Logout cancels queued work and a durable
 session nonce prevents late replies from committing after logout.
 
-The API has no attendance, finance, inventory or expense synchronization yet.
-Complete shared-data download and durable reconnect/retry/conflict handling for
-those modules. Pending operations are retained; the UI identifies member-only
-sync and does not claim financial data has reached the server. Automatic updates
-remain manual package upgrades. The build is not the final all-features release.
+Protocol 2 covers attendance, finance, inventory, expenses, memberships, profile
+and audit as atomic business transactions. The workflow verifies real native
+envelopes against the server contract before installer creation. The isolated
+Supabase Auth/PostgreSQL suite passes, and production migrations 1–4 are applied.
+Deploy the updated source before native live acceptance. Pending/conflicting
+transactions are retained. Same-computer online backup recovery is implemented;
+live recovery acceptance, general conflict review and large/legacy bootstrap
+remain open. See [restore recovery](RESTORE_RECOVERY.md).
+Automatic updates use manual package upgrades.
+The build is not the final all-features release.
 
 Windows acceptance must cover fresh installation, real Credential Manager
 readback, online login, offline saves/restart, reconnect without duplicates,
@@ -100,8 +105,8 @@ The initial artifact is for acceptance, not a completed production release.
 
 Inspection found a configured `server/.env` committed in the public repository,
 including a database password, Administrator probe password and privileged Auth
-key. The proposed branch removes the tracked file and adds root ignore rules;
-the private local file is preserved. Removing a file does not remove its history.
+key. The tracked file is now removed on main and root ignore rules protect local
+copies. Removing a file does not remove its history or revoke exposed credentials.
 
 Reset the exposed database password in the Supabase project, reset the
 Administrator account password and revoke its active sessions, and revoke/replace

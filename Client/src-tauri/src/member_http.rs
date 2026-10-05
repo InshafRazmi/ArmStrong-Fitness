@@ -102,9 +102,15 @@ impl<C: HttpsExchange> MemberApi<C> {
         if self.expires_at <= Utc::now() {
             return Err(RemoteFailure::Authentication);
         }
+        let business = path.starts_with("/v2/business/");
+        let request_limit = if business {
+            super::business_sync::REQUEST_LIMIT
+        } else {
+            REQUEST_LIMIT
+        };
         if body
             .as_ref()
-            .is_some_and(|bytes| bytes.len() > REQUEST_LIMIT)
+            .is_some_and(|bytes| bytes.len() > request_limit)
         {
             return Err(RemoteFailure::InvalidResponse);
         }
@@ -120,7 +126,11 @@ impl<C: HttpsExchange> MemberApi<C> {
                 ("content-type", "application/json".into()),
             ],
             body,
-            response_limit: RESPONSE_LIMIT,
+            response_limit: if business {
+                super::business_sync::REQUEST_LIMIT + 8192
+            } else {
+                RESPONSE_LIMIT
+            },
         };
         match self.client.send(request) {
             Ok(response) => Ok(response),
@@ -129,6 +139,62 @@ impl<C: HttpsExchange> MemberApi<C> {
             }),
             Err(ExchangeError::InvalidResponse) => Err(RemoteFailure::InvalidResponse),
         }
+    }
+}
+
+fn business_reply(response: Response) -> std::result::Result<Value, RemoteFailure> {
+    match response.status {
+        401 => return Err(RemoteFailure::Authentication),
+        403 => return Err(RemoteFailure::Authorization),
+        429 | 500..=599 => {
+            return Err(RemoteFailure::Transient {
+                retry_after_seconds: retry_delay(response.retry_after.as_deref()),
+            })
+        }
+        200 | 400 | 409 => (),
+        _ => return Err(RemoteFailure::InvalidResponse),
+    }
+    if !response
+        .content_type
+        .as_deref()
+        .and_then(|s| s.split(';').next())
+        .is_some_and(|s| s.trim().eq_ignore_ascii_case("application/json"))
+        || response.body.len() > super::business_sync::REQUEST_LIMIT + 8192
+    {
+        return Err(RemoteFailure::InvalidResponse);
+    }
+    let value: Value =
+        serde_json::from_slice(&response.body).map_err(|_| RemoteFailure::InvalidResponse)?;
+    if response.status == 200 {
+        return Ok(value);
+    }
+    let code = value["error"]
+        .as_str()
+        .filter(|s| {
+            !s.is_empty() && s.len() <= 80 && s.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
+        })
+        .ok_or(RemoteFailure::InvalidResponse)?;
+    Err(RemoteFailure::BusinessConflict { code: code.into() })
+}
+impl<C: HttpsExchange> super::member_worker::BusinessTransport for MemberApi<C> {
+    fn push_business(&mut self, request: &Value) -> std::result::Result<Value, RemoteFailure> {
+        if request["deviceId"] != self.scope.device_id {
+            return Err(RemoteFailure::Authorization);
+        }
+        let response = self.exchange(
+            "POST",
+            "/v2/business/push",
+            Some(serde_json::to_vec(request).map_err(|_| RemoteFailure::InvalidResponse)?),
+        )?;
+        business_reply(response)
+    }
+    fn pull_business(&mut self, after: i64) -> std::result::Result<Value, RemoteFailure> {
+        if !(0..=MAX_CURSOR).contains(&after) {
+            return Err(RemoteFailure::InvalidResponse);
+        }
+        let response =
+            self.exchange("GET", &format!("/v2/business/changes?after={after}"), None)?;
+        business_reply(response)
     }
 }
 fn retry_delay(value: Option<&str>) -> Option<u32> {

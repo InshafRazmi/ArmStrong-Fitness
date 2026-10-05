@@ -61,7 +61,7 @@ pub(crate) struct Runtime {
     last_error: Option<String>,
     last_success_on: Option<DateTime<Utc>>,
 }
-fn scope(conn: &Connection) -> Result<Option<SyncScope>> {
+pub(super) fn scope(conn: &Connection) -> Result<Option<SyncScope>> {
     let saved: Option<String> = conn
         .query_row(
             "SELECT value FROM metadata WHERE key='member_sync_scope'",
@@ -104,7 +104,10 @@ fn put_runtime(conn: &Connection, state: &Runtime) -> Result<()> {
 fn subject(store: &Store) -> Result<String> {
     subject_on(&store.conn, store.removal_session.as_ref())
 }
-fn subject_on(conn: &Connection, session: Option<&super::removal::Session>) -> Result<String> {
+pub(crate) fn subject_on(
+    conn: &Connection,
+    session: Option<&super::removal::Session>,
+) -> Result<String> {
     let session = session.ok_or("Verified native staff sign-in is required for sync")?;
     super::removal::current_session(conn, session)?;
     if session.expires_at <= Utc::now() {
@@ -166,7 +169,7 @@ pub(super) fn review_scope(
     let subject = subject_on(conn, session)?;
     Ok(json!({"scope":saved,"subject":subject}))
 }
-fn authorized(store: &Store, transport: &impl MemberTransport) -> Result<()> {
+pub(crate) fn authorized(store: &Store, transport: &impl MemberTransport) -> Result<()> {
     if restored(&store.conn)? {
         return Err("Restored database requires server reconciliation before sync".into());
     }
@@ -218,6 +221,7 @@ pub(crate) enum RemoteFailure {
     Authorization,
     Rejected { kind: Rejection, member: Value },
     InvalidResponse,
+    BusinessConflict { code: String },
 }
 // Implementations must verify HTTPS, scope and access-token identity. They must
 // never return synthetic success or trust caller-supplied webview identity fields.
@@ -226,6 +230,10 @@ pub(crate) trait MemberTransport {
     fn subject(&self) -> &str;
     fn push(&mut self, request: &Value) -> std::result::Result<Receipt, RemoteFailure>;
     fn pull(&mut self, after: i64) -> std::result::Result<Page, RemoteFailure>;
+}
+pub(crate) trait BusinessTransport: MemberTransport {
+    fn push_business(&mut self, request: &Value) -> std::result::Result<Value, RemoteFailure>;
+    fn pull_business(&mut self, after: i64) -> std::result::Result<Value, RemoteFailure>;
 }
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Run {

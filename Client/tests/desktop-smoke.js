@@ -29,6 +29,7 @@
   Storage.prototype.setItem = function () { throw new Error('Desktop attempted browser storage write'); };
   try {
     await until(() => document.body.textContent.includes('Desktop SQLite') && document.querySelector('.kpi-grid') && button('Refresh'), 'shared desktop interface loaded');
+    await window.__TAURI__.core.invoke('smoke_progress', {stage:'interface loaded'});
     const pages = [
       ['Dashboard', '.kpi-grid'], ['Members', '.toolbar'], ['NFC Attendance', '.scanner'],
       ['Memberships', '.table-card'], ['Payments', '.table-card'], ['Sales & Inventory', '.table-card'],
@@ -56,6 +57,7 @@
     await click('Backup & restore');
     assert(!button('Export backup').disabled && !button('Restore backup').disabled, 'native backups available');
     console.log('ARMSTRONG_UI_SMOKE: all nine navigation destinations and settings tabs verified');
+    await window.__TAURI__.core.invoke('smoke_progress', {stage:'navigation and settings verified'});
     let data = await state();
     if (data.members.length) {
       assert(data.members.length === 1 && data.members[0].name === 'Desktop persistence test', 'member persisted across process restart');
@@ -79,6 +81,7 @@
       assert(document.querySelector('.desktop-history').textContent.includes('Monthly test'), 'membership history visible after restart');
       await closeModal();
       console.log('ARMSTRONG_UI_SMOKE: restart verified');
+      await window.__TAURI__.core.invoke('smoke_progress', {stage:'restart verified'});
     } else {
       assert(data.plans.length === 0 && data.periods.length === 0 && data.pending === 0, 'fresh SQLite is empty');
       await click('Memberships'); await click('Add plan');
@@ -141,7 +144,9 @@
       await click('Receipt'); await until(() => document.querySelector('.finance-receipt'),'real saved-data receipt preview');
       assert(document.querySelector('.finance-receipt').textContent.includes(originalPayment.receiptNumber) && button('Print / system preview'),'saved number and real print action shown');
       await closeModal();
-      assert(JSON.stringify(await window.__TAURI__.core.invoke('payment_receipt',{paymentId:originalPayment.id})) === JSON.stringify(savedOriginal),'reprint does not rewrite receipt after allocation');
+      const reprintedOriginal = await window.__TAURI__.core.invoke('payment_receipt',{paymentId:originalPayment.id});
+      assert(reprintedOriginal.number === savedOriginal.number && JSON.stringify(reprintedOriginal.snapshot) === JSON.stringify(savedOriginal.snapshot),'reprint does not rewrite receipt after allocation');
+      assert(reprintedOriginal.currentStatus === 'Partly allocated','reprint shows current allocation status separately');
       await click('Reverse'); await field('Reversal reason','Incorrect received amount'); await click('Confirm full reversal'); await until(closed,'full reversal committed');
       data = await state();
       assert(data.payments.find(p=>p.id===originalPayment.id).status === 'Reversed' && data.allocations[0].reversedBy && data.financialAccounts[0].outstandingMinor === 1000000 && data.financialAccounts[0].creditMinor === 0,'original retained and allocations released atomically');
@@ -159,10 +164,12 @@
       await click('Allocate'); await field('Invoice',renewalInvoice.id); await field('Amount','1000.00'); await click('Save allocation'); await until(closed,'credit topup committed');
       data = await state();
       assert(data.financialAccounts[0].outstandingMinor === 550075 && data.financialAccounts[0].creditMinor === 100000 && data.financialAccounts[0].netBalanceMinor === 450075,'partial renewal and residual credit reconciled');
-      assert(JSON.stringify(await window.__TAURI__.core.invoke('payment_receipt',{paymentId:overpayment.id})) === JSON.stringify(originalReceipt),'later allocation does not overwrite issue snapshot');
+      const reprintedOverpayment = await window.__TAURI__.core.invoke('payment_receipt',{paymentId:overpayment.id});
+      assert(reprintedOverpayment.number === originalReceipt.number && JSON.stringify(reprintedOverpayment.snapshot) === JSON.stringify(originalReceipt.snapshot),'later allocation does not overwrite issue snapshot');
       assert(data.pending === 19 && data.auditCount === 19,'finance workflows each commit one audit/outbox operation');
       console.log('ARMSTRONG_UI_SMOKE: finance forms, balances, renewal, reversal and saved receipt preview verified');
       console.log('ARMSTRONG_UI_SMOKE: all local forms, error handling and SQLite verified');
+      await window.__TAURI__.core.invoke('smoke_progress', {stage:'business forms verified'});
     }
     const removalBefore = await state();
     assert(removalBefore.removalAuthorization.allowed === false, 'local operator never receives removal privilege');
@@ -200,7 +207,9 @@
     const incomeMinor = after.payments.filter(row=>row.businessOn===after.today).reduce((sum,row)=>sum+row.netAmountMinor,0) + after.sales.filter(row=>row.businessOn===after.today).reduce((sum,row)=>sum+row.totalMinor,0);
     assert(report.incomeMinor === incomeMinor, 'native report received amounts reconcile to saved payment/sale history');
     document.querySelector('.report-card').click(); await until(()=>document.querySelector('.storage-file-result'), 'date-filtered native report file saved');
+    await window.__TAURI__.core.invoke('smoke_progress', {stage:'native report export verified'});
     await click('Settings'); await click('Backup & restore'); await click('Export backup'); await until(()=>document.querySelector('.storage-file-result'), 'validated native backup saved');
+    await window.__TAURI__.core.invoke('smoke_progress', {stage:'native backup export verified'});
     assert(errors.length === 0, `no uncaught render/storage errors: ${errors.join('; ')}`);
     Storage.prototype.getItem = originalGet; Storage.prototype.setItem = originalSet;
     await window.__TAURI__.core.invoke('smoke_finished', { error: null });

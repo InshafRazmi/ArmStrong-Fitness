@@ -35,6 +35,17 @@ fn quoted(value: &str) -> std::result::Result<String, ExchangeError> {
 }
 fn config(client: &NativeHttps, request: &Request) -> std::result::Result<Vec<u8>, ExchangeError> {
     let url = Url::parse(&request.url).map_err(|_| ExchangeError::InvalidResponse)?;
+    let business = url.path().starts_with("/v2/business/");
+    let response_limit = if business {
+        super::business_sync::REQUEST_LIMIT + 8192
+    } else {
+        RESPONSE_LIMIT
+    };
+    let body_limit = if business {
+        super::business_sync::REQUEST_LIMIT
+    } else {
+        32 * 1024
+    };
     if url.scheme() != "https"
         || !url.username().is_empty()
         || url.password().is_some()
@@ -42,11 +53,11 @@ fn config(client: &NativeHttps, request: &Request) -> std::result::Result<Vec<u8
         || !client.origins.contains(&url.origin().ascii_serialization())
         || !matches!(request.method, "GET" | "POST")
         || request.response_limit == 0
-        || request.response_limit > RESPONSE_LIMIT
+        || request.response_limit > response_limit
         || request
             .body
             .as_ref()
-            .is_some_and(|body| body.len() > 32 * 1024)
+            .is_some_and(|body| body.len() > body_limit)
     {
         return Err(ExchangeError::InvalidResponse);
     }

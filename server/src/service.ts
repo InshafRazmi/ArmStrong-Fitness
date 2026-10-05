@@ -9,7 +9,7 @@ export class MemberService {
   pool: Pool;
   automaticEnrollment: boolean;
   constructor(pool: Pool, automaticEnrollment = false) { this.pool = pool; this.automaticEnrollment = automaticEnrollment; }
-  private async transaction(scope: Omit<Scope, 'gymId'> & { gymId?: string }, write: boolean, run: (db: any, role: string, gymId: string) => Promise<unknown>) {
+  protected async transaction(scope: Omit<Scope, 'gymId'> & { gymId?: string }, write: boolean, run: (db: any, role: string, gymId: string) => Promise<unknown>) {
     if (scope.gymId !== undefined) uuid(scope.gymId);
     uuid(scope.deviceId); uuid(scope.userId);
     if (typeof scope.deviceSecret !== 'string' || !/^[a-f0-9]{64}$/.test(scope.deviceSecret)) throw new ApiError(403, 'device_not_authorized');
@@ -62,6 +62,7 @@ export class MemberService {
     const op = parseOperation(body);
     if (op.deviceId !== scope.deviceId) throw new ApiError(403, 'device_mismatch');
     try { return await this.transaction(scope, true, async (db, role, gymId) => {
+      await this.beforeMemberWrite(db, gymId);
       if (op.action === 'archive' && role !== 'Administrator') throw new ApiError(403, 'administrator_required');
       const saved = await db.query('SELECT receipt,request=$3::jsonb AND device_id=$4 AND actor_user_id=$5 AS matches FROM armstrong.member_operations WHERE gym_id=$1 AND id=$2', [gymId,op.operationId,JSON.stringify(op),scope.deviceId,scope.userId]);
       if (saved.rowCount) {
@@ -93,6 +94,7 @@ export class MemberService {
       throw error;
     }
   }
+  protected async beforeMemberWrite(_db: any, _gymId: string): Promise<void> {}
   async pull(scope: Scope, after: number) {
     return this.transaction(scope, false, async (db, _role, gymId) => {
       const high = Number((await db.query('SELECT change_sequence FROM armstrong.gyms WHERE id=$1',[gymId])).rows[0].change_sequence);

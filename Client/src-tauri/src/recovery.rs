@@ -19,6 +19,8 @@ impl Drop for TemporaryFile {
         let _ = fs::remove_file(&self.0);
         let _ = fs::remove_file(format!("{}-wal", self.0.display()));
         let _ = fs::remove_file(format!("{}-shm", self.0.display()));
+        // Isolated native recovery creates only its own disposable backup dir.
+        let _ = fs::remove_dir(self.0.with_extension("backups"));
     }
 }
 pub(super) struct RestoreCandidate {
@@ -26,6 +28,126 @@ pub(super) struct RestoreCandidate {
     file: TemporaryFile,
     state: String,
     checksum: String,
+}
+// Opaque native recovery result: never supplied by the webview or a backup file.
+pub(super) struct NativeRestore {
+    file: TemporaryFile,
+    original_state: String,
+    complete: bool,
+    verified_until: Option<DateTime<Utc>>,
+}
+fn storage_fingerprint(conn: &Connection) -> Result<String> {
+    let mut digest = Sha256::new();
+    for (table, sql) in schema(conn)? {
+        digest.update(sql.as_bytes());
+        if !sql.starts_with("CREATE TABLE") {
+            continue;
+        }
+        let mut columns = conn
+            .prepare(&format!("PRAGMA table_info({})", identifier(&table)))
+            .map_err(db_error)?;
+        let columns = columns
+            .query_map([], |r| r.get::<_, String>(1))
+            .map_err(db_error)?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(db_error)?;
+        let names = columns
+            .iter()
+            .map(|c| identifier(c))
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut rows = conn
+            .prepare(&format!(
+                "SELECT json_array({names}) FROM {} ORDER BY {names}",
+                identifier(&table)
+            ))
+            .map_err(db_error)?;
+        for row in rows
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(db_error)?
+        {
+            let row = row.map_err(db_error)?;
+            digest.update(row.len().to_be_bytes());
+            digest.update(row.as_bytes());
+        }
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
+impl NativeRestore {
+    pub(super) fn run(
+        &mut self,
+        verified: &super::native_auth::VerifiedEnrollment,
+        transport: &mut impl super::member_worker::BusinessTransport,
+        cancelled: impl Fn() -> Result<()>,
+    ) -> Result<()> {
+        if !verified.is_administrator() {
+            return Err("Verified Administrator recovery is required".into());
+        }
+        let mut isolated = Store::open(&self.file.0)?;
+        // Only this disposable copy can bypass the restore guard. Binding still
+        // requires the same existing API/gym/device and fresh verified authority.
+        isolated
+            .conn
+            .execute(
+                "DELETE FROM metadata WHERE key='restore_requires_reconciliation'",
+                [],
+            )
+            .map_err(db_error)?;
+        isolated.enroll_native(verified)?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        for _ in 0..25 {
+            cancelled()?;
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            match isolated.run_business_sync(transport,Utc::now(),super::member_worker::Limits {pushes:10,pages:10})? {
+                super::member_worker::Run::Complete {..} => {
+                    cancelled()?;
+                    isolated.conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").map_err(db_error)?;
+                    integrity(&isolated.conn)?;
+                    self.complete=true;
+                    self.verified_until=Some(verified.valid_until());
+                    return Ok(());
+                }
+                super::member_worker::Run::Yielded {..} => continue,
+                _ => return Err("Restore reconciliation did not complete. The restored database and recovery copies remain guarded; retry online or review the conflict.".into()),
+            }
+        }
+        Err("Restore reconciliation reached its bounded limit; the restored database is retained. Retry online.".into())
+    }
+    pub(super) fn commit(self, store: &mut Store) -> Result<Value> {
+        if !self.complete {
+            return Err("Restore has no complete verified server reconciliation".into());
+        }
+        let check_expiry = || -> Result<()> {
+            if self
+                .verified_until
+                .is_none_or(|expiry| expiry <= Utc::now())
+            {
+                return Err(
+                    "Verified recovery session expired; the restored database remains guarded"
+                        .into(),
+                );
+            }
+            Ok(())
+        };
+        check_expiry()?;
+        verify_file(&self.file.0, SCHEMA_VERSION)?;
+        let isolated = Store::open(&self.file.0)?;
+        let preview = store.preview_restore(isolated.backup_envelope()?)?;
+        drop(isolated);
+        store.restore_checked_with(preview["token"].as_str().ok_or("Missing native recovery token")?.into(),
+            |conn| {
+                check_expiry()?;
+                if storage_fingerprint(conn)? != self.original_state { return Err("Restored database changed during online recovery; no records were replaced".into()); }
+                Ok(())
+            },
+            |conn| {
+                conn.execute("DELETE FROM metadata WHERE key='restore_requires_reconciliation'",[]).map_err(db_error)?;
+                check_expiry()?;
+                record(conn,"restore_reconciled",&id(),None,None,json!({"verifiedServerHistory":true}))
+            })
+    }
 }
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -106,6 +228,11 @@ fn verify_file(path: &Path, version: i64) -> Result<()> {
             .execute_batch(include_str!("../migrations/006_member_conflicts.sql"))
             .map_err(db_error)?;
     }
+    if version >= 7 {
+        expected
+            .execute_batch(include_str!("../migrations/007_business_sync.sql"))
+            .map_err(db_error)?;
+    }
     if schema(&conn)? != schema(&expected)? {
         return Err("Backup contains an unrecognized schema, index or trigger".into());
     }
@@ -123,6 +250,42 @@ fn summary(snapshot: &Value) -> Value {
     json!({"members":snapshot["members"].as_array().map_or(0,Vec::len),"periods":snapshot["periods"].as_array().map_or(0,Vec::len),"payments":snapshot["payments"].as_array().map_or(0,Vec::len),"sales":snapshot["sales"].as_array().map_or(0,Vec::len),"expenses":snapshot["expenses"].as_array().map_or(0,Vec::len),"pending":snapshot["pending"],"auditCount":snapshot["auditCount"]})
 }
 impl Store {
+    pub(super) fn requires_restore_reconciliation(&self) -> Result<bool> {
+        self.conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM metadata WHERE key='restore_requires_reconciliation')",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(db_error)
+    }
+    pub(super) fn prepare_restore_reconciliation(&self) -> Result<NativeRestore> {
+        if !self.requires_restore_reconciliation()?
+            || super::member_worker::scope(&self.conn)?.is_none()
+        {
+            return Err("A restored backup with verified server scope is required".into());
+        }
+        let original_state = storage_fingerprint(&self.conn)?;
+        let snapshot = self.backup_envelope()?;
+        let file = TemporaryFile(
+            self.files_dir()?
+                .join(format!("online-recovery-{}.sqlite3", id())),
+        );
+        write_new(&file.0, &snapshot.data)?;
+        let copy = Store::open(&file.0)?;
+        if storage_fingerprint(&copy.conn)? != original_state
+            || storage_fingerprint(&self.conn)? != original_state
+        {
+            return Err("Restored database changed before recovery could start".into());
+        }
+        drop(copy);
+        Ok(NativeRestore {
+            file,
+            original_state,
+            complete: false,
+            verified_until: None,
+        })
+    }
     fn files_dir(&self) -> Result<PathBuf> {
         let path = self.path.with_extension("backups");
         fs::create_dir_all(&path).map_err(io_error)?;
@@ -232,6 +395,14 @@ impl Store {
         token: String,
         after_copy: impl FnOnce(&Connection) -> Result<()>,
     ) -> Result<Value> {
+        self.restore_checked_with(token, |_| Ok(()), |tx| after_copy(tx))
+    }
+    fn restore_checked_with(
+        &mut self,
+        token: String,
+        before_copy: impl FnOnce(&Connection) -> Result<()>,
+        after_copy: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<()>,
+    ) -> Result<Value> {
         let candidate = self
             .restore_candidate
             .take()
@@ -326,6 +497,7 @@ impl Store {
             if hash(snapshot_on(&tx)?.to_string().as_bytes()) != candidate.state {
                 return Err("Storage changed or confirmation expired. Preview the backup again; no data was replaced.".into());
             }
+            before_copy(&tx)?;
             let recovery = recovery_store.export_backup()?;
             let triggers = {
                 let mut stmt = tx
@@ -387,6 +559,10 @@ impl Store {
                 "member_resolved_conflicts",
                 "member_resolved_operations",
                 "local_operations",
+                "business_dirty",
+                "business_batches",
+                "business_batch_operations",
+                "business_cursor",
             ];
             if tables.len() != order.len()
                 || tables.iter().any(|table| !order.contains(&table.as_str()))

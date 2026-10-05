@@ -7,11 +7,12 @@ builder and Actions workflow include the approved public API/Auth settings and
 an offline WebView2 installer. Fresh packaged builds start locked at account
 login without requiring a settings file on each computer. Follow
 [Windows build/download and remaining acceptance work](docs/WINDOWS_INSTALLER.md).
-Account-based computer enrollment, bounded offline restart and native member
-reconnect sync are implemented and tested locally. The approval SQL and the
-Administrator registration are ready; deploy the updated API before testing.
-Financial/attendance/inventory cloud sync and real Windows acceptance remain
-unfinished; this is an acceptance build until those release gates pass.
+Account-based computer enrollment, bounded offline restart and all-module
+reconnect sync are implemented. Real native SQLite envelopes pass the server
+contract, and isolated Supabase Auth/PostgreSQL integration passes. Production
+migrations 1–4 and Administrator registration are applied. Publish/deploy the
+updated API, then complete Windows/network/hardware and reconciliation gates
+before labeling this a final release.
 
 ## Arch package
 
@@ -22,7 +23,7 @@ Rust. Build it on Arch with `npm run desktop:arch:build`.
 
 ## Local foundation test build
 
-The native Tauri build supports SQLite-backed members/cards, explicit membership dates, attendance, invoices/payment allocations and saved receipts, sales/stock, expenses, audit, validated backups and date-filtered CSV reports. Packaged builds require verified Administrator sign-in and OS credential storage. Native member synchronization is wired; other modules remain local. The ordinary unconfigured development build is explicitly for local test records. See [STATUS.md](STATUS.md) and [PLAN.md](PLAN.md) for measured checks and release gates.
+The native Tauri build supports SQLite-backed members/cards, explicit membership dates, attendance, invoices/payment allocations and saved receipts, sales/stock, expenses, audit, validated backups and date-filtered CSV reports. Packaged builds require verified Administrator sign-in and OS credential storage. All-module synchronization uses exact server receipts and ordered atomic download. The ordinary unconfigured development build is explicitly for local test records. See [STATUS.md](STATUS.md) and [PLAN.md](PLAN.md) for measured checks and release gates.
 
 ```bash
 npm run desktop:run    # build embedded frontend and launch Tauri
@@ -30,7 +31,7 @@ npm run test:core      # SQLite business/integrity tests
 npm run test:desktop   # real webview forms, then process-restart verification
 ```
 
-Rust and Tauri OS prerequisites are required. GTK initialization blocks launch in this sandbox; the desktop test needs a usable graphical session and uses an isolated temporary database. Windows has not yet been verified. No Tauri npm CLI is required; these scripts invoke Cargo directly. Always use `desktop:run` after the smoke test to rebuild without test hooks. For constrained Linux builds use `CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2`; add `CARGO_NET_OFFLINE=true` when using the existing dependency cache.
+Rust and Tauri OS prerequisites are required. The desktop test needs a usable graphical session and uses an isolated temporary database. Linux forms and process-restart checks pass; Windows has not yet been verified. No Tauri npm CLI is required; these scripts invoke Cargo directly. Always use `desktop:run` after the smoke test to rebuild without test hooks. For constrained Linux builds use `CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2`; add `CARGO_NET_OFFLINE=true` when using the existing dependency cache.
 
 Reports accept inclusive From/To dates and a Today shortcut using Asia/Colombo.
 Blank dates include all history. Payments/reversals count on their own posting

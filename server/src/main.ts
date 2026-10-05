@@ -2,8 +2,9 @@ import pg from "pg";
 import { runtimeConfig } from "./config.ts";
 import { createApp } from "./app.ts";
 import { createVerifier } from "./auth.ts";
-import { MemberService } from "./service.ts";
+import { GymService } from "./business-service.ts";
 import { databaseOptions, databaseFailure } from "./database.ts";
+import { verifyBusinessReadiness } from "./business-readiness.ts";
 let pool: InstanceType<typeof pg.Pool> | undefined;
 let app: ReturnType<typeof createApp> | undefined;
 try {
@@ -13,11 +14,12 @@ try {
     console.error(databaseFailure(error, "Idle database connection")),
   );
   app = createApp(
-    new MemberService(pool, c.automaticEnrollment),
+    new GymService(pool, c.automaticEnrollment),
     createVerifier(c.supabaseUrl, c.publishableKey),
   );
 
   await pool.query("SELECT 1");
+  await verifyBusinessReadiness(pool);
   if (c.automaticEnrollment) {
     const permission = await pool.query("SELECT has_function_privilege(current_user,'armstrong.enroll_desktop(uuid,uuid,text)','EXECUTE') AS allowed");
     if (permission.rows[0]?.allowed !== true) throw new Error('Automatic device enrollment schema or runtime permission is missing');

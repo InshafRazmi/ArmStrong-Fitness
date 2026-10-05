@@ -102,13 +102,21 @@ fn record_action(
         json!({"before":before,"after":after,"actorUserId":actor.user_id,"actor":actor.label});
     tx.execute("INSERT INTO outbox(id,device_id,entity,entity_id,action,expected_version,payload_json,schema_version,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
         params![id(),device,entity,entity_id,action,version,payload.to_string(),SCHEMA_VERSION,now]).map_err(db_error)?;
+    business_sync::capture(tx)?;
     Ok(())
 }
 pub(super) fn append_snapshot(conn: &Connection, value: &mut Value) -> Result<()> {
     let members=rows(conn,"SELECT json_object('id',id,'name',name,'phone',phone,'email',email,'nfcId',COALESCE(nfc_id,''),'joinedOn',joined_on,'version',version,'active',json(CASE WHEN archived_at IS NULL THEN 'true' ELSE 'false' END),'archivedAt',archived_at,'archivedByUserId',archived_by_user_id) FROM members ORDER BY name,id")?;
     let mut members = members;
+    let cloud_bound: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM metadata WHERE key='member_sync_scope')",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(db_error)?;
     for member in &mut members {
-        member["canDelete"] = json!(!linked(conn, member["id"].as_str().unwrap())?);
+        member["canDelete"] = json!(!cloud_bound && !linked(conn, member["id"].as_str().unwrap())?);
     }
     value["members"] = json!(members);
     value["expenses"]=json!(rows(conn,"SELECT json_object('id',id,'title',title,'category',category,'amountMinor',amount_minor,'effectiveAmountMinor',effective_amount_minor,'status',status,'method',method,'businessOn',business_on,'createdAt',created_at,'actor',actor,'reversesId',reverses_id,'voidReason',void_reason,'voidedAt',voided_at,'voidedBy',voided_by,'voidedByUserId',voided_by_user_id) FROM expense_history ORDER BY created_at DESC,id DESC")?);
@@ -127,6 +135,17 @@ impl Store {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(db_error)?;
         let actor = authorized(&tx, self.removal_session.as_ref())?;
+        if delete
+            && tx
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM metadata WHERE key='member_sync_scope')",
+                    [],
+                    |r| r.get::<_, bool>(0),
+                )
+                .map_err(db_error)?
+        {
+            return Err("Cloud-bound members must be archived to preserve shared history".into());
+        }
         let command = if delete {
             "delete_member"
         } else {

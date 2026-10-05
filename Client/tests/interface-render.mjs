@@ -71,6 +71,11 @@ try {
     else assert.ok(markup.includes('Unverified') || markup.includes('No authenticated backend'), tab+' accurately reports its capability')
   }
   console.log('PASS all seven desktop settings panels')
+  const businessValue = {...value,desktop:{...value.desktop,snapshot:{...native,businessSync:{available:true,pending:1,acknowledged:9,conflicts:[{id:'batch-1',reason:'Server refused the transaction: business_revision_conflict. Local history is retained.'}],lastError:'Unconfirmed changes are retained.',lastSuccessOn:null}}}}
+  const businessMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:businessValue},h(DesktopSettingsPanel,{tab:'Server synchronization'})))
+  for (const text of ['payments and receipts','sales and stock','Confirmed transactions','Transactions to review','Local history is retained','before later changes can upload','Sync gym records now']) assert.ok(businessMarkup.includes(text),text)
+  assert.ok(!businessMarkup.includes('Other modules are saved locally') && !businessMarkup.includes('Last server confirmation:'))
+  console.log('PASS all-module sync status and retained conflict display')
   const restoredMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,desktop:{...value.desktop,snapshot:{...native,restoreRequiresReconciliation:true}}}},h(DesktopSettingsPanel,{tab:'Server synchronization'})))
   assert.ok(/<button class="secondary" disabled="">Prepare this computer<\/button>/.test(restoredMarkup),'restored database cannot prepare a substitute credential')
   const conflictValue = { ...value, desktop: { ...value.desktop, snapshot: { ...native, memberSync: {available:false,reason:'Enrollment required',cursor:1,acknowledged:2,conflicts:[{id:'conflict-1',memberId:'sqlite-member',operationId:'op-1',reason:'Remote change overlaps pending local member edits',remote:{name:'Server & member',nfcId:'CARD-2',archivedAt:'2026-10-03T10:00:00Z'},createdAt:'2026-10-03T10:00:00Z'}]} } } }

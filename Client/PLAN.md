@@ -2,42 +2,43 @@
 
 ## Active release gates — 2026-10-05
 
-The requested final all-features release remains open. The latest milestone
-supersedes the historical status/sequence below. Installed Windows is mandatory,
-Arch optional; retain black/amber UI, native SQLite history and existing queues.
+Windows installation remains mandatory; Arch is optional. Preserve the
+black/amber UI, transactional SQLite, stored identities/history and existing
+queues. One approved computer edits; additional computers download shared gym
+data until concurrent offline writers are explicitly authorized and designed.
 
-Completed locally: packaged public connection settings, native account login,
-automatic credential preparation, tested account-authorized computer approval
-SQL/API path, bounded OS-vault offline restart, logout/late-reply fencing, native
-member scheduling/retries and in-memory online token renewal. The actual approved
-Administrator/gym are registered in production; onboarding migration version 2
-is applied. The native Arch acceptance package is built. No production desktop
-or Windows installer acceptance is claimed.
+Implemented and checked: packaged public settings, account/computer onboarding,
+seven-day OS-vault offline access, native renewal/logout fencing, bounded
+all-module HTTPS retries and atomic shared-data download. Real native envelopes
+pass the server contract; isolated Supabase Auth/PostgreSQL and Linux local
+webview/restart acceptance pass. Production migrations 1–4 and the approved
+Administrator/gym are provisioned; restricted-runtime TLS/catalog checks pass.
 
-1. Apply the prepared source to the verified GitHub baseline using a writable
-   checkout; the connector's content write is blocked by 403. Preserve private
-   env/certificates; remove tracked server env and rotate exposed credentials.
-2. Deploy updated Render source and set `AUTOMATIC_DEVICE_ENROLLMENT=true` with
-   the existing restricted runtime login/TLS CA. Verify current revision,
-   actual password Auth, real native enrollment, new-computer member download,
-   dropped-response/restart retries, logout, token renewal and device revocation.
-3. Run the Windows Actions workflow and retrieve its actual NSIS setup. Test
-   fresh installation, Credential Manager, upgrade/data preservation, cached
-   offline access/restart, NFC HID and physical receipt printing.
-4. Complete cloud persistence/download/receipts for membership plans/periods,
-   attendance, invoices/allocations/payments/receipts/reversals, products/sales/
-   stock, expenses/voids, settings and audit. Preserve integer minor units,
-   FK/history/actor mappings and atomic groups. Never clear a queue for an
-   unconfirmed commit or overwrite conflicting financial/stock histories.
-5. Verify all-module outage/reconnect/idempotency and safe restore reconciliation
-   against real services on supported desktops; build final installers only
-   after these pass. Additional computers currently have read-only access;
-   keep the single-writer rule until multi-writer reconciliation is designed,
-   owner-approved and tested. The topology question is still unanswered.
+1. Publish this reviewed all-module source. Earlier changes are on GitHub main
+   `ef1faa0a729db3c74aa21c8c4dd5d6a498bbc9df`; current changes remain local.
+   The user will commit and push the finished changes from this workspace.
+   The verified source patch is available for transfer to another checkout.
+   Tracked env is removed;
+   historically exposed database/Auth/Administrator credentials still need rotation.
+2. Deploy current Render source with `AUTOMATIC_DEVICE_ENROLLMENT=true`,
+   restricted runtime login and the existing verified CA. Verify deployed
+   revision, real native login/enrollment/download, dropped-response/restart
+   retries, offline/reconnect, logout, renewal and revocation. Public health is
+   reachable but does not certify these workflows.
+3. Accept the new same-computer online restore path on a real desktop; finish
+   general conflict review and bounded large/legacy bootstrap. Unreconciled
+   backups and conflicting financial/master transactions remain blocked,
+   retaining queues/history. Existing legacy cloud members must
+   be reconciled explicitly; the approved production gym currently has none.
+4. Run the Windows Actions workflow and obtain its actual NSIS installer. Verify
+   fresh install, Credential Manager, offline saves/restart, live reconnect,
+   upgrades preserving data, NFC HID and physical receipt printing.
+5. Rebuild final installers only after these gates pass. Current packages are
+   acceptance builds; system-dialog printing and manual updates are implemented.
 
-See [delivery guide](docs/DELIVERY.md) and current [STATUS](STATUS.md) for actual
-checks and limitations. An Arch package or successful frontend build alone does
-not close these release gates.
+See [delivery](docs/DELIVERY.md), [current status](STATUS.md) and
+[protocol limits](../server/docs/BUSINESS_SYNC.md). Historical sections below do
+not override the active gates.
 
 ## Windows installation required; Linux optional, 2026-10-05
 

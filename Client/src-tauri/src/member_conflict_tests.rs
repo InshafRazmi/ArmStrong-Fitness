@@ -626,5 +626,5 @@ fn populated_schema_five_migration_preserves_history_and_old_backups_migrate_in_
         .conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 6);
+    assert_eq!(version, SCHEMA_VERSION);
 }

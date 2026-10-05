@@ -1,6 +1,428 @@
 use super::*;
 const BUNDLED: &str = r#"{"authOrigin":"https://auth.example","apiOrigin":"https://api.example","publishableKey":"sb_publishable_mock"}"#;
 #[derive(Default)]
+struct RecoveryCloud {
+    entries: Vec<Value>,
+    rows: std::collections::BTreeMap<(String, String), Value>,
+    drop_reply: bool,
+}
+struct RecoveryExchange {
+    cloud: std::sync::Arc<Mutex<RecoveryCloud>>,
+    subject: String,
+}
+impl crate::member_http::HttpsExchange for RecoveryExchange {
+    fn send(
+        &mut self,
+        request: crate::member_http::Request,
+    ) -> std::result::Result<crate::member_http::Response, crate::member_http::ExchangeError> {
+        let mut cloud = self.cloud.lock().unwrap();
+        let mut status = 200;
+        let body = if request.method == "POST" {
+            assert!(request.url.ends_with("/v2/business/push"));
+            let batch: Value = serde_json::from_slice(request.body.as_ref().unwrap()).unwrap();
+            let gym = request
+                .headers
+                .iter()
+                .find(|(k, _)| *k == "x-gym-id")
+                .unwrap()
+                .1
+                .clone();
+            let saved = cloud
+                .entries
+                .iter()
+                .find(|e| e["request"]["operationId"] == batch["operationId"]);
+            let receipt = if let Some(saved) = saved {
+                assert_eq!(
+                    saved["request"], batch,
+                    "recovery must retry the frozen request exactly"
+                );
+                saved["receipt"].clone()
+            } else {
+                let mut rows = cloud.rows.clone();
+                let mut conflict = false;
+                for c in batch["changes"].as_array().unwrap() {
+                    let key = (
+                        c["table"].as_str().unwrap().to_string(),
+                        c["id"].as_str().unwrap().to_string(),
+                    );
+                    let current = rows.get(&key).cloned().unwrap_or(Value::Null);
+                    if current != c["before"] && !(c["before"].is_null() && current == c["after"]) {
+                        conflict = true;
+                        break;
+                    }
+                    rows.insert(key, c["after"].clone());
+                }
+                if conflict {
+                    status = 409;
+                    json!({"error":"business_revision_conflict"})
+                } else {
+                    cloud.rows = rows;
+                    let sequence = cloud.entries.len() + 1;
+                    let receipt = json!({"protocolVersion":2,"operationId":batch["operationId"],"deviceId":batch["deviceId"],"gymId":gym,"actorSubject":self.subject,"sequence":sequence,"requestSha256":crate::business_sync::hash(&batch).unwrap()});
+                    cloud
+                        .entries
+                        .push(json!({"sequence":sequence,"request":batch,"receipt":receipt}));
+                    receipt
+                }
+            };
+            if std::mem::take(&mut cloud.drop_reply) {
+                return Err(crate::member_http::ExchangeError::Unavailable);
+            }
+            receipt
+        } else {
+            let after: usize = request
+                .url
+                .split("?after=")
+                .nth(1)
+                .unwrap()
+                .parse()
+                .unwrap();
+            let gym = request
+                .headers
+                .iter()
+                .find(|(k, _)| *k == "x-gym-id")
+                .unwrap()
+                .1
+                .clone();
+            let entries = cloud
+                .entries
+                .get(after)
+                .map(|e| vec![e.clone()])
+                .unwrap_or_default();
+            json!({"protocolVersion":2,"gymId":gym,"after":after,"nextCursor":after+entries.len(),"hasMore":cloud.entries.len()>after+entries.len(),"changes":entries})
+        };
+        Ok(crate::member_http::Response {
+            status,
+            content_type: Some("application/json".into()),
+            retry_after: None,
+            body: serde_json::to_vec(&body).unwrap(),
+        })
+    }
+}
+fn recovery_transport(
+    proof: &VerifiedEnrollment,
+    store: &Store,
+    cloud: &std::sync::Arc<Mutex<RecoveryCloud>>,
+) -> crate::member_http::MemberApi<RecoveryExchange> {
+    let subject: String = store
+        .conn
+        .query_row(
+            "SELECT subject FROM users WHERE active=1 LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    proof
+        .recovery_transport(RecoveryExchange {
+            cloud: cloud.clone(),
+            subject,
+        })
+        .unwrap()
+}
+fn restored_fixture() -> (
+    Fixture,
+    DesktopAuth,
+    std::sync::Arc<Mutex<RecoveryCloud>>,
+    String,
+) {
+    let mut f = Fixture::new();
+    let auth = f.configured();
+    auth.initialize(&mut f.store).unwrap();
+    let epoch = auth.begin(&mut f.store).unwrap();
+    let proof = f.verified(&auth, "Administrator");
+    auth.finish_with_vault(
+        &mut f.store,
+        PendingDesktopLogin {
+            epoch,
+            verified: proof,
+            restore: None,
+        },
+        &mut AccessVault::default(),
+    )
+    .unwrap();
+    auth.authorize(&mut f.store, true).unwrap();
+    f.store
+        .save_plan(PlanInput {
+            id: None,
+            version: None,
+            name: "Original plan".into(),
+            duration_months: 1,
+            price_minor: 600000,
+            active: true,
+        })
+        .unwrap();
+    f.store
+        .save_member(MemberInput {
+            id: None,
+            version: None,
+            name: "Recovered member".into(),
+            phone: "0771234567".into(),
+            email: String::new(),
+            nfc_id: String::new(),
+        })
+        .unwrap();
+    let cloud = std::sync::Arc::new(Mutex::new(RecoveryCloud::default()));
+    let proof = f.recovery_verified(&auth, true);
+    let mut transport = recovery_transport(&proof, &f.store, &cloud);
+    assert!(matches!(
+        f.store
+            .run_business_sync(
+                &mut transport,
+                Utc::now(),
+                crate::member_worker::Limits {
+                    pushes: 10,
+                    pages: 10
+                }
+            )
+            .unwrap(),
+        crate::member_worker::Run::Complete { .. }
+    ));
+    let backup = f.store.backup_envelope().unwrap();
+    let snapshot = f.store.snapshot().unwrap();
+    let plan = snapshot["plans"][0]["id"].as_str().unwrap().to_string();
+    let member = snapshot["members"][0]["id"].as_str().unwrap().to_string();
+    f.store
+        .save_plan(PlanInput {
+            id: Some(plan.clone()),
+            version: Some(1),
+            name: "Current cloud plan".into(),
+            duration_months: 1,
+            price_minor: 650000,
+            active: true,
+        })
+        .unwrap();
+    f.store
+        .receive_payment(ReceivePaymentInput {
+            request_id: id(),
+            member_id: member,
+            amount_minor: 650000,
+            method: "Cash".into(),
+            invoice_id: None,
+        })
+        .unwrap();
+    assert!(matches!(
+        f.store
+            .run_business_sync(
+                &mut transport,
+                Utc::now(),
+                crate::member_worker::Limits {
+                    pushes: 10,
+                    pages: 10
+                }
+            )
+            .unwrap(),
+        crate::member_worker::Run::Complete { .. }
+    ));
+    let preview = f.store.preview_restore(backup).unwrap();
+    f.store
+        .restore_backup(preview["token"].as_str().unwrap().into())
+        .unwrap();
+    assert!(f.store.requires_restore_reconciliation().unwrap());
+    assert_eq!(
+        f.store.snapshot().unwrap()["plans"][0]["name"],
+        "Original plan"
+    );
+    (f, auth, cloud, plan)
+}
+#[test]
+fn online_restore_reconciles_newer_cloud_payment_receipt_and_plan_before_unlocking() {
+    let (mut f, auth, cloud, _) = restored_fixture();
+    let epoch = auth.begin(&mut f.store).unwrap();
+    let proof = f.recovery_verified(&auth, true);
+    let mut candidate = f.store.prepare_restore_reconciliation().unwrap();
+    let mut transport = recovery_transport(&proof, &f.store, &cloud);
+    candidate.run(&proof, &mut transport, || Ok(())).unwrap();
+    assert!(f.store.requires_restore_reconciliation().unwrap());
+    assert!(
+        f.store.snapshot().unwrap()["payments"]
+            .as_array()
+            .unwrap()
+            .is_empty(),
+        "isolated recovery cannot change the guarded live database"
+    );
+    let status = auth
+        .finish_with_vault(
+            &mut f.store,
+            PendingDesktopLogin {
+                epoch,
+                verified: proof,
+                restore: Some(candidate),
+            },
+            &mut AccessVault::default(),
+        )
+        .unwrap();
+    assert!(status.authenticated && status.can_write);
+    assert!(!f.store.requires_restore_reconciliation().unwrap());
+    let snapshot = f.store.snapshot().unwrap();
+    assert_eq!(snapshot["plans"][0]["name"], "Current cloud plan");
+    assert_eq!(snapshot["payments"][0]["amountMinor"], 650000);
+    let payment = snapshot["payments"][0]["id"].as_str().unwrap().to_string();
+    let receipt = f.store.payment_receipt(payment).unwrap();
+    assert_eq!(receipt["snapshot"]["payment"]["amountMinor"], 650000);
+    assert_eq!(receipt["number"], receipt["snapshot"]["number"]);
+    assert!(
+        f.store
+            .path
+            .with_extension("backups")
+            .read_dir()
+            .unwrap()
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+            .count()
+            >= 2,
+        "both pre-restore and pre-reconciliation recovery copies remain"
+    );
+}
+#[test]
+fn lost_response_during_restore_keeps_guard_and_retries_the_original_request() {
+    let (mut f, auth, cloud, _) = restored_fixture();
+    let epoch = auth.begin(&mut f.store).unwrap();
+    let proof = f.recovery_verified(&auth, true);
+    let frozen:String=f.store.conn.query_row("SELECT request_json FROM business_batches WHERE state='pending' ORDER BY ordinal LIMIT 1",[],|r|r.get(0)).unwrap();
+    let operation: Value = serde_json::from_str(&frozen).unwrap();
+    cloud.lock().unwrap().drop_reply = true;
+    let mut failed = f.store.prepare_restore_reconciliation().unwrap();
+    let mut transport = recovery_transport(&proof, &f.store, &cloud);
+    assert!(failed.run(&proof, &mut transport, || Ok(())).is_err());
+    assert!(failed.commit(&mut f.store).is_err());
+    assert!(f.store.requires_restore_reconciliation().unwrap());
+    assert_eq!(f.store.conn.query_row("SELECT request_json FROM business_batches WHERE state='pending' ORDER BY ordinal LIMIT 1",[],|r|r.get::<_,String>(0)).unwrap(),frozen);
+    let mut candidate = f.store.prepare_restore_reconciliation().unwrap();
+    candidate.run(&proof, &mut transport, || Ok(())).unwrap();
+    auth.finish_with_vault(
+        &mut f.store,
+        PendingDesktopLogin {
+            epoch,
+            verified: proof,
+            restore: Some(candidate),
+        },
+        &mut AccessVault::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        cloud
+            .lock()
+            .unwrap()
+            .entries
+            .iter()
+            .filter(|e| e["request"]["operationId"] == operation["operationId"])
+            .count(),
+        1
+    );
+}
+#[test]
+fn logout_and_external_storage_change_refuse_completed_restore_results() {
+    for logout in [true, false] {
+        let (mut f, auth, cloud, _) = restored_fixture();
+        let epoch = auth.begin(&mut f.store).unwrap();
+        let proof = f.recovery_verified(&auth, true);
+        let mut candidate = f.store.prepare_restore_reconciliation().unwrap();
+        candidate
+            .run(
+                &proof,
+                &mut recovery_transport(&proof, &f.store, &cloud),
+                || Ok(()),
+            )
+            .unwrap();
+        if logout {
+            // Locked OS storage can refuse grant cleanup, after the durable
+            // session nonce and native epoch have already been invalidated.
+            let _ = auth.logout(&mut f.store);
+        } else {
+            let other = Store::open(&f.store.path).unwrap();
+            other
+                .conn
+                .execute(
+                    "INSERT INTO metadata VALUES('external_recovery_change','1')",
+                    [],
+                )
+                .unwrap();
+        }
+        assert!(auth
+            .finish_with_vault(
+                &mut f.store,
+                PendingDesktopLogin {
+                    epoch,
+                    verified: proof,
+                    restore: Some(candidate)
+                },
+                &mut AccessVault::default()
+            )
+            .is_err());
+        assert!(f.store.requires_restore_reconciliation().unwrap());
+        assert!(f.store.snapshot().unwrap()["payments"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert!(!auth.status(&f.store).unwrap().authenticated);
+    }
+}
+#[test]
+fn restore_cancellation_and_different_scope_never_replace_live_history() {
+    let (mut f, auth, cloud, _) = restored_fixture();
+    auth.begin(&mut f.store).unwrap();
+    let proof = f.recovery_verified(&auth, true);
+    let mut cancelled = f.store.prepare_restore_reconciliation().unwrap();
+    assert!(cancelled
+        .run(
+            &proof,
+            &mut recovery_transport(&proof, &f.store, &cloud),
+            || Err("cancelled".into())
+        )
+        .is_err());
+    assert!(cancelled.commit(&mut f.store).is_err());
+    let wrong = f.verified(&auth, "Administrator");
+    let mut candidate = f.store.prepare_restore_reconciliation().unwrap();
+    assert!(candidate
+        .run(
+            &wrong,
+            &mut recovery_transport(&wrong, &f.store, &cloud),
+            || Ok(())
+        )
+        .is_err());
+    assert!(candidate.commit(&mut f.store).is_err());
+    assert!(f.store.requires_restore_reconciliation().unwrap());
+    assert!(f.store.snapshot().unwrap()["payments"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+}
+#[test]
+fn restored_pending_master_conflict_and_read_only_approval_keep_recovery_guard() {
+    for conflict in [true, false] {
+        let (mut f, auth, cloud, plan) = restored_fixture();
+        auth.begin(&mut f.store).unwrap();
+        if conflict {
+            f.store
+                .save_plan(PlanInput {
+                    id: Some(plan),
+                    version: Some(1),
+                    name: "Retained offline edit".into(),
+                    duration_months: 1,
+                    price_minor: 610000,
+                    active: true,
+                })
+                .unwrap();
+        }
+        let proof = f.recovery_verified(&auth, conflict);
+        let mut candidate = f.store.prepare_restore_reconciliation().unwrap();
+        assert!(candidate
+            .run(
+                &proof,
+                &mut recovery_transport(&proof, &f.store, &cloud),
+                || Ok(())
+            )
+            .is_err());
+        assert!(candidate.commit(&mut f.store).is_err());
+        assert!(f.store.requires_restore_reconciliation().unwrap());
+        assert!(f.store.snapshot().unwrap()["payments"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert!(!auth.status(&f.store).unwrap().authenticated);
+    }
+}
+#[derive(Default)]
 struct AccessVault {
     value: Option<String>,
 }
@@ -35,7 +457,11 @@ fn verified_native_login_saves_bounded_offline_access_without_bearer_or_password
     let status = auth
         .finish_with_vault(
             &mut f.store,
-            PendingDesktopLogin { epoch, verified },
+            PendingDesktopLogin {
+                epoch,
+                verified,
+                restore: None,
+            },
             &mut vault,
         )
         .unwrap();
@@ -64,7 +490,11 @@ fn native_logout_invalidates_dedicated_worker_and_queued_job_before_network() {
     let verified = f.verified(&auth, "Administrator");
     auth.finish_with_vault(
         &mut f.store,
-        PendingDesktopLogin { epoch, verified },
+        PendingDesktopLogin {
+            epoch,
+            verified,
+            restore: None,
+        },
         &mut vault,
     )
     .unwrap();
@@ -89,7 +519,11 @@ fn logout_cancels_queued_and_completed_session_renewal_without_unlocking_or_netw
     let verified = f.verified(&auth, "Administrator");
     auth.finish_with_vault(
         &mut f.store,
-        PendingDesktopLogin { epoch, verified },
+        PendingDesktopLogin {
+            epoch,
+            verified,
+            restore: None,
+        },
         &mut vault,
     )
     .unwrap();
@@ -229,6 +663,31 @@ struct Fixture {
 }
 impl Fixture {
     fn verified(&self, auth: &DesktopAuth, role: &str) -> VerifiedEnrollment {
+        self.verified_values(auth, role, id(), id(), true)
+    }
+    fn recovery_verified(&self, auth: &DesktopAuth, can_write: bool) -> VerifiedEnrollment {
+        let scope = crate::member_worker::scope(&self.store.conn)
+            .unwrap()
+            .unwrap();
+        let subject: String = self
+            .store
+            .conn
+            .query_row(
+                "SELECT subject FROM users WHERE active=1 LIMIT 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        self.verified_values(auth, "Administrator", subject, scope.gym_id, can_write)
+    }
+    fn verified_values(
+        &self,
+        auth: &DesktopAuth,
+        role: &str,
+        subject: String,
+        gym: String,
+        can_write: bool,
+    ) -> VerifiedEnrollment {
         use crate::member_http::{ExchangeError, HttpsExchange, Request, Response};
         struct Mock(std::collections::VecDeque<Value>);
         impl HttpsExchange for Mock {
@@ -241,7 +700,6 @@ impl Fixture {
                 })
             }
         }
-        let subject = id();
         let device: String = self
             .store
             .conn
@@ -251,7 +709,7 @@ impl Fixture {
                 |r| r.get(0),
             )
             .unwrap();
-        let mut mock=Mock([json!({"access_token":"mock-private-access","token_type":"bearer","expires_in":3600,"user":{"id":subject,"email":"admin@example.test"}}),json!({"id":subject,"email":"admin@example.test"}),json!({"protocolVersion":1,"gym":{"id":id(),"name":"Test gym"},"staff":{"id":subject,"name":"Verified Admin","role":role},"device":{"id":device,"canWrite":true}})].into());
+        let mut mock=Mock([json!({"access_token":"mock-private-access","token_type":"bearer","expires_in":3600,"user":{"id":subject,"email":"admin@example.test"}}),json!({"id":subject,"email":"admin@example.test"}),json!({"protocolVersion":1,"gym":{"id":gym,"name":"Test gym"},"staff":{"id":subject,"name":"Verified Admin","role":role},"device":{"id":device,"canWrite":can_write}})].into());
         super::super::native_auth::login(
             &mut mock,
             auth.config.as_ref().unwrap(),
@@ -413,7 +871,14 @@ fn verified_login_attributes_member_payment_receipt_and_audit_to_native_actor() 
     let epoch = auth.begin(&mut f.store).unwrap();
     let verified = f.verified(&auth, "Administrator");
     let status = auth
-        .finish(&mut f.store, PendingDesktopLogin { epoch, verified })
+        .finish(
+            &mut f.store,
+            PendingDesktopLogin {
+                epoch,
+                verified,
+                restore: None,
+            },
+        )
         .unwrap();
     assert!(status.authenticated && status.can_write);
     assert!(!serde_json::to_string(&status)
@@ -494,7 +959,14 @@ fn cancelled_login_and_reception_do_not_bind_or_unlock_the_database() {
             auth.lock(&mut f.store).unwrap();
         }
         assert!(auth
-            .finish(&mut f.store, PendingDesktopLogin { epoch, verified })
+            .finish(
+                &mut f.store,
+                PendingDesktopLogin {
+                    epoch,
+                    verified,
+                    restore: None
+                }
+            )
             .is_err());
         assert!(!auth.status(&f.store).unwrap().authenticated);
         let bound: bool = f
@@ -517,8 +989,15 @@ fn authenticated_restore_preserves_actor_auth_requirement_and_locks_session() {
     auth.initialize(&mut f.store).unwrap();
     let epoch = auth.begin(&mut f.store).unwrap();
     let verified = f.verified(&auth, "Administrator");
-    auth.finish(&mut f.store, PendingDesktopLogin { epoch, verified })
-        .unwrap();
+    auth.finish(
+        &mut f.store,
+        PendingDesktopLogin {
+            epoch,
+            verified,
+            restore: None,
+        },
+    )
+    .unwrap();
     auth.authorize(&mut f.store, true).unwrap();
     let user = f.store.removal_session.as_ref().unwrap().user_id.clone();
     let exported = f.store.export_backup().unwrap();
@@ -563,8 +1042,15 @@ fn backup_without_restoration_actor_refuses_replacement_and_preserves_records() 
             .unwrap();
     let epoch = auth.begin(&mut f.store).unwrap();
     let verified = f.verified(&auth, "Administrator");
-    auth.finish(&mut f.store, PendingDesktopLogin { epoch, verified })
-        .unwrap();
+    auth.finish(
+        &mut f.store,
+        PendingDesktopLogin {
+            epoch,
+            verified,
+            restore: None,
+        },
+    )
+    .unwrap();
     auth.authorize(&mut f.store, true).unwrap();
     let preview = f.store.preview_restore(envelope).unwrap();
     let before = f.store.snapshot().unwrap();

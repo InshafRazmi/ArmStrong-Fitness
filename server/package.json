@@ -26,6 +26,8 @@
     "test:integration": "npm run test:integration:supabase",
     "test:integration:supabase": "node --env-file-if-exists=.env.test --test --test-isolation=none test/supabase.integration.ts",
     "test:integration:postgres": "node --env-file-if-exists=.env.test --test --test-isolation=none test/member.integration.ts",
+    "test:integration:business": "node --env-file-if-exists=.env.test --test --test-isolation=none test/business.integration.ts",
+    "test:native-contract": "node --test --test-isolation=none test/business-native.fixture.ts",
     "test:config": "node --env-file-if-exists=.env.test scripts/check-test-config.ts",
     "migrate": "node --env-file-if-exists=.env src/migrate.ts",
     "types:verify": "node scripts/check-vendored-types.ts"

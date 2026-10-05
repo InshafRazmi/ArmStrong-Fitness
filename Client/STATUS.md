@@ -1,5 +1,77 @@
 # Status — 2026-10-05
 
+## Current milestone: all-module synchronization and real desktop checks
+
+The requested final Windows release is still open. This milestone supersedes
+the historical member-only status below. The existing single-writer rule remains:
+one approved computer edits and additional computers download shared gym records.
+
+Protocol 2 now freezes every business transaction in SQLite with its audit and
+outbox IDs, then commits scoped cloud rows, references, ordered history and an
+exact request-hash receipt together. It covers members/cards, plans/periods,
+attendance, invoices/payments/allocations/receipts/reversals, products/sales/stock,
+expenses/voids, profile and audit. Downloaded user rows are inactive historical
+references; they cannot grant account access or roles. Logout/session nonce
+fencing, bounded native HTTPS, durable retry/backoff and online renewal remain.
+Conflicting transactions stay visible and block later uploads without overwriting
+financial history. General conflict review remains required. Same-computer
+restore recovery now verifies online Auth/possession and reconciles an isolated
+copy before atomic replacement/unlock. Lost replies, logout, wrong scope,
+read-only approval, expiry and storage races keep the restored database guarded;
+both recovery copies remain. See [restore recovery](docs/RESTORE_RECOVERY.md).
+
+SQLite migration 7 preserves local data and queues. CLI-generated PostgreSQL
+migrations 3 and 4 are applied to the existing test project and production;
+production's ledger checksums match source versions 1–4. Existing unrelated
+member/change counts remain 1/3; the approved ArmStrong Fitness gym has no legacy
+cloud members. Real restricted-runtime TLS/catalog checks PASS, including narrow
+column grants, immutable guards and computer-enrollment permission. Public Data
+API access, deletion and direct staff insertion remain denied. API startup now
+verifies these capabilities before listening. Legacy member-only gyms require
+explicit reconciliation instead of silently creating a second cloud history.
+
+Final measured checks: **171 packaged native tests PASS / 2 default-ignored OS/TLS probes**;
+**17 adapter tests PASS**, all route/settings/login/receipt renders PASS, including
+the all-module conflict panel; frontend and desktop asset builds PASS; native
+Clippy PASS with warnings denied. Backend strict typing/provenance and **77 unit
+tests PASS / 1 sandbox process skip**. Ten real native SQLite envelopes pass the
+server's full-state contract and canonical hash checks. The isolated integration
+suite passes with **real Supabase Auth + PostgreSQL**, exercising exact retries,
+read-only download, cross-gym/secret/revocation denial and rollback. Fixtures are
+rolled back and never written to production. The final strengthened integration
+rerun PASS includes refusing allocations after a saved full reversal.
+The separate installed-curl TLS refusal probe PASS. The OS-vault read-only
+probe correctly refuses an unavailable/locked Secret Service here; this does
+not certify successful credential storage or desktop sign-in.
+
+The real Linux webview form and process-restart checks PASS after correcting the
+receipt test to compare immutable snapshot/number separately from current payment
+status. The harness now requires explicit webview success on both launches and
+cannot report a failed assertion as a pass. This covers local business forms;
+production login/keyring/network and Windows hardware acceptance remain separate.
+
+GitHub main advanced to `ef1faa0a729db3c74aa21c8c4dd5d6a498bbc9df`; earlier
+onboarding/packaging changes and removal of tracked `server/.env` are committed
+there. These all-module changes are local. Connector writes still return 403,
+the CLI token is invalid and no Windows workflow run/installer exists. The user
+will handle commit/push. The source patch is checked against that baseline, and
+the Arch package has been rebuilt with the final recovery changes. Its checksum,
+archive allowlist, launcher, all runtime libraries and exclusion of smoke-test
+commands are verified. Source bundles have verified CRC and SHA-256 manifests.
+Public Render health was independently reached;
+no updated deployment is claimed. The updated API adds `/v2/health` to identify
+all-module deployment while retaining the original `/health` compatibility body.
+
+Still required: publish/deploy this source; build and accept the Windows installer;
+verify native live HTTPS/OS-vault offline/reconnect/restore behavior; provide
+general conflict review, legacy-gym migration and large-database bootstrap;
+accept NFC/physical printing/upgrades; rotate historically exposed credentials.
+Transactions are limited to 1 MiB / 2,000 changed rows; an oversized legacy
+baseline is refused atomically. Backups preserve queues and recovery copies;
+restored databases stay blocked until successful verified reconciliation. Manual package upgrades
+and system-dialog printing remain the implemented options. See
+[delivery](docs/DELIVERY.md) and [protocol](../server/docs/BUSINESS_SYNC.md).
+
 ## Current milestone: Administrator registered, Arch artifact and offline/member wiring
 
 The latest request is to finish all features and build the final app. That goal

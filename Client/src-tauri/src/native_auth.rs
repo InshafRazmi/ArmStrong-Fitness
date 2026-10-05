@@ -420,6 +420,9 @@ pub(super) fn renew(
     })
 }
 impl VerifiedEnrollment {
+    pub(super) fn valid_until(&self) -> DateTime<Utc> {
+        self.expires_at
+    }
     pub(super) fn renewal(&self) -> Option<RefreshState> {
         Some(RefreshState {
             scope: self.scope.clone(),
@@ -453,6 +456,16 @@ impl VerifiedEnrollment {
             self.subject,
             self.token,
             self.secret,
+            self.expires_at,
+        )
+    }
+    pub(super) fn recovery_transport<C: HttpsExchange>(&self, exchange: C) -> Result<MemberApi<C>> {
+        MemberApi::new(
+            exchange,
+            self.scope.clone(),
+            self.subject.clone(),
+            self.token.clone(),
+            self.secret.clone(),
             self.expires_at,
         )
     }

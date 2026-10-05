@@ -4,6 +4,7 @@ export const emptyDesktopData = (): GymData => ({
   members: [], plans: [], attendance: [], payments: [], products: [], sales: [], expenses: [], audit: [], queue: [],
 })
 export function desktopData(snapshot: Snapshot): GymData {
+  const syncState = snapshot.businessSync?.lastSuccessOn && !snapshot.businessSync.lastError && snapshot.pending === 0 ? 'synced' : 'pending'
   return {
     ...emptyDesktopData(),
     plans: snapshot.plans.map(plan => ({
@@ -14,12 +15,12 @@ export function desktopData(snapshot: Snapshot): GymData {
     attendance: snapshot.attendance.map(row => ({
       id: row.id, memberId: row.memberId, name: row.name, date: row.businessOn,
       time: new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Colombo', hour: '2-digit', minute: '2-digit' }).format(new Date(row.occurredAt)),
-      type: row.type, source: row.source, syncState: 'pending',
+      type: row.type, source: row.source, syncState,
     })),
-    payments: snapshot.payments.map(row => ({ id: row.id, memberId: row.memberId, memberName: row.memberName, date: row.businessOn, method: row.method, amount: row.netAmountMinor / 100, status: row.status, syncState: 'pending' })),
-    expenses: snapshot.expenses.map(row => ({ id: row.id, title: row.title, category: row.category, date: row.businessOn, method: row.method, amount: row.amountMinor / 100, recordedBy: row.actor, status: row.status, effectiveAmount: row.effectiveAmountMinor / 100, voidReason: row.voidReason, voidedAt: row.voidedAt, voidedBy: row.voidedBy, syncState: 'pending' })),
+    payments: snapshot.payments.map(row => ({ id: row.id, memberId: row.memberId, memberName: row.memberName, date: row.businessOn, method: row.method, amount: row.netAmountMinor / 100, status: row.status, syncState })),
+    expenses: snapshot.expenses.map(row => ({ id: row.id, title: row.title, category: row.category, date: row.businessOn, method: row.method, amount: row.amountMinor / 100, recordedBy: row.actor, status: row.status, effectiveAmount: row.effectiveAmountMinor / 100, voidReason: row.voidReason, voidedAt: row.voidedAt, voidedBy: row.voidedBy, syncState })),
     products: snapshot.products.map(row => ({ id: row.id, version: row.version, name: row.name, sku: row.sku, stock: row.stock, reorderLevel: row.reorderLevel, cost: row.costMinor / 100, price: row.priceMinor / 100 })),
-    sales: snapshot.sales.map(row => ({ id: row.id, date: row.businessOn, method: row.method, total: row.totalMinor / 100, syncState: 'pending', items: row.items.map(item => ({ productId: item.productId, name: item.name, quantity: item.quantity, price: item.priceMinor / 100 })) })),
+    sales: snapshot.sales.map(row => ({ id: row.id, date: row.businessOn, method: row.method, total: row.totalMinor / 100, syncState, items: row.items.map(item => ({ productId: item.productId, name: item.name, quantity: item.quantity, price: item.priceMinor / 100 })) })),
     audit: snapshot.audit,
   }
 }

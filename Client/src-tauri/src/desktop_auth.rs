@@ -32,6 +32,7 @@ pub struct DesktopAuthStatus {
 pub struct PendingDesktopLogin {
     epoch: u64,
     verified: VerifiedEnrollment,
+    restore: Option<super::recovery::NativeRestore>,
 }
 // An opaque native job. The webview cannot supply its session, account, scope,
 // database path or credentials. A dedicated connection avoids I/O under UI locks.
@@ -162,9 +163,12 @@ impl DesktopAuth {
     pub fn status(&self, store: &Store) -> Result<DesktopAuthStatus> {
         let identity = store.native_identity(false).ok();
         let requires_login = self.requires_login(store)?;
+        let restored = store.requires_restore_reconciliation()?;
         let reason=self.config_error.clone().unwrap_or_else(|| {
             if self.config.is_none() {
                 "Native sign-in needs desktop-auth.json with the approved HTTPS API and public Auth settings".into()
+            } else if identity.is_none() && restored {
+                "This restored backup needs online recovery. Sign in with the approved account on this computer to reconcile retained changes and download server history. Failed or conflicting recovery keeps the backup guarded.".into()
             } else if identity.is_none() {
                 "Sign in with the approved Administrator account. Internet access is required for sign-in".into()
             } else { String::new() }
@@ -233,13 +237,36 @@ impl DesktopAuth {
             .as_ref()
             .ok_or("Native sign-in is not configured")?;
         let mut store = Store::open(path)?;
-        store.prepare_native_device()?;
-        let (device, secret) = store.native_device_secret()?;
+        let mut restore = if store.requires_restore_reconciliation()? {
+            Some(store.prepare_restore_reconciliation()?)
+        } else {
+            None
+        };
+        let (device, secret) = if restore.is_some() {
+            store.native_restore_device_secret()?
+        } else {
+            store.prepare_native_device()?;
+            store.native_device_secret()?
+        };
         drop(store);
         let mut exchange = NativeHttps::new(&config.auth_origin, &config.api_origin);
         let verified =
             super::native_auth::login(&mut exchange, config, &device, secret, email, password)?;
-        Ok(PendingDesktopLogin { epoch, verified })
+        if let Some(candidate) = restore.as_mut() {
+            let mut transport = verified
+                .recovery_transport(NativeHttps::new(&config.auth_origin, &config.api_origin))?;
+            candidate.run(&verified, &mut transport, || {
+                if epoch != self.epoch.load(Ordering::SeqCst) {
+                    return Err("Online restore recovery was cancelled".into());
+                }
+                Ok(())
+            })?;
+        }
+        Ok(PendingDesktopLogin {
+            epoch,
+            verified,
+            restore,
+        })
     }
     pub fn finish(
         &self,
@@ -260,6 +287,9 @@ impl DesktopAuth {
         if !pending.verified.is_administrator() {
             return Err("The approved Administrator account is required for this desktop".into());
         }
+        if pending.verified.valid_until() <= Utc::now() {
+            return Err("Verified account session expired; sign in again".into());
+        }
         // Take lock before committing local enrollment; poisoning cannot leave a
         // new authorized session after the caller received a failure.
         let mut renewal = self
@@ -270,6 +300,9 @@ impl DesktopAuth {
             .transport
             .try_lock()
             .map_err(|_| "Native session unavailable")?;
+        if let Some(recovery) = pending.restore {
+            recovery.commit(store)?;
+        }
         store.enroll_native(&pending.verified)?;
         // Only the agreed Administrator can operate this desktop. Reception
         // enrollment remains an API role, without desktop control grants.
@@ -387,6 +420,7 @@ impl DesktopAuth {
                 PendingDesktopLogin {
                     epoch: result.epoch,
                     verified,
+                    restore: None,
                 },
             );
         }
@@ -458,7 +492,7 @@ impl DesktopAuth {
         worker.removal_session = Some(job.session);
         // The durable session nonce is rechecked inside every receipt/page
         // transaction, so a logout or another app cannot commit a late reply.
-        let run = worker.run_member_sync(
+        let run = worker.run_business_sync(
             transport,
             Utc::now(),
             Limits {
@@ -475,13 +509,13 @@ impl DesktopAuth {
                 "complete",
                 pushed,
                 pages,
-                "Member changes confirmed by the server. Other modules remain local.".into(),
+                "Gym transactions confirmed by the server.".into(),
             ),
             Run::Yielded { pushed, pages } => (
                 "yielded",
                 pushed,
                 pages,
-                "Member synchronization will continue on the next run.".into(),
+                "Gym synchronization will continue on the next run.".into(),
             ),
             Run::Deferred { .. } => (
                 "deferred",
@@ -499,7 +533,7 @@ impl DesktopAuth {
                 "blocked",
                 0,
                 0,
-                "Review pending member conflicts before synchronization can continue.".into(),
+                "A retained gym transaction needs reconciliation before synchronization can continue.".into(),
             ),
         };
         let denied = worker.removal_session.is_none();
@@ -533,8 +567,9 @@ impl DesktopAuth {
         let available =
             self.online_transport.load(Ordering::SeqCst) && store.native_identity(false).is_ok();
         snapshot["memberSync"]["available"] = json!(available);
+        snapshot["businessSync"]["available"] = json!(available);
         snapshot["memberSync"]["reason"] = json!(if available {
-            "Member synchronization is connected. Other modules remain local."
+            "Gym synchronization is connected. Changes require actual server receipts."
         } else {
             "Sign in online to synchronize members. Offline changes are retained."
         });

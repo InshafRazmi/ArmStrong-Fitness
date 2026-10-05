@@ -49,7 +49,7 @@ test('LIVE Supabase PostgreSQL + Auth: isolated migrations and member API', { ti
     await step('real migration runner, repeatability and checksum-drift rejection', async () => {
       await applyMigrations(owner!);
       const first = (await owner!.query('SELECT version,sha256,applied_at FROM public.armstrong_migrations')).rows;
-      assert.equal(first.length, 1);
+      assert.equal(first.length, 4);
       await applyMigrations(owner!);
       assert.deepEqual((await owner!.query('SELECT version,sha256,applied_at FROM public.armstrong_migrations')).rows, first);
       await owner!.query("UPDATE public.armstrong_migrations SET sha256=repeat('0',64) WHERE version=1");

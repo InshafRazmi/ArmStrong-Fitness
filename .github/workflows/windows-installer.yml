@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'Client/**'
+      - 'server/**'
       - '.github/workflows/windows-installer.yml'
 
 permissions:
@@ -39,7 +40,19 @@ jobs:
           rustup target add x86_64-pc-windows-msvc
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run native business and authorization checks on Windows
+        env:
+          ARMSTRONG_BUSINESS_FIXTURE_PATH: ${{ runner.temp }}/armstrong-business-fixture.json
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib
+      - name: Verify server and native business protocol compatibility
+        working-directory: server
+        env:
+          ARMSTRONG_BUSINESS_FIXTURE_PATH: ${{ runner.temp }}/armstrong-business-fixture.json
+        run: |
+          npm ci --include=dev --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build:verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:native-contract
       - name: Verify the bundled login settings on Windows
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib --features packaged-auth desktop_auth::tests
       - name: Run interface checks

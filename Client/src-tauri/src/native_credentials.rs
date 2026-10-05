@@ -65,6 +65,14 @@ pub struct DeviceApproval {
 }
 impl Store {
     pub(super) fn native_device_secret(&self) -> Result<(String, String)> {
+        self.read_existing_device_secret(false)
+    }
+    // Recovery reads the existing possession proof only. It cannot prepare or
+    // replace a credential, clear the restore guard, or authorize local access.
+    pub(super) fn native_restore_device_secret(&self) -> Result<(String, String)> {
+        self.read_existing_device_secret(true)
+    }
+    fn read_existing_device_secret(&self, reconciliation: bool) -> Result<(String, String)> {
         let tx = self.conn.unchecked_transaction().map_err(db_error)?;
         let restored: bool = tx
             .query_row(
@@ -73,9 +81,15 @@ impl Store {
                 |r| r.get(0),
             )
             .map_err(db_error)?;
-        if restored {
+        if restored != reconciliation {
             return Err(
-                "Restored database requires administrator reconciliation before sign-in".into(),
+                "Restored database requires verified online reconciliation before sign-in".into(),
+            );
+        }
+        if reconciliation && super::member_worker::scope(&tx)?.is_none() {
+            return Err(
+                "Restored backup has no verified server scope; keep it for Administrator recovery"
+                    .into(),
             );
         }
         let device: String = tx

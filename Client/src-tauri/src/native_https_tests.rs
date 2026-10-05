@@ -83,6 +83,20 @@ fn bounded_response_parser_preserves_errors_without_following_redirects() {
         assert!(parse(invalid.to_vec(), 2).is_err());
     }
 }
+#[test]
+fn business_https_supports_bounded_atomic_groups_without_widening_auth_limits() {
+    let client = NativeHttps::new("https://auth.example", "https://api.example");
+    let mut req = request();
+    req.url = "https://api.example/v2/business/push".into();
+    req.body = Some(vec![b'a'; 40 * 1024]);
+    req.response_limit = crate::business_sync::REQUEST_LIMIT + 8192;
+    assert!(config(&client, &req).is_ok());
+    req.body = Some(vec![b'a'; crate::business_sync::REQUEST_LIMIT + 1]);
+    assert!(config(&client, &req).is_err());
+    req.body = Some(vec![b'a'; 40 * 1024]);
+    req.url = "https://auth.example/auth/v1/token?grant_type=password".into();
+    assert!(config(&client, &req).is_err());
+}
 #[cfg(target_os = "linux")]
 #[test]
 #[ignore = "Real TLS probe requires permission to bind a loopback listener"]

@@ -4,8 +4,9 @@ Render is now the selected provider. Following the free-hosting discussion,
 the setup target is **Free in Singapore** for testing. The latest user selection
 authorizes this Render setup and supersedes the earlier hosting decision gate.
 Finishing live setup still needs account/repository access and restricted database
-credentials with the mounted CA. User-supplied Render logs confirm a successful
-build followed by a failed API startup; no live API has been verified here.
+credentials with the mounted CA. The public health endpoint was independently
+reached on 2026-10-05. Protocol-2 source publication/deployment and live native
+acceptance are still pending; health alone does not identify the deployed revision.
 
 The installation name is **ArmStrong Fitness** and the existing account's
 Administrator display name is **ArmStrong**. Those names and a stable new gym

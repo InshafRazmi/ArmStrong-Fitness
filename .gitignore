@@ -15,5 +15,7 @@ server/*.pem
 server/armstrong-*-source.zip
 Client/armstrong-windows-changes.zip
 Client/armstrong-desktop-changes.zip
+Client/armstrong-desktop-changes.zip.sha256
+server/armstrong-*-source.zip.sha256
 Client/dist-linux/
 server/supabase/.temp/

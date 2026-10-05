@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 use std::{path::Path, time::Duration};
 use uuid::Uuid;
 
+mod business_sync;
 mod desktop_auth;
 mod finance;
 pub use desktop_auth::{
@@ -36,7 +37,7 @@ pub use operations::{
 pub use recovery::BackupEnvelope;
 pub use reports::ReportRange;
 
-const SCHEMA_VERSION: i64 = 6;
+const SCHEMA_VERSION: i64 = 7;
 type Result<T> = std::result::Result<T, String>;
 const ACTOR: &str = "local-test-operator (unauthenticated)";
 fn id() -> String {
@@ -174,6 +175,10 @@ impl Store {
         }
         if version <= 5 {
             tx.execute_batch(include_str!("../migrations/006_member_conflicts.sql"))
+                .map_err(db_error)?;
+        }
+        if version <= 6 {
+            tx.execute_batch(include_str!("../migrations/007_business_sync.sql"))
                 .map_err(db_error)?;
         }
         integrity(&tx)?;
@@ -406,6 +411,7 @@ fn record(
     )
     .map_err(db_error)?;
     tx.execute("INSERT INTO outbox (id,device_id,entity,entity_id,action,expected_version,payload_json,schema_version,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",params![id(),device,entity,entity_id,action,expected_version,payload,SCHEMA_VERSION,now]).map_err(db_error)?;
+    business_sync::capture(tx)?;
     Ok(())
 }
 fn integrity(conn: &Connection) -> Result<()> {
@@ -453,7 +459,7 @@ fn snapshot_on(conn: &Connection) -> Result<Value> {
         )?);
     }
     let pending: i64 = conn
-        .query_row("SELECT count(*) FROM outbox o WHERE NOT EXISTS(SELECT 1 FROM member_deliveries d WHERE d.operation_id=o.id AND d.state='acknowledged') AND NOT EXISTS(SELECT 1 FROM member_resolved_operations r WHERE r.operation_id=o.id)", [], |r| r.get(0))
+        .query_row("SELECT count(*) FROM outbox o WHERE NOT EXISTS(SELECT 1 FROM member_deliveries d WHERE d.operation_id=o.id AND d.state='acknowledged') AND NOT EXISTS(SELECT 1 FROM member_resolved_operations r WHERE r.operation_id=o.id) AND NOT EXISTS(SELECT 1 FROM business_batch_operations bo JOIN business_batches b ON b.id=bo.batch_id WHERE bo.operation_id=o.id AND b.state='confirmed')", [], |r| r.get(0))
         .map_err(db_error)?;
     let audits: i64 = conn
         .query_row("SELECT count(*) FROM audit", [], |r| r.get(0))
@@ -463,5 +469,6 @@ fn snapshot_on(conn: &Connection) -> Result<Value> {
     finance::append_snapshot(conn, &mut result)?;
     removal::append_snapshot(conn, &mut result)?;
     member_sync::append_snapshot(conn, &mut result)?;
+    result["businessSync"] = business_sync::status(conn)?;
     Ok(result)
 }
