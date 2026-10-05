@@ -1,0 +1,1077 @@
+{
+  "protocolVersion": 2,
+  "tables": [
+    {
+      "name": "users",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "subject",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "display_name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "active",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [
+        "email",
+        "display_name"
+      ],
+      "references": []
+    },
+    {
+      "name": "members",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "phone",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "nfc_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "joined_on",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "archived_at",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "archived_by_user_id",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "mutable": [
+        "name",
+        "phone",
+        "email",
+        "nfc_id",
+        "version",
+        "archived_at",
+        "archived_by_user_id"
+      ],
+      "references": [
+        {
+          "column": "archived_by_user_id",
+          "table": "users",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "plans",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "duration_months",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "price_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "active",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [
+        "name",
+        "duration_months",
+        "price_minor",
+        "active",
+        "version"
+      ],
+      "references": []
+    },
+    {
+      "name": "gym_settings",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "location",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "phone",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [
+        "name",
+        "location",
+        "phone",
+        "email",
+        "version"
+      ],
+      "references": []
+    },
+    {
+      "name": "nfc_cards",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "member_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "uid",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "assigned_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "revoked_at",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "mutable": [
+        "revoked_at"
+      ],
+      "references": [
+        {
+          "column": "member_id",
+          "table": "members",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "membership_periods",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "member_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "plan_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "plan_name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "price_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "starts_on",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "ends_on",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "plan_id",
+          "table": "plans",
+          "key": "id"
+        },
+        {
+          "column": "member_id",
+          "table": "members",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "attendance",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "member_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "card_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "member_name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "card_uid",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "source",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "business_on",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "occurred_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "voids_id",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "voids_id",
+          "table": "attendance",
+          "key": "id"
+        },
+        {
+          "column": "card_id",
+          "table": "nfc_cards",
+          "key": "id"
+        },
+        {
+          "column": "member_id",
+          "table": "members",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "products",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "sku",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "cost_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "price_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "reorder_level",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [
+        "name",
+        "sku",
+        "cost_minor",
+        "price_minor",
+        "reorder_level",
+        "version"
+      ],
+      "references": []
+    },
+    {
+      "name": "sales",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "total_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "method",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "business_on",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "reverses_id",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "reverses_id",
+          "table": "sales",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "sale_items",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "sale_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "product_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "sku",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "price_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "cost_minor",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "product_id",
+          "table": "products",
+          "key": "id"
+        },
+        {
+          "column": "sale_id",
+          "table": "sales",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "stock_movements",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "product_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "sale_item_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "delta",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor",
+          "type": "text",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "sale_item_id",
+          "table": "sale_items",
+          "key": "id"
+        },
+        {
+          "column": "product_id",
+          "table": "products",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "expenses",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "category",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "amount_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "method",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "business_on",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "reverses_id",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "reverses_id",
+          "table": "expenses",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "expense_voids",
+      "key": "expense_id",
+      "columns": [
+        {
+          "name": "expense_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor_user_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "legacy_reversal_id",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "legacy_reversal_id",
+          "table": "expenses",
+          "key": "id"
+        },
+        {
+          "column": "actor_user_id",
+          "table": "users",
+          "key": "id"
+        },
+        {
+          "column": "expense_id",
+          "table": "expenses",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "invoices",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "member_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "membership_period_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "sale_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "amount_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "issued_on",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "sale_id",
+          "table": "sales",
+          "key": "id"
+        },
+        {
+          "column": "membership_period_id",
+          "table": "membership_periods",
+          "key": "id"
+        },
+        {
+          "column": "member_id",
+          "table": "members",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "invoice_details",
+      "key": "invoice_id",
+      "columns": [
+        {
+          "name": "invoice_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "number",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "member_name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "legacy",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "invoice_id",
+          "table": "invoices",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "payments",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "member_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "member_name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "amount_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "method",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "business_on",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "reverses_id",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "reverses_id",
+          "table": "payments",
+          "key": "id"
+        },
+        {
+          "column": "member_id",
+          "table": "members",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "payment_allocations",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "payment_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "invoice_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "amount_minor",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "invoice_id",
+          "table": "invoices",
+          "key": "id"
+        },
+        {
+          "column": "payment_id",
+          "table": "payments",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "payment_reversal_details",
+      "key": "payment_id",
+      "columns": [
+        {
+          "name": "payment_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "payment_id",
+          "table": "payments",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "allocation_reversals",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "allocation_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "payment_reversal_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "payment_reversal_id",
+          "table": "payments",
+          "key": "id"
+        },
+        {
+          "column": "allocation_id",
+          "table": "payment_allocations",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "payment_receipts",
+      "key": "payment_id",
+      "columns": [
+        {
+          "name": "payment_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "number",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "snapshot_json",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "issued_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "legacy",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "payment_id",
+          "table": "payments",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "audit",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "device_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "action",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "entity_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "before_json",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "after_json",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "entity",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor_user_id",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "actor_user_id",
+          "table": "users",
+          "key": "id"
+        }
+      ]
+    }
+  ]
+}
