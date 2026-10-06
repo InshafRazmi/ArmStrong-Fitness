@@ -143,46 +143,90 @@ fn executable() -> std::result::Result<std::path::PathBuf, ExchangeError> {
     Ok("/usr/bin/curl".into())
 }
 #[cfg(windows)]
-fn executable() -> std::result::Result<std::path::PathBuf, ExchangeError> {
+mod windows_system {
+    use super::*;
     #[link(name = "kernel32")]
     extern "system" {
         fn GetSystemDirectoryW(buffer: *mut u16, size: u32) -> u32;
+        fn GetSystemWindowsDirectoryW(buffer: *mut u16, size: u32) -> u32;
     }
-    let mut directory = vec![0u16; 32768];
-    // SAFETY: buffer has size writable UTF-16 slots; SDK returns length.
-    let size =
-        unsafe { GetSystemDirectoryW(directory.as_mut_ptr(), directory.len() as u32) } as usize;
-    if size == 0 || size >= directory.len() {
-        return Err(ExchangeError::Unavailable);
+    fn directory(
+        get: unsafe extern "system" fn(*mut u16, u32) -> u32,
+    ) -> std::result::Result<std::path::PathBuf, ExchangeError> {
+        let mut directory = vec![0u16; 32768];
+        // SAFETY: both SDK functions write at most the supplied UTF-16 capacity.
+        let size = unsafe { get(directory.as_mut_ptr(), directory.len() as u32) } as usize;
+        if size == 0 || size >= directory.len() {
+            return Err(ExchangeError::ClientUnavailable);
+        }
+        use std::os::windows::ffi::OsStringExt;
+        Ok(std::path::PathBuf::from(std::ffi::OsString::from_wide(
+            &directory[..size],
+        )))
     }
-    use std::os::windows::ffi::OsStringExt;
-    Ok(
-        std::path::PathBuf::from(std::ffi::OsString::from_wide(&directory[..size]))
-            .join("curl.exe"),
-    )
+    pub(super) fn executable() -> std::result::Result<std::path::PathBuf, ExchangeError> {
+        Ok(directory(GetSystemDirectoryW)?.join("curl.exe"))
+    }
+    pub(super) fn environment(command: &mut Command) -> std::result::Result<(), ExchangeError> {
+        // Windows loader/security providers need the system Windows root.
+        // Obtain it from the OS, never an inherited/user-controlled env value.
+        let root = directory(GetSystemWindowsDirectoryW)?;
+        command.env("SystemRoot", &root).env("WINDIR", root);
+        Ok(())
+    }
 }
+#[cfg(windows)]
+use windows_system::executable;
 #[cfg(not(any(windows, target_os = "linux")))]
 fn executable() -> std::result::Result<std::path::PathBuf, ExchangeError> {
-    Err(ExchangeError::Unavailable)
+    Err(ExchangeError::ClientUnavailable)
+}
+fn command() -> std::result::Result<Command, ExchangeError> {
+    let mut command = Command::new(executable()?);
+    // --disable must be first to ignore personal/global curlrc. Credentials
+    // travel through stdin config, never argv. No shell interprets the text.
+    command
+        .args(["--disable", "--config", "-"])
+        .env_clear()
+        .env("LC_ALL", "C");
+    #[cfg(windows)]
+    windows_system::environment(&mut command)?;
+    Ok(command)
+}
+fn exit_error(code: Option<i32>) -> ExchangeError {
+    // Only curl's stable numeric categories cross the transport boundary.
+    // Never expose stderr, response bodies or process/OS error strings.
+    match code {
+        Some(1 | 2 | 4 | 48) => ExchangeError::ClientUnsupported,
+        Some(5 | 6) => ExchangeError::Dns,
+        Some(7) => ExchangeError::Connection,
+        Some(28) => ExchangeError::Timeout,
+        Some(35 | 51 | 53 | 54 | 58 | 59 | 60 | 66 | 77 | 80 | 82 | 83 | 90 | 91 | 98) => {
+            ExchangeError::Tls
+        }
+        Some(3 | 8 | 63 | 100) => ExchangeError::InvalidResponse,
+        _ => ExchangeError::Unavailable,
+    }
 }
 impl HttpsExchange for NativeHttps {
     fn send(&mut self, request: Request) -> std::result::Result<Response, ExchangeError> {
         let input = config(self, &request)?;
-        let mut command = Command::new(executable()?);
-        // --disable must be first to ignore personal/global curlrc. Credentials
-        // travel through stdin config, never argv. No shell interprets the text.
-        command
-            .args(["--disable", "--config", "-"])
-            .env_clear()
-            .env("LC_ALL", "C");
         let output = super::native_process::run(
-            command,
+            command()?,
             input,
             request.response_limit + HEADER_LIMIT + 4,
             Duration::from_secs(18),
         )
-        .map_err(|_| ExchangeError::Unavailable)?;
-        if !output.status.success() || !output.stderr.is_empty() {
+        .map_err(|error| match error {
+            super::native_process::ProcessError::Start => ExchangeError::ClientUnavailable,
+            super::native_process::ProcessError::Timeout => ExchangeError::Timeout,
+            super::native_process::ProcessError::OutputLimit => ExchangeError::InvalidResponse,
+            super::native_process::ProcessError::Io => ExchangeError::Unavailable,
+        })?;
+        if !output.status.success() {
+            return Err(exit_error(output.status.code()));
+        }
+        if !output.stderr.is_empty() {
             return Err(ExchangeError::Unavailable);
         }
         parse(output.stdout, request.response_limit)

@@ -20,7 +20,7 @@ export function AttendancePage() {
     } catch (error) { setError(errorText(error)) }
     finally { setBusy(false) }
   }
-  return <><PageHeader title="NFC Attendance" subtitle={desktop ? 'NFC/manual event logging in SQLite; admission rules and hardware acceptance are separate' : 'USB NFC readers work as keyboard input; records save offline'}/>
+  return <><PageHeader title="NFC Attendance" subtitle="Record member check-ins and check-outs using NFC or manual selection"/>
     <div className="attendance-layout"><section className="card scanner">
       <span className="reader-wave">)))</span><h2>Tap member card</h2><p>Keep this field focused while scanning</p>
       <div className="reader-device"><i/><i/><i/><span>NFC</span></div>

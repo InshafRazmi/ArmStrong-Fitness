@@ -26,9 +26,11 @@ pub use native_credentials::DeviceApproval;
 mod removal;
 pub use removal::{ExpenseVoidInput, MemberRemovalInput};
 mod operations;
+mod registration;
 pub use finance::{
     AllocationInput, InvoiceInput, ReceivePaymentInput, RenewalInput, ReversalInput,
 };
+pub use registration::RegisterMemberInput;
 mod recovery;
 mod reports;
 pub use operations::{
@@ -251,76 +253,12 @@ impl Store {
         tx.commit().map_err(db_error)
     }
     pub fn save_member(&mut self, input: MemberInput) -> Result<()> {
-        let name = required(&input.name, "Name", 120)?;
-        let phone = required(&input.phone, "Phone", 40)?;
-        let email = input.email.trim();
-        if email.len() > 254
-            || (!email.is_empty()
-                && (!email.contains('@') || email.chars().any(char::is_whitespace)))
-        {
-            return Err("Enter a valid email or leave it blank".into());
-        }
-        let nfc = input.nfc_id.trim().to_ascii_uppercase();
-        if nfc.len() > 128
-            || !nfc.is_ascii()
-            || nfc.chars().any(|c| c.is_whitespace() || c.is_control())
-        {
-            return Err("Card ID must be at most 128 ASCII characters without spaces".into());
-        }
-        let nfc = if nfc.is_empty() { None } else { Some(nfc) };
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(db_error)?;
-        let member_id = input.id.clone().unwrap_or_else(id);
-        let duplicate: bool = tx
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM members WHERE nfc_id=?1 AND id<>?2)",
-                params![nfc, member_id],
-                |r| r.get(0),
-            )
-            .map_err(db_error)?;
-        if duplicate {
-            return Err("This NFC card is already assigned to another member".into());
-        }
-        let before = if input.id.is_some() {
-            tx.query_row("SELECT json_object('name',name,'phone',phone,'email',email,'nfcId',nfc_id,'version',version) FROM members WHERE id=?1", [&member_id], |r| r.get::<_,String>(0)).optional().map_err(db_error)?
-        } else {
-            None
-        };
-        if input.id.is_some() {
-            let changed = tx.execute("UPDATE members SET name=?1,phone=?2,email=?3,nfc_id=?4,version=version+1 WHERE id=?5 AND version=?6 AND archived_at IS NULL",params![name,phone,email,nfc,member_id,input.version]).map_err(db_error)?;
-            if changed != 1 {
-                return Err("Member changed or no longer exists. Refresh and try again.".into());
-            }
-        } else {
-            if input.version.is_some() {
-                return Err("New members cannot have a version".into());
-            }
-            tx.execute(
-                "INSERT INTO members(id,name,phone,email,nfc_id,joined_on,version) VALUES (?1,?2,?3,?4,?5,?6,1)",
-                params![
-                    member_id,
-                    name,
-                    phone,
-                    email,
-                    nfc,
-                    business_date(Utc::now())
-                ],
-            )
-            .map_err(db_error)?;
-        }
-        let joined: String = tx
-            .query_row(
-                "SELECT joined_on FROM members WHERE id=?1",
-                [&member_id],
-                |r| r.get(0),
-            )
-            .map_err(db_error)?;
-        let cards: String = tx.query_row("SELECT json_group_array(json_object('id',id,'uid',uid,'assignedAt',assigned_at,'revokedAt',revoked_at)) FROM nfc_cards WHERE member_id=?1",[&member_id],|r|r.get(0)).map_err(db_error)?;
-        let cards: Value = serde_json::from_str(&cards).map_err(|e| e.to_string())?;
-        let payload = json!({"id":member_id,"name":name,"phone":phone,"email":email,"nfcId":nfc,"joinedOn":joined,"version":input.version.unwrap_or(0)+1,"cards":cards});
-        record(&tx, "member", &member_id, input.version, before, payload)?;
+        save_member_on(&tx, input)?;
+        business_sync::capture(&tx)?;
         tx.commit().map_err(db_error)
     }
     pub fn add_period(&mut self, input: PeriodInput) -> Result<()> {
@@ -361,7 +299,86 @@ impl Store {
         tx.commit().map_err(db_error)
     }
 }
+fn save_member_on(tx: &rusqlite::Transaction<'_>, input: MemberInput) -> Result<String> {
+    let name = required(&input.name, "Name", 120)?;
+    let phone = required(&input.phone, "Phone", 40)?;
+    let email = input.email.trim();
+    if email.len() > 254
+        || (!email.is_empty() && (!email.contains('@') || email.chars().any(char::is_whitespace)))
+    {
+        return Err("Enter a valid email or leave it blank".into());
+    }
+    let nfc = input.nfc_id.trim().to_ascii_uppercase();
+    if nfc.len() > 128
+        || !nfc.is_ascii()
+        || nfc.chars().any(|c| c.is_whitespace() || c.is_control())
+    {
+        return Err("Card ID must be at most 128 ASCII characters without spaces".into());
+    }
+    let nfc = if nfc.is_empty() { None } else { Some(nfc) };
+    let member_id = input.id.clone().unwrap_or_else(id);
+    let duplicate: bool = tx
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM members WHERE nfc_id=?1 AND id<>?2)",
+            params![nfc, member_id],
+            |r| r.get(0),
+        )
+        .map_err(db_error)?;
+    if duplicate {
+        return Err("This NFC card is already assigned to another member".into());
+    }
+    let before = if input.id.is_some() {
+        tx.query_row("SELECT json_object('name',name,'phone',phone,'email',email,'nfcId',nfc_id,'version',version) FROM members WHERE id=?1", [&member_id], |r| r.get::<_,String>(0)).optional().map_err(db_error)?
+    } else {
+        None
+    };
+    if input.id.is_some() {
+        let changed = tx.execute("UPDATE members SET name=?1,phone=?2,email=?3,nfc_id=?4,version=version+1 WHERE id=?5 AND version=?6 AND archived_at IS NULL",params![name,phone,email,nfc,member_id,input.version]).map_err(db_error)?;
+        if changed != 1 {
+            return Err("Member changed or no longer exists. Refresh and try again.".into());
+        }
+    } else {
+        if input.version.is_some() {
+            return Err("New members cannot have a version".into());
+        }
+        tx.execute(
+                "INSERT INTO members(id,name,phone,email,nfc_id,joined_on,version) VALUES (?1,?2,?3,?4,?5,?6,1)",
+                params![
+                    member_id,
+                    name,
+                    phone,
+                    email,
+                    nfc,
+                    business_date(Utc::now())
+                ],
+            )
+            .map_err(db_error)?;
+    }
+    let joined: String = tx
+        .query_row(
+            "SELECT joined_on FROM members WHERE id=?1",
+            [&member_id],
+            |r| r.get(0),
+        )
+        .map_err(db_error)?;
+    let cards: String = tx.query_row("SELECT json_group_array(json_object('id',id,'uid',uid,'assignedAt',assigned_at,'revokedAt',revoked_at)) FROM nfc_cards WHERE member_id=?1",[&member_id],|r|r.get(0)).map_err(db_error)?;
+    let cards: Value = serde_json::from_str(&cards).map_err(|e| e.to_string())?;
+    let payload = json!({"id":member_id,"name":name,"phone":phone,"email":email,"nfcId":nfc,"joinedOn":joined,"version":input.version.unwrap_or(0)+1,"cards":cards});
+    record_uncaptured(tx, "member", &member_id, input.version, before, payload)?;
+    Ok(member_id)
+}
 fn record(
+    tx: &rusqlite::Transaction<'_>,
+    entity: &str,
+    entity_id: &str,
+    expected_version: Option<i64>,
+    before: Option<String>,
+    payload: Value,
+) -> Result<()> {
+    record_uncaptured(tx, entity, entity_id, expected_version, before, payload)?;
+    business_sync::capture(tx)
+}
+fn record_uncaptured(
     tx: &rusqlite::Transaction<'_>,
     entity: &str,
     entity_id: &str,
@@ -411,7 +428,6 @@ fn record(
     )
     .map_err(db_error)?;
     tx.execute("INSERT INTO outbox (id,device_id,entity,entity_id,action,expected_version,payload_json,schema_version,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",params![id(),device,entity,entity_id,action,expected_version,payload,SCHEMA_VERSION,now]).map_err(db_error)?;
-    business_sync::capture(tx)?;
     Ok(())
 }
 fn integrity(conn: &Connection) -> Result<()> {

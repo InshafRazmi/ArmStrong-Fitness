@@ -48,6 +48,26 @@ unprepared database or a hash differing from native readback. Follow
 using the one existing Administrator account and approved gym. No second account,
 secret in chat, test-schema reset or public deployment is needed.
 
+## Diagnose a refused sign-in
+
+The desktop now identifies which online check refused the request. An incorrect
+gym account email/password is a password-login failure; the keyring password
+only unlocks local credential storage. Use the password for the approved
+Supabase Auth account. Email confirmation and disabled-account responses have
+their own messages. Do not include passwords or tokens in diagnostic reports.
+
+An online account-verification refusal requires checking the configured Auth
+project and session. An enrollment refusal after successful account sign-in
+requires checking the deployed API's account/computer approval, including
+`AUTOMATIC_DEVICE_ENROLLMENT=true`, approved active Administrator registration
+and existing device approval. The deployed service must use the intended Auth
+project and database. A successful password login or public health response
+does not establish computer enrollment.
+
+Only recognized provider/API error codes select fixed messages. Unknown,
+malformed and oversized responses remain redacted and access stays locked.
+These diagnostics never create a role, replace a credential or approve a device.
+
 ## Provision native server settings
 
 Copy the shape of [desktop-auth.example.json](../desktop-auth.example.json) into
@@ -111,7 +131,12 @@ locks the session; server reconciliation remains required before reuse.
 Requests invoke the OS curl executable directly: `/usr/bin/curl` on Linux and
 the OS System32 `curl.exe` on Windows. No shell or user PATH lookup is used.
 Credentials are supplied through stdin configuration, with curlrc/environment
-overrides disabled. TLS uses system certificate/hostname verification and TLS
+overrides disabled. The child environment contains `LC_ALL=C`; Windows also
+receives `SystemRoot` and `WINDIR` from `GetSystemWindowsDirectoryW`, rather than
+inherited environment values. Clearing these Windows system variables can break
+the system HTTPS client's loader/security providers. PATH, proxy, certificate
+override and TLS key-log variables are not inherited.
+TLS uses system certificate/hostname verification and TLS
 1.2 or later. Redirects/proxy credentials are disabled; request/response sizes and
 both curl/native process deadlines are bounded. Errors discard provider bodies
 and stderr. Missing/unsupported OS tools fail without granting a session.
@@ -119,6 +144,31 @@ and stderr. Missing/unsupported OS tools fail without granting a session.
 References: [curl options](https://curl.se/docs/manpage.html),
 [Windows curl](https://learn.microsoft.com/en-us/windows/curl/) and
 [Windows credential API](https://learn.microsoft.com/en-us/windows/win32/api/wincred/nf-wincred-credwritew).
+
+Connection errors identify the account sign-in, identity verification or computer
+enrollment stage and a fixed category: missing/incompatible system HTTPS client,
+DNS, blocked/refused connection, timeout, TLS, invalid response or other outage.
+Only numeric curl/process categories select these messages. Raw diagnostics,
+passwords, tokens, device secrets and provider bodies remain private. TLS outages
+retain the existing transient renewal/sync behavior; no unverified access is granted.
+
+If Windows login fails while Linux login and browser API health work, check the
+Auth origin with the same system HTTPS client in PowerShell, without credentials:
+
+```powershell
+& "$env:WINDIR\System32\curl.exe" --disable --silent --show-error --http1.1 --tlsv1.2 --noproxy "*" --connect-timeout 5 --max-time 15 --output NUL --write-out "HTTP %{http_code}" "https://pxhnvhiaesapykivsopa.supabase.co/auth/v1/health"
+"curl exit: $LASTEXITCODE"
+```
+
+A 401/403 from the Auth gateway still proves a verified HTTPS response; it may
+require an API key for health. API health alone does not test the separate Auth
+host, a password POST, account verification or device enrollment. Do not disable
+certificate verification to resolve a TLS error. A credential-free real native
+transport probe is available on Linux/Windows:
+
+```sh
+cargo test --manifest-path src-tauri/Cargo.toml --locked --lib --features packaged-auth real_system_https_client_reaches_public_auth_and_gym_health_without_credentials -- --ignored
+```
 
 Run the core/UI checks from `Client/`:
 

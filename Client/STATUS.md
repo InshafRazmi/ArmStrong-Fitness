@@ -1,5 +1,202 @@
 # Status — 2026-10-05
 
+## Current update: remove Attendance and Reports implementation notices
+
+Removed both requested desktop notices from the shared screen-notice component.
+The Attendance subtitle now describes NFC/manual check-ins and check-outs rather
+than SQLite implementation and unfinished admission/hardware work. Reports keeps
+its existing date controls and range-aware CSV behavior. This is a presentation
+change; attendance admission/grace/freeze policy and real Windows reader testing
+remain unfinished, as documented in the attendance/release milestones.
+
+Browser build and all 21 adapter tests plus route/settings/login/receipt renders
+PASS. Packaged desktop build PASS; its assets exclude both notices and the old
+Attendance subtitle and retain the Reports date controls. Windows x64 release
+and NSIS packaging PASS. Installer archive integrity, exact app/WebView2 payload
+hashes, Windows OS/runtime imports and delivery-copy SHA-256 PASS. Patch whitespace
+PASS. No native business/authentication code changed in this milestone; the prior
+native checks still apply.
+
+Rebuilt `Client/dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe` with these
+removals and the previous HTTPS correction: 220,150,558 bytes / 209.95 MiB,
+SHA-256 `3437c13232437ea6f3d2428d83f07323274a0d994711cecd9ed9b79445f446e9`.
+`SHA256SUMS` and `BUILD-INFO.txt` match this delivery copy. Reinstall to update
+the installed Windows app. Existing Windows runtime/hardware release gates
+remain open. Source remains local for the user's commit/push.
+
+## Previous update: Windows sign-in connection handling and rebuilt installer
+
+The user reports that the same Administrator can sign in on Linux and that
+Windows browser API health works, but the Windows app reports
+`Sign-in connection unavailable; values withheld`. That message previously hid
+all native transport failures and the failing sign-in stage. The exact failure
+on the reporting Windows computer is not yet confirmed by a native probe.
+
+The Windows HTTPS child previously cleared all system variables. It now receives
+only `LC_ALL=C` and OS-derived `SystemRoot`/`WINDIR`, retaining the Windows root
+needed by loader/security components without inheriting PATH, proxy, certificate
+override or TLS key-log variables. The trusted System32 curl path, verified TLS,
+no-redirect policy, bounded secret stdin and process deadlines are retained.
+Fixed connection messages identify the sign-in/identity/enrollment stage and
+missing/incompatible client, DNS, connection, timeout, TLS, invalid-response or
+other outage categories. No raw process/provider diagnostics or credentials are
+shown. Sync/renewal outages remain transient and failed login grants no access.
+
+Rebuilt `Client/dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe`:
+220,137,873 bytes / 209.94 MiB, SHA-256
+`c73429246fa744179daee1b80ec2eab380752fefc327a9846f895f45375b2f96`.
+The delivery folder includes matching `SHA256SUMS` and updated `BUILD-INFO.txt`.
+This supersedes the previous installer at the same path.
+
+Measured checks: 184 packaged-auth native tests PASS, 3 ignored; native Clippy
+with warnings denied PASS; browser/packaged frontend builds, all 21 adapter
+tests and route/settings/login/receipt renders PASS. Real credential-free public
+Auth/API HTTPS and forged-plaintext TLS rejection probes separately PASS on Linux.
+Windows MSVC x64 release and NSIS packaging PASS. PE imports include the new
+OS Windows-directory lookup and no external Visual C++ runtime dependency.
+Installer archive integrity, exact eight files, app/runtime payload hashes and
+delivery-copy checksum PASS. Patch whitespace PASS.
+
+Windows Actions now runs the same credential-free native public-service HTTPS
+probe before packaging; this workflow has not run for the local change and
+depends on public-service availability. Login on the reporting Windows computer
+still needs confirmation after reinstalling this build. Account/device setup,
+data and credentials were not reset. Source remains local for the user's push.
+
+## Previous update: first Windows x64 NSIS installer built
+
+The first local Windows setup executable was produced at:
+`Client/dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe`
+(220,129,901 bytes / 209.93 MiB), with `SHA256SUMS` and `BUILD-INFO.txt`.
+It includes the recent sign-in diagnostics, membership registration/remaining
+days, dropdown theme, notice removals and startup session gate. The per-user
+installer embeds Microsoft's x64 WebView2 offline installer. Build outputs and
+isolated build tools are ignored; source remains local for the user's commit/push.
+
+Built on Linux with Rust 1.98.0, Tauri CLI 2.12.1 and cargo-xwin 0.23.1, locked
+dependencies and `desktop,custom-protocol,packaged-auth`. The initial executable
+required Visual C++ runtime DLLs. `Client/.cargo/config.toml` now enables the
+static C runtime for Windows x64; the final PE imports only Windows OS libraries.
+The isolated NSIS compiler's data path was corrected and packaging completes.
+Microsoft library debug-symbol warnings do not prevent release linking.
+
+Measured checks: Windows MSVC x64 release compilation and NSIS packaging PASS;
+packaged frontend and all 21 adapter/calendar tests plus route/settings/login/
+receipt renders PASS. PE architecture, Credential Manager/System32 HTTPS imports,
+registration/login support and exclusion of smoke commands PASS. NSIS archive
+integrity and its exact eight expected files PASS. Extracted app bytes match the
+compiled executable with Tauri's expected NSIS bundle-marker patch; embedded
+WebView2 bytes match the downloaded Microsoft installer. Delivery-copy SHA-256 PASS.
+
+This is an unsigned cross-built acceptance installer. Actual Windows installation,
+online/offline login, Credential Manager, reconnect, data-preserving upgrades,
+NFC and receipt printing remain unverified. The Windows Actions/native-runtime
+and other release gates in PLAN.md remain open.
+
+## Current update: hide the dashboard until the startup session check completes
+
+The desktop shell previously rendered while native auth status was still null,
+so its Dashboard heading/navigation could flash before the login screen.
+Native startup now shows a full-screen session check using the login theme.
+Only a known native access state can show the shell; accounts requiring login
+go to the sign-in screen. A failed initial check offers retry and keeps the
+shell/member data hidden. Browser demo sign-in state no longer initializes
+native access. The explicit local-test build still works after its access
+state is known. Native authentication and offline verification remain native.
+
+Frontend and packaged desktop builds, all 21 adapter/calendar tests and route/settings/login/receipt
+renders PASS. Startup regression checks cover null/missing auth status even
+with a populated snapshot, an initial-check failure, locked/login-required
+accounts and the verified-user shell. No browser storage is read during native
+startup. Real Linux desktop forms/process-restart checks PASS. The Arch package
+is rebuilt and passes SHA-256, archive-content and executable checks. Packaged
+assets contain the startup gate and exclude demo auth/the removed notices.
+Reinstall `Client/dist-linux/armstrong-fitness-0.1.0-1-x86_64.pkg.tar.zst`
+for this startup fix. Source remains local; the user handles commit/push.
+No native business/schema change or live production login is involved.
+
+## Current update: remove requested interface notices
+
+Removed the Expenses and Payments implementation notices and the authenticated signed-in/access/
+offline-session banner from the shared desktop shell. The normal profile,
+login gate, native authorization, sync controls and error reporting remain.
+The separate unauthenticated local-test build still identifies itself.
+
+Frontend and packaged desktop builds and all 21 adapter/calendar tests plus route/settings/login/
+receipt renders PASS. The existing signed-in render assertion now checks the
+clean shell and retained sign-out control. Patch whitespace PASS. The rebuilt
+Arch package passes SHA-256, archive contents and executable checks; the
+packaged frontend excludes the requested messages. Reinstall it to update
+the installed app. No native business or
+authentication behavior changed; prior membership checks still apply.
+Source remains local; the user handles commit/push.
+
+## Current update: package registration and remaining membership days
+
+Members now shows remaining membership days, including the final valid day,
+with zero for expired memberships, a start-date label for scheduled packages,
+and no fabricated countdown for unassigned or archived members. The dashboard's
+expiring list also shows days left. Counts use the native Asia/Colombo business
+date; the separate browser demo uses the same calendar rules.
+
+New-member registration offers active packages with duration and price. It
+defaults the start to today and recalculates the inclusive expiry when the
+package or start changes. Calendar months use the day before the anniversary,
+or the last day of the target month when that anniversary does not exist:
+October 5 + one month ends November 4; January 31 ends February 28/29.
+An explicit details-only option remains available. Existing recorded dates and
+financial history are retained; invoices and payments remain separate actions.
+
+Native registration validates the reviewed package version and derives the
+expiry from its stored duration. Member/card history, membership, two audit/
+outbox records and one frozen sync batch commit together. Stable operation IDs
+make retries after a lost reply/restart safe. Inactive/stale packages, invalid
+dates/cards and injected membership/audit/sync/receipt failures preserve all
+existing data. No SQLite or cloud schema migration is required. Dropdowns and
+native options use dark backgrounds, visible text and amber selection/focus.
+
+Measured checks: **180 packaged native tests PASS / 2 environment probes ignored**;
+**21 adapter/calendar tests PASS**, route/settings/login/receipt renders PASS,
+frontend and packaged desktop builds PASS, native Clippy with warnings denied PASS, formatting and
+patch whitespace PASS. Real Linux webview forms and process restart PASS,
+including automatic month-end expiry, package reselection, readable dropdown
+colors and remaining-day display. The updated native combined-registration
+envelopes also PASS the server's full-state contract/hash check and local
+all-module download test. No new live production sync or Windows acceptance
+is claimed. The optimized Arch package is rebuilt; SHA-256, archive contents,
+registration support in its executable and exclusion of smoke commands PASS.
+Reinstall `Client/dist-linux/armstrong-fitness-0.1.0-1-x86_64.pkg.tar.zst`
+to update an already installed app. Source remains local;
+the user handles commit/push. Next release gates remain in PLAN.md.
+
+## Current update: password and computer-enrollment diagnostics
+
+Read-only live diagnosis reached `/v2/health` with HTTP 200 and protocol 2.
+The approved Administrator is confirmed, unbanned and active in exactly one gym;
+the API runtime has permission to call the enrollment function. This computer's
+SQLite metadata has a prepared credential and no server binding/restore guard.
+Production had no registered computers for the gym during this inspection.
+Auth logs show both successful password/identity checks and subsequent
+`invalid_credentials` password failures. These are separate from enrollment
+refusals. Render's live automatic-enrollment flag was not inspected, and no
+successful production desktop enrollment or synchronization is claimed.
+
+Native sign-in now distinguishes password, online identity, computer enrollment
+and renewal refusals. Recognized error codes select fixed actionable messages;
+unknown/malformed/oversized provider content remains redacted. Authentication,
+scope/device checks and credential preservation remain in force. Tests verify
+each refusal stops at its failed step without local users/roles/audit or binding.
+
+Measured checks: **172 packaged native tests PASS / 2 environment probes ignored**;
+frontend and packaged desktop frontend builds PASS; Rust formatting and patch
+whitespace checks PASS. The optimized Arch package is rebuilt; SHA-256, archive
+contents and presence of the new messages in its executable PASS. Source changes
+remain local, and the running installed app needs to be closed/reinstalled to
+use these messages. No production registration, password, credential or
+role was changed by this diagnosis. Use the gym account's Auth password for
+sign-in; the computer/keyring unlock password serves local storage only.
+See [sign-in diagnosis](docs/NATIVE_SIGN_IN.md#diagnose-a-refused-sign-in).
+
 ## Current milestone: all-module synchronization and real desktop checks
 
 The requested final Windows release is still open. This milestone supersedes

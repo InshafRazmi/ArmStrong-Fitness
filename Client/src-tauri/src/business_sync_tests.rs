@@ -174,14 +174,20 @@ fn setup_operations(store: &mut Store) -> (String, String) {
             active: true,
         })
         .unwrap();
-    store
-        .save_member(MemberInput {
-            id: None,
-            version: None,
+    let plan = store.snapshot().unwrap()["plans"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let registration = store
+        .register_member(RegisterMemberInput {
+            request_id: id(),
             name: "Member".into(),
             phone: "0771234567".into(),
             email: "".into(),
             nfc_id: "CARD1".into(),
+            plan_id: Some(plan),
+            plan_version: Some(1),
+            starts_on: Some("2026-09-05".into()),
         })
         .unwrap();
     let snap = store.snapshot().unwrap();
@@ -193,7 +199,9 @@ fn setup_operations(store: &mut Store) -> (String, String) {
             member_id: member.clone(),
             plan_id: plan,
             plan_version: 1,
-            expected_last_period_id: None,
+            expected_last_period_id: registration["membershipPeriodId"]
+                .as_str()
+                .map(str::to_owned),
             starts_on: "2026-10-05".into(),
             ends_on: "2026-11-04".into(),
         })
@@ -301,6 +309,12 @@ fn business_all_modules_download_exact_receipts_ledgers_and_audit_without_granti
     ));
     let a = writer.store.snapshot().unwrap();
     let b = reader.store.snapshot().unwrap();
+    assert_eq!(b["periods"].as_array().unwrap().len(), 2);
+    assert!(b["periods"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|period| period["startsOn"] == "2026-09-05" && period["endsOn"] == "2026-10-04"));
     for key in [
         "members",
         "plans",

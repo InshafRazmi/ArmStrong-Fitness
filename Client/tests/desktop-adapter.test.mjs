@@ -3,6 +3,45 @@ import test from 'node:test'
 import { nativeSnapshot } from './native-snapshot.mjs'
 import { minorUnits, requireSnapshot } from '../src/desktop/api.ts'
 import { desktopData, desktopMembers, emptyDesktopData } from '../src/desktop/adapter.ts'
+import { colomboToday, membershipDaysRemaining, membershipEndDate } from '../src/utils/membership.ts'
+
+test('package dates handle inclusive calendar months, leap years and supported bounds', () => {
+  for (const [start, months, end] of [
+    ['2026-10-05', 1, '2026-11-04'], ['2026-10-01', 1, '2026-10-31'],
+    ['2026-01-31', 1, '2026-02-28'], ['2024-01-31', 1, '2024-02-29'],
+    ['2024-02-29', 12, '2025-02-28'], ['2026-12-15', 3, '2027-03-14'],
+    ['2026-01-30', 3, '2026-04-29'], ['2026-01-31', 3, '2026-04-30'],
+    ['2026-10-05', 60, '2031-10-04'], ['2200-11-01', 1, '2200-11-30'],
+  ]) assert.equal(membershipEndDate(start, months), end)
+  for (const [start, months] of [['2026-02-30', 1], ['2026-2-01', 1], ['1899-12-01', 1], ['2200-12-31', 1], ['2026-10-05', 0], ['2026-10-05', 61], ['2026-10-05', 1.5]]) {
+    assert.equal(membershipEndDate(start, months), '')
+  }
+})
+test('remaining days include expiry day and exclude the wait for scheduled membership', () => {
+  assert.equal(membershipDaysRemaining('2026-11-04', '2026-10-05', '2026-10-05'), 31)
+  assert.equal(membershipDaysRemaining('2026-11-04', '2026-11-04'), 1)
+  assert.equal(membershipDaysRemaining('2026-11-04', '2026-11-05'), 0)
+  assert.equal(membershipDaysRemaining('2026-11-30', '2026-10-05', '2026-11-01'), 30)
+  assert.equal(membershipDaysRemaining('2024-03-01', '2024-02-28'), 3)
+  assert.equal(membershipDaysRemaining('', '2026-10-05'), null)
+  assert.equal(membershipDaysRemaining('2026-02-30', '2026-10-05'), null)
+  assert.equal(membershipDaysRemaining('2026-11-04', '2026-11-01', '2026-11-05'), null)
+})
+test('membership business date rolls over at Colombo midnight regardless of computer timezone', () => {
+  assert.equal(colomboToday(new Date('2026-10-04T18:29:59Z')), '2026-10-04')
+  assert.equal(colomboToday(new Date('2026-10-04T18:30:00Z')), '2026-10-05')
+})
+test('member registration sends a single native operation with the selected package version', async () => {
+  const api = await import('../src/desktop/api.ts')
+  const calls = []
+  const input = {requestId:'registration-uuid',name:'New member',phone:'0771234567',email:'',nfcId:'CARD',planId:'plan-1',planVersion:3,startsOn:'2026-10-05'}
+  globalThis.window = {__TAURI__:{core:{invoke:async(command,args)=>{calls.push({command,args});throw new Error('Package changed')}}}}
+  try {
+    await assert.rejects(api.registerMember(input), /Package changed/)
+    assert.deepEqual(calls, [{command:'register_member',args:{input}}])
+    assert.ok(!('endsOn' in calls[0].args.input), 'expiry is calculated by native storage')
+  } finally { delete globalThis.window }
+})
 
 test('device preparation accepts no caller identity or credential and propagates vault failure', async () => {
   const api = await import('../src/desktop/api.ts')
@@ -60,6 +99,7 @@ test('native prices, versions and historical membership names survive the interf
   assert.equal(data.members[0].version, 7)
   assert.equal(data.members[0].plan, 'Original plan')
   assert.equal(data.members[0].expiry, '2026-10-31')
+  assert.equal(data.members[0].membershipStartsOn, '2026-10-01')
   assert.equal(data.members[0].nfcId, 'CARD')
 })
 test('current membership takes precedence over a later scheduled period', () => {

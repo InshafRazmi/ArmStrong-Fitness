@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { Expense, GymData, Member, MembershipPlan, Payment, ToastMessage } from '../types/domain'
 import type { MemberRemovalInput, ExpenseVoidInput, AllocationInput, InvoiceInput, ReceivePaymentInput, RenewalInput, ReversalInput, ReceiptDocument, BackupEnvelope, FileResult, PeriodInput, PlanInput, ProductInput, Profile, ReportRange, ReportSummary, RestorePreview, RestoreResult, Snapshot } from '../desktop/api'
-export type NewMember = Pick<Member, 'name' | 'phone' | 'email' | 'plan' | 'expiry' | 'nfcId'>
+export type NewMember = Pick<Member, 'name' | 'phone' | 'email' | 'plan' | 'expiry' | 'nfcId'> & import('../desktop/api').RegisterMemberInput
 type WriteResult = void | Promise<void>
 export interface DesktopData {
   previewMemberConflict: (conflictId: string) => Promise<import('../desktop/api').MemberConflictPreview>

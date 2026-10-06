@@ -185,15 +185,69 @@ fn credential(value: &str) -> bool {
             .bytes()
             .all(|c| c.is_ascii_alphanumeric() || b"._~-".contains(&c))
 }
-fn json(response: Response) -> Result<Vec<u8>> {
+#[derive(Clone, Copy)]
+enum AuthStep {
+    Password,
+    Identity,
+    Enrollment,
+    Renewal,
+}
+fn refusal_message(step: AuthStep, response: &Response) -> &'static str {
+    // Only recognized codes select fixed messages. Never expose provider bodies,
+    // tokens, passwords or arbitrary error text to the webview.
+    let payload = if response.body.len() <= RESPONSE_LIMIT
+        && response.content_type.as_deref().is_some_and(|value| {
+            value
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .eq_ignore_ascii_case("application/json")
+        }) {
+        serde_json::from_slice::<Value>(&response.body).ok()
+    } else {
+        None
+    };
+    let code = payload
+        .as_ref()
+        .and_then(|value| {
+            value
+                .get("error_code")
+                .or_else(|| value.get("code"))
+                .or_else(|| value.get("error"))
+        })
+        .and_then(Value::as_str);
+    match (step, code) {
+        (AuthStep::Password, Some("invalid_credentials")) =>
+            "Incorrect gym account email or password. Use your gym account password; the computer/keyring password is separate.",
+        (AuthStep::Password, Some("email_not_confirmed")) =>
+            "Confirm your gym account email before signing in.",
+        (AuthStep::Password, Some("user_banned")) =>
+            "This gym account is disabled; contact the Administrator.",
+        (AuthStep::Password, _) =>
+            "Account sign-in was refused; check the gym account email, password and configured Auth project.",
+        (AuthStep::Identity, _) =>
+            "Online account verification was refused; sign in again and check the configured Auth project.",
+        (AuthStep::Renewal, _) =>
+            "Account session renewal was refused; sign in online again.",
+        (AuthStep::Enrollment, Some("authentication_required" | "invalid_session")) =>
+            "Computer enrollment could not verify your account session; sign in again and check the server's Auth settings.",
+        (AuthStep::Enrollment, Some("staff_not_authorized" | "gym_not_authorized")) =>
+            "Account sign-in succeeded, but this account is not approved for the gym; ask the Administrator to review its registration.",
+        (AuthStep::Enrollment, Some("device_not_authorized" | "device_mismatch")) =>
+            "Account sign-in succeeded, but this computer was not approved; ask the Administrator to review computer enrollment.",
+        (AuthStep::Enrollment, Some("registration_not_authorized")) =>
+            "Account sign-in succeeded, but automatic computer enrollment was refused; ask the Administrator to review account/device approval.",
+        (AuthStep::Enrollment, Some("invalid_request" | "invalid_protocol" | "invalid_device_secret")) =>
+            "The gym server refused this computer's enrollment request; check that the server and desktop app use compatible versions.",
+        (AuthStep::Enrollment, _) =>
+            "Account sign-in succeeded, but computer enrollment was refused; check server computer approval and account/device registration.",
+    }
+}
+fn json(response: Response, step: AuthStep) -> Result<Vec<u8>> {
     match response.status {
         200 => (),
-        400 | 401 | 403 | 422 => {
-            return Err(
-                "Sign-in or device enrollment was refused; check approved account/device setup"
-                    .into(),
-            )
-        }
+        400 | 401 | 403 | 422 => return Err(refusal_message(step, &response).into()),
         429 => return Err("Sign-in is rate limited; wait before trying again".into()),
         _ => return Err("Sign-in service unavailable; local permissions remain locked".into()),
     }
@@ -208,8 +262,37 @@ fn json(response: Response) -> Result<Vec<u8>> {
     }
     Ok(response.body)
 }
+fn connection_message(step: AuthStep, error: super::member_http::ExchangeError) -> String {
+    use super::member_http::ExchangeError;
+    let stage = match step {
+        AuthStep::Password => "Cannot connect to account sign-in",
+        AuthStep::Identity => "Cannot connect to account verification",
+        AuthStep::Enrollment => "Account verified, but cannot connect to computer enrollment",
+        AuthStep::Renewal => "Cannot connect to session renewal",
+    };
+    let detail = match error {
+        ExchangeError::ClientUnavailable =>
+            "The system HTTPS client could not start. Update or repair the operating system and retry.",
+        ExchangeError::ClientUnsupported =>
+            "The system HTTPS client is incompatible. Update the operating system and retry.",
+        ExchangeError::Dns =>
+            "The server name could not be resolved. Check this computer's DNS or network.",
+        ExchangeError::Connection =>
+            "The server connection was refused or blocked. Check this computer's network or firewall.",
+        ExchangeError::Timeout =>
+            "The connection timed out. Check the network and retry.",
+        ExchangeError::Tls =>
+            "TLS verification or handshake failed. Check this computer's date/time, certificate trust and network security.",
+        ExchangeError::InvalidResponse =>
+            "The server returned an invalid or oversized response.",
+        ExchangeError::Unavailable =>
+            "The connection failed. Check this computer's network and retry.",
+    };
+    format!("{stage}. {detail}")
+}
 fn send(
     exchange: &mut impl HttpsExchange,
+    step: AuthStep,
     method: &'static str,
     url: String,
     headers: Vec<(&'static str, String)>,
@@ -227,8 +310,8 @@ fn send(
             body,
             response_limit: RESPONSE_LIMIT,
         })
-        .map_err(|_| "Sign-in connection unavailable; values withheld")?;
-    json(reply)
+        .map_err(|error| connection_message(step, error))?;
+    json(reply, step)
 }
 
 // Runs without a database transaction/UI mutex. The native caller must obtain
@@ -259,6 +342,7 @@ pub(crate) fn login(
     let started = Utc::now();
     let bytes = send(
         exchange,
+        AuthStep::Password,
         "POST",
         format!("{}/auth/v1/token?grant_type=password", config.auth_origin),
         vec![
@@ -309,6 +393,7 @@ fn complete(
     }
     let bytes = send(
         exchange,
+        AuthStep::Identity,
         "GET",
         format!("{}/auth/v1/user", config.auth_origin),
         vec![
@@ -325,6 +410,7 @@ fn complete(
     }
     let bytes = send(
         exchange,
+        AuthStep::Enrollment,
         "POST",
         format!("{}/v1/enrollment", config.api_origin),
         vec![
@@ -374,6 +460,7 @@ pub(super) fn renew(
         let started = Utc::now();
         let bytes = send(
             &mut exchange,
+            AuthStep::Renewal,
             "POST",
             format!(
                 "{}/auth/v1/token?grant_type=refresh_token",

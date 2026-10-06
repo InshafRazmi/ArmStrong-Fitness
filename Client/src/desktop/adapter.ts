@@ -36,7 +36,7 @@ export function desktopMembers(snapshot: Snapshot, includeArchived = false): Mem
         id: member.id, version: member.version, name: member.name, phone: member.phone, email: member.email,
         nfcId: member.nfcId, joinedAt: member.joinedOn,
         initials: member.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(),
-        plan: period?.planName ?? 'No membership', expiry: period?.endsOn ?? '', status: member.active ? period?.status ?? 'No membership' : 'Archived',
+        plan: period?.planName ?? 'No membership', membershipStartsOn: period?.startsOn, expiry: period?.endsOn ?? '', status: member.active ? period?.status ?? 'No membership' : 'Archived',
       } satisfies Member
     })
 }

@@ -24,9 +24,15 @@ pub(crate) struct Response {
     pub(crate) retry_after: Option<String>,
     pub(crate) body: Vec<u8>,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExchangeError {
     Unavailable,
+    ClientUnavailable,
+    ClientUnsupported,
+    Dns,
+    Connection,
+    Timeout,
+    Tls,
     InvalidResponse,
 }
 
@@ -134,10 +140,10 @@ impl<C: HttpsExchange> MemberApi<C> {
         };
         match self.client.send(request) {
             Ok(response) => Ok(response),
-            Err(ExchangeError::Unavailable) => Err(RemoteFailure::Transient {
+            Err(ExchangeError::InvalidResponse) => Err(RemoteFailure::InvalidResponse),
+            Err(_) => Err(RemoteFailure::Transient {
                 retry_after_seconds: None,
             }),
-            Err(ExchangeError::InvalidResponse) => Err(RemoteFailure::InvalidResponse),
         }
     }
 }

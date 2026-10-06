@@ -6,6 +6,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { PageContent } from "./pages/navigation";
 import type { Member, Page } from "./types/domain";
 import { DesktopScreenNotice } from "./desktop/DesktopScreenNotice";
+import { SessionStartup } from "./desktop/SessionStartup";
 import { displayDate } from "./utils/format";
 
 export default function App() {
@@ -13,12 +14,13 @@ export default function App() {
        const native = import.meta.env.VITE_DESKTOP_ONLY === 'true' || mode === 'desktop';
        const [authenticated, setAuthenticated] = useState(
               () =>
-                     native ||
-                     sessionStorage.getItem("armstrong-demo-auth") === "true",
+                     !native && sessionStorage.getItem("armstrong-demo-auth") === "true",
        );
        const [page, setPage] = useState<Page>("Dashboard");
        const [selected, setSelected] = useState<Member | null>(null);
-       if (!authenticated || (native && desktop?.authStatus?.requiresLogin && !desktop.authStatus.authenticated))
+       if (native && !desktop?.authStatus)
+              return <SessionStartup error={desktop?.error} onRetry={desktop ? () => { void desktop.refresh().catch(() => {}); } : undefined}/>;
+       if (native ? desktop?.authStatus?.requiresLogin && !desktop.authStatus.authenticated : !authenticated)
               return <LoginPage onLogin={() => setAuthenticated(true)} />;
        const content = <PageContent page={page} navigate={setPage} />;
        const logout = () => {
@@ -41,13 +43,13 @@ export default function App() {
                      >
                             {desktop && (
                                    <>
-                                          <div
+                                          {!desktop.authStatus?.authenticated && <div
                                                  className="foundation-warning"
                                                  role="note"
                                           >
-                                                 <b>{desktop.authStatus?.authenticated ? `Signed in as ${desktop.authStatus.userName}` : "Desktop SQLite — local test build"}</b>
-                                                 {desktop.authStatus?.authenticated ? `${desktop.authStatus.canWrite ? "Administrator access" : "Read-only computer"}${desktop.authStatus.offline ? " · Offline session" : ""}. ${desktop.snapshot?.memberSync?.available ? "Member sync connected; other modules remain local." : "Connect and sign in online to sync members."}` : "Authentication is not configured. This local test operator has unrestricted access. Use test records only."}
-                                          </div>
+                                                 <b>Desktop SQLite — local test build</b>
+                                                 Authentication is not configured. This local test operator has unrestricted access. Use test records only.
+                                          </div>}
                                           {desktop.error && (
                                                  <div
                                                         role="alert"

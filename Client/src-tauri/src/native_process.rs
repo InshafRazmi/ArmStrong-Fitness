@@ -10,16 +10,24 @@ pub(super) struct Output {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
 }
-fn read(mut stream: impl Read, limit: usize) -> std::result::Result<Vec<u8>, ()> {
+// Categories only: OS messages and process diagnostics can contain secrets.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum ProcessError {
+    Start,
+    Io,
+    OutputLimit,
+    Timeout,
+}
+fn read(mut stream: impl Read, limit: usize) -> std::result::Result<Vec<u8>, ProcessError> {
     let mut bytes = Vec::new();
     let mut chunk = [0u8; 4096];
     loop {
-        let size = stream.read(&mut chunk).map_err(|_| ())?;
+        let size = stream.read(&mut chunk).map_err(|_| ProcessError::Io)?;
         if size == 0 {
             return Ok(bytes);
         }
         if bytes.len() + size > limit {
-            return Err(());
+            return Err(ProcessError::OutputLimit);
         }
         bytes.extend_from_slice(&chunk[..size]);
     }
@@ -29,7 +37,7 @@ pub(super) fn run(
     input: Vec<u8>,
     limit: usize,
     timeout: Duration,
-) -> std::result::Result<Output, ()> {
+) -> std::result::Result<Output, ProcessError> {
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -39,10 +47,10 @@ pub(super) fn run(
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW, no credential console
     }
-    let mut child = command.spawn().map_err(|_| ())?;
-    let stdin = child.stdin.take().ok_or(())?;
-    let stdout = child.stdout.take().ok_or(())?;
-    let stderr = child.stderr.take().ok_or(())?;
+    let mut child = command.spawn().map_err(|_| ProcessError::Start)?;
+    let stdin = child.stdin.take().ok_or(ProcessError::Io)?;
+    let stdout = child.stdout.take().ok_or(ProcessError::Io)?;
+    let stderr = child.stderr.take().ok_or(ProcessError::Io)?;
     let (sender, receiver) = mpsc::channel();
     let out_sender = sender.clone();
     let err_sender = sender.clone();
@@ -56,24 +64,30 @@ pub(super) fn run(
         let mut stdin = stdin;
         let _ = sender.send((
             2,
-            stdin.write_all(&input).map(|_| Vec::new()).map_err(|_| ()),
+            stdin
+                .write_all(&input)
+                .map(|_| Vec::new())
+                .map_err(|_| ProcessError::Io),
         ));
     });
     let started = Instant::now();
     let mut streams: [Option<Vec<u8>>; 3] = [None, None, None];
-    let mut failed = false;
+    let mut failure = None;
     let result = loop {
         while let Ok((index, reply)) = receiver.try_recv() {
             match reply {
                 Ok(bytes) => streams[index] = Some(bytes),
-                Err(_) => {
-                    failed = true;
+                Err(error) => {
+                    failure = Some(error);
                     break;
                 }
             }
         }
-        if failed || started.elapsed() >= timeout {
-            break Err(());
+        if let Some(error) = failure {
+            break Err(error);
+        }
+        if started.elapsed() >= timeout {
+            break Err(ProcessError::Timeout);
         }
         match child.try_wait() {
             Ok(Some(status)) if streams.iter().all(Option::is_some) => {
@@ -84,7 +98,7 @@ pub(super) fn run(
                 })
             }
             Ok(_) => (),
-            Err(_) => break Err(()),
+            Err(_) => break Err(ProcessError::Io),
         }
         std::thread::sleep(Duration::from_millis(5));
     };
@@ -111,14 +125,28 @@ mod tests {
         assert_eq!(output.stdout, data);
         let mut oversized = Command::new("/usr/bin/head");
         oversized.args(["-c", "8193", "/dev/zero"]);
-        assert!(run(oversized, vec![], 8192, Duration::from_secs(3)).is_err());
+        assert!(matches!(
+            run(oversized, vec![], 8192, Duration::from_secs(3)),
+            Err(ProcessError::OutputLimit)
+        ));
     }
     #[test]
     fn timeout_kills_and_reaps_child_instead_of_waiting_for_service() {
         let mut command = Command::new("/usr/bin/sleep");
         command.arg("2");
         let started = Instant::now();
-        assert!(run(command, vec![], 1, Duration::from_millis(30)).is_err());
+        assert!(matches!(
+            run(command, vec![], 1, Duration::from_millis(30)),
+            Err(ProcessError::Timeout)
+        ));
         assert!(started.elapsed() < Duration::from_millis(1500));
+    }
+    #[test]
+    fn missing_client_returns_a_category_without_os_diagnostics() {
+        let path = std::env::temp_dir().join(format!("missing-client-{}", crate::id()));
+        assert!(matches!(
+            run(Command::new(path), vec![], 1, Duration::from_secs(1)),
+            Err(ProcessError::Start)
+        ));
     }
 }

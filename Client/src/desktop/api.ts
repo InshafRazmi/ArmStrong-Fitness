@@ -31,6 +31,7 @@ export interface ReceiptDocument { number: string; currentStatus: NativePayment[
 export interface Snapshot { businessSync?: BusinessSyncStatus; memberSync?: MemberSyncStatus; removalAuthorization: RemovalAuthorization; invoices: NativeInvoice[]; allocations: NativeAllocation[]; financialAccounts: FinancialAccount[]; plans: Plan[]; members: Member[]; periods: Period[]; pending: number; auditCount: number; today: string; profile: Profile; attendance: NativeAttendance[]; payments: NativePayment[]; products: NativeProduct[]; sales: NativeSale[]; expenses: NativeExpense[]; audit: NativeAudit[]; users: NativeUser[]; restoreRequiresReconciliation: boolean }
 export type PlanInput = Omit<Plan, 'id' | 'version' | 'activeMembers'> & { id?: string; version?: number }
 export type MemberInput = Pick<Member, 'name' | 'phone' | 'email' | 'nfcId'> & { id?: string; version?: number }
+export interface RegisterMemberInput extends Pick<Member, 'name' | 'phone' | 'email' | 'nfcId'> { requestId: string; planId: string | null; planVersion: number | null; startsOn: string | null }
 export interface PeriodInput { memberId: string; planId: string; startsOn: string; endsOn: string }
 export interface ProductInput { requestId: string; id?: string; version?: number; name: string; sku: string; costMinor: number; priceMinor: number; reorderLevel: number; openingStock: number }
 export interface WriteOutcome { id?: string; duplicate?: boolean }
@@ -65,6 +66,7 @@ export interface MemberSyncOutcome { state: 'complete' | 'yielded' | 'deferred' 
 export const synchronizeMembers = () => invoke<MemberSyncOutcome>('synchronize_members')
 export const savePlan = (input: PlanInput) => invoke<void>('save_plan', { input })
 export const saveMember = (input: MemberInput) => invoke<void>('save_member', { input })
+export const registerMember = (input: RegisterMemberInput) => invoke<WriteOutcome>('register_member', { input })
 export const addPeriod = (input: PeriodInput) => invoke<void>('add_membership_period', { input })
 export const saveProfile = (input: Profile) => invoke<WriteOutcome>('save_gym_profile', { input })
 export const saveProduct = (input: ProductInput) => invoke<WriteOutcome>('save_product', { input })

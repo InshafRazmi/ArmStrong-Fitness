@@ -134,7 +134,7 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
         return result
       },
     },
-    addMember: member => commit(() => api.saveMember({ name: member.name, phone: member.phone, email: member.email, nfcId: member.nfcId })),
+    addMember: member => commit(() => api.registerMember({ requestId: member.requestId, name: member.name, phone: member.phone, email: member.email, nfcId: member.nfcId, planId: member.planId, planVersion: member.planVersion, startsOn: member.startsOn }), 'Member and selected membership saved in SQLite.'),
     updateMember: member => commit(() => api.saveMember({ id: member.id, version: member.version, name: member.name, phone: member.phone, email: member.email, nfcId: member.nfcId })),
     updatePlan: plan => commit(() => api.savePlan({ id: plan.id, version: plan.version, name: plan.name, durationMonths: plan.durationMonths, priceMinor: api.minorUnits(plan.price), active: plan.status === 'Active' })),
     recordAttendance: (memberOrCard, source, operationId) => commit(() => api.recordAttendance({ requestId: request(operationId), memberOrCard, source })),

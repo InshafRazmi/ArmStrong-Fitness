@@ -6,8 +6,8 @@ compile_error!("Windows release builds require the packaged-auth feature");
 use armstrong_core::{
     AllocationInput, AttendanceInput, BackupEnvelope, ExpenseInput, ExpenseVoidInput, InvoiceInput,
     MemberConflictInput, MemberInput, MemberRemovalInput, PaymentInput, PeriodInput, PlanInput,
-    ProductInput, ProfileInput, ReceivePaymentInput, RenewalInput, ReportRange, ReversalInput,
-    SaleInput, StockInput, Store,
+    ProductInput, ProfileInput, ReceivePaymentInput, RegisterMemberInput, RenewalInput,
+    ReportRange, ReversalInput, SaleInput, StockInput, Store,
 };
 use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{Manager, State};
@@ -116,6 +116,13 @@ fn save_plan(db: State<Database>, input: PlanInput) -> Result<(), String> {
 #[tauri::command]
 fn save_member(db: State<Database>, input: MemberInput) -> Result<(), String> {
     db.access(true)?.save_member(input)
+}
+#[tauri::command]
+fn register_member(
+    db: State<Database>,
+    input: RegisterMemberInput,
+) -> Result<serde_json::Value, String> {
+    db.access(true)?.register_member(input)
 }
 #[tauri::command]
 fn add_membership_period(db: State<Database>, input: PeriodInput) -> Result<(), String> {
@@ -290,6 +297,7 @@ fn main() {
         synchronize_members,
         save_plan,
         save_member,
+        register_member,
         add_membership_period,
         save_gym_profile,
         record_attendance,
@@ -328,6 +336,7 @@ fn main() {
             synchronize_members,
             save_plan,
             save_member,
+            register_member,
             add_membership_period,
             save_gym_profile,
             record_attendance,

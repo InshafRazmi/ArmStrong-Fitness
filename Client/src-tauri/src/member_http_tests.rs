@@ -138,8 +138,17 @@ fn http_mock_access_denials_and_outages_do_not_parse_provider_payloads() {
             ),
         });
     }
-    for error in [ExchangeError::Unavailable, ExchangeError::InvalidResponse] {
-        let transient = matches!(error, ExchangeError::Unavailable);
+    for error in [
+        ExchangeError::Unavailable,
+        ExchangeError::ClientUnavailable,
+        ExchangeError::ClientUnsupported,
+        ExchangeError::Dns,
+        ExchangeError::Connection,
+        ExchangeError::Timeout,
+        ExchangeError::Tls,
+        ExchangeError::InvalidResponse,
+    ] {
+        let transient = error != ExchangeError::InvalidResponse;
         let mut client = api(vec![Err(error)]);
         let result = client.pull(0);
         assert!(if transient {

@@ -30,7 +30,11 @@ Administrator/gym are provisioned; restricted-runtime TLS/catalog checks pass.
    backups and conflicting financial/master transactions remain blocked,
    retaining queues/history. Existing legacy cloud members must
    be reconciled explicitly; the approved production gym currently has none.
-4. Run the Windows Actions workflow and obtain its actual NSIS installer. Verify
+4. A local Windows x64 NSIS acceptance installer is built in `Client/dist-windows/`.
+   It now corrects the HTTPS child's Windows system environment and reports
+   specific connection failures. Confirm sign-in on the reporting Windows PC;
+   Linux login and browser API health do not establish Windows app Auth connectivity.
+   Run the Windows Actions workflow and obtain a Windows-runner installer. Verify
    fresh install, Credential Manager, offline saves/restart, live reconnect,
    upgrades preserving data, NFC HID and physical receipt printing.
 5. Rebuild final installers only after these gates pass. Current packages are

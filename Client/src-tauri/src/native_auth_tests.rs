@@ -371,6 +371,15 @@ fn native_auth_mock_provider_errors_redirects_and_malformed_replies_are_redacted
             });
             let error = f.login(&mut mock).err().unwrap();
             assert!(!error.contains("private-provider"));
+            if matches!(status, 400 | 401 | 403 | 422) {
+                assert!(error.starts_with(
+                    [
+                        "Account sign-in was refused",
+                        "Online account verification was refused",
+                        "Account sign-in succeeded, but computer enrollment was refused",
+                    ][stage]
+                ));
+            }
             assert_eq!(mock.requests.len(), stage + 1);
         }
         for body in [b"{".to_vec(), vec![b' '; RESPONSE_LIMIT + 1]] {
@@ -388,6 +397,159 @@ fn native_auth_mock_provider_errors_redirects_and_malformed_replies_are_redacted
         assert!(f.login(&mut mock).is_err());
     }
     assert_eq!(f.count("audit"), 0);
+}
+
+#[test]
+fn native_auth_connection_errors_identify_stage_and_cause_without_credentials_or_grants() {
+    let f = Fixture::new();
+    for stage in 0..3 {
+        for (cause, expected) in [
+            (ExchangeError::Unavailable, "connection failed"),
+            (
+                ExchangeError::ClientUnavailable,
+                "HTTPS client could not start",
+            ),
+            (
+                ExchangeError::ClientUnsupported,
+                "HTTPS client is incompatible",
+            ),
+            (ExchangeError::Dns, "DNS"),
+            (ExchangeError::Connection, "refused or blocked"),
+            (ExchangeError::Timeout, "timed out"),
+            (ExchangeError::Tls, "TLS verification or handshake failed"),
+            (
+                ExchangeError::InvalidResponse,
+                "invalid or oversized response",
+            ),
+        ] {
+            let mut mock = f.mock();
+            mock.replies[stage] = Err(cause);
+            let error = f.login(&mut mock).err().unwrap();
+            assert!(error.contains(expected));
+            assert!(error.starts_with(
+                [
+                    "Cannot connect to account sign-in.",
+                    "Cannot connect to account verification.",
+                    "Account verified, but cannot connect to computer enrollment.",
+                ][stage]
+            ));
+            for private in [
+                "private-test-password",
+                "mock-access-token",
+                "unused-refresh-token",
+                "admin@example.test",
+                f.device.as_str(),
+                f.subject.as_str(),
+                f.gym.as_str(),
+            ] {
+                assert!(!error.contains(private));
+            }
+            assert_eq!(mock.requests.len(), stage + 1);
+        }
+    }
+    assert_eq!(f.count("users"), 0);
+    assert_eq!(f.count("audit"), 0);
+}
+
+#[test]
+fn native_auth_mock_refusal_codes_are_scoped_redacted_and_never_grant_local_access() {
+    let f = Fixture::new();
+    for (stage, field, code, expected) in [
+        (
+            0,
+            "error_code",
+            "invalid_credentials",
+            "Incorrect gym account email or password",
+        ),
+        (
+            0,
+            "code",
+            "email_not_confirmed",
+            "Confirm your gym account email",
+        ),
+        (
+            0,
+            "error_code",
+            "user_banned",
+            "This gym account is disabled",
+        ),
+        (
+            1,
+            "error_code",
+            "invalid_credentials",
+            "Online account verification was refused",
+        ),
+        (
+            2,
+            "error",
+            "device_not_authorized",
+            "this computer was not approved",
+        ),
+        (
+            2,
+            "error",
+            "registration_not_authorized",
+            "automatic computer enrollment was refused",
+        ),
+        (
+            2,
+            "error",
+            "staff_not_authorized",
+            "this account is not approved for the gym",
+        ),
+        (
+            2,
+            "error",
+            "invalid_session",
+            "Computer enrollment could not verify your account session",
+        ),
+        (2, "error", "invalid_request", "compatible versions"),
+        (
+            2,
+            "error_code",
+            "invalid_credentials",
+            "computer enrollment was refused",
+        ),
+        (
+            0,
+            "error_code",
+            "private-provider-password-token",
+            "Account sign-in was refused",
+        ),
+    ] {
+        let mut payload = json!({"message":"private-provider-password-token","access_token":"private-provider-password-token"});
+        payload[field] = json!(code);
+        let mut response = reply(payload);
+        response.status = 403;
+        let mut mock = f.mock();
+        mock.replies[stage] = Ok(response);
+        let error = f.login(&mut mock).err().unwrap();
+        assert!(
+            error.contains(expected),
+            "Unexpected refusal message: {error}"
+        );
+        assert!(!error.contains("private-provider"));
+        assert_eq!(mock.requests.len(), stage + 1);
+        assert_eq!(f.count("users"), 0);
+        assert_eq!(f.count("user_roles"), 0);
+        assert_eq!(f.count("audit"), 0);
+        assert!(f.store.removal_session.is_none());
+        assert_eq!(
+            f.store.snapshot().unwrap()["memberSync"]["scope"],
+            Value::Null
+        );
+    }
+    let mut mock = f.mock();
+    let mut response = reply(json!({"error_code":"invalid_credentials"}));
+    response.body.extend(vec![b' '; RESPONSE_LIMIT]);
+    response.status = 400;
+    mock.replies[0] = Ok(response);
+    assert!(f
+        .login(&mut mock)
+        .err()
+        .unwrap()
+        .starts_with("Account sign-in was refused"));
+    assert_eq!(mock.requests.len(), 1);
 }
 
 #[test]

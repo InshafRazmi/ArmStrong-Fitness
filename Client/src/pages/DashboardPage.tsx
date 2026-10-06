@@ -1,6 +1,7 @@
 import { Icon } from '../components/ui/Icon'
 import { useGym } from '../context/GymContext'
 import { money } from '../utils/format'
+import { colomboToday, membershipDaysRemaining } from '../utils/membership'
 import type { Page } from '../types/domain'
 
 function Kpi({label,value,note,icon}:{label:string;value:string;note:string;icon:string}) {
@@ -8,7 +9,7 @@ function Kpi({label,value,note,icon}:{label:string;value:string;note:string;icon
 }
 export function DashboardPage({navigate}:{navigate:(p:Page)=>void}) {
   const {data,desktop} = useGym()
-  const today = desktop?.snapshot?.today ?? new Date().toISOString().slice(0,10)
+  const today = desktop?.snapshot?.today ?? colomboToday()
   const income = desktop?.snapshot
     ? (desktop.snapshot.payments.filter(row=>row.businessOn===today).reduce((sum,row)=>sum+row.netAmountMinor,0)
       +desktop.snapshot.sales.filter(row=>row.businessOn===today).reduce((sum,row)=>sum+row.totalMinor,0))/100
@@ -30,6 +31,6 @@ export function DashboardPage({navigate}:{navigate:(p:Page)=>void}) {
     <section className="card nfc-card"><div className="card-head"><div><h2>{desktop?'Local storage':'Offline sync'}</h2><p>Local data protection</p></div><span className="live">{desktop?'SQLITE':'LIVE'}</span></div><div className="success-row"><div className="success-icon">✓</div><div><b>LOCAL DATABASE READY</b><span>{desktop?.snapshot?.pending??data.queue.length} changes waiting for server</span></div></div><div className="member-highlight"><span className="avatar">DB</span><div><h3>{desktop?'Local operations persisted':'Safe offline operation'}</h3><p>{desktop?(desktop.snapshot?.businessSync?(desktop.snapshot.businessSync.available?'Gym records synchronize with your verified account.':'Sign in online to synchronize gym records.'):(desktop.snapshot?.memberSync?.available?'Member sync connected; other modules remain local.':'Sign in online to synchronize members.')):'Auto-sync on reconnection'}</p></div></div><button className="primary wide" onClick={()=>navigate('Settings')}>Open sync settings</button></section>
     <section className="card list-card"><div className="card-head"><div><h2>Recent attendance</h2><p>Latest activity</p></div><button className="link" onClick={()=>navigate('NFC Attendance')}>View all</button></div>{data.attendance.slice(0,5).map(row=><div className="list-row" key={row.id}><span className="avatar tiny">{row.name.split(' ').map(part=>part[0]).join('').slice(0,2)}</span><div><b>{row.name}</b><small>{row.memberId} · {row.source}</small></div><time>{row.time}</time><span className={row.type==='Check-in'?'tag green':'tag red'}>{row.type}</span></div>)}</section>
     <section className="card quick-card"><div className="card-head"><div><h2>Quick actions</h2><p>Reception tasks</p></div></div><div className="quick-grid">{[['Members','plus','Add member'],['Payments','money','Receive payment'],['Sales & Inventory','bag','New sale'],['NFC Attendance','signal','Check-in']].map(row=><button key={row[0]} onClick={()=>navigate(row[0] as Page)}><Icon name={row[1]}/><span>{row[2]}</span></button>)}</div></section>
-    <section className="card list-card expiry-card"><div className="card-head"><div><h2>Memberships expiring</h2><p>Follow-up list</p></div></div>{data.members.filter(row=>row.status==='Expiring').map(row=><div className="list-row" key={row.id}><span className="avatar tiny">{row.initials}</span><div><b>{row.name}</b><small>{row.plan}</small></div><span className="days">Renew soon</span></div>)}</section>
+    <section className="card list-card expiry-card"><div className="card-head"><div><h2>Memberships expiring</h2><p>Follow-up list</p></div></div>{data.members.filter(row=>row.status==='Expiring').map(row=><div className="list-row" key={row.id}><span className="avatar tiny">{row.initials}</span><div><b>{row.name}</b><small>{row.plan}</small></div><span className="days">{membershipDaysRemaining(row.expiry,today,row.membershipStartsOn) ?? 0} days left</span></div>)}</section>
   </div></>
 }

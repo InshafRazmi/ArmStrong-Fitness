@@ -19,7 +19,7 @@ try {
   const native = nativeSnapshot()
   const unexpected = () => { throw new Error('Render triggered a write or browser storage access') }
   const value = {
-    mode: 'desktop', desktop: { archiveMember: unexpected, deleteMember: unexpected, voidExpense: unexpected, snapshot: native, error: '', refresh: unexpected, createInvoice: unexpected, allocatePayment: unexpected, receivePayment: unexpected, renewMembership: unexpected, reversePayment: unexpected, paymentReceipt: unexpected, savePlan: unexpected, addPeriod: unexpected, saveProfile: unexpected, saveProduct: unexpected, exportBackup: unexpected, previewRestore: unexpected, restoreBackup: unexpected, exportReport: unexpected },
+    mode: 'desktop', desktop: { authStatus: {requiresLogin:false,configured:false,authenticated:false,canWrite:false,userName:null,role:null,expiresAt:null,reason:''}, archiveMember: unexpected, deleteMember: unexpected, voidExpense: unexpected, snapshot: native, error: '', refresh: unexpected, createInvoice: unexpected, allocatePayment: unexpected, receivePayment: unexpected, renewMembership: unexpected, reversePayment: unexpected, paymentReceipt: unexpected, savePlan: unexpected, addPeriod: unexpected, saveProfile: unexpected, saveProduct: unexpected, exportBackup: unexpected, previewRestore: unexpected, restoreBackup: unexpected, exportReport: unexpected },
     data: desktopData(native), online: false, syncing: false, toasts: [], notify: unexpected,
     addMember: unexpected, updateMember: unexpected, updatePlan: unexpected,
     recordAttendance: unexpected, addPayment: unexpected, addExpense: unexpected,
@@ -47,7 +47,7 @@ try {
       assert.ok(!markup.includes('Auto-sync on reconnection') && markup.includes('last 28 business days') && markup.includes('Payments + retail sales'))
       assert.ok(markup.includes('524.45'), 'today received amounts include native payments and sales')
     }
-    if (page.name === 'Members') assert.ok(markup.includes('SQLite member') && markup.includes('Historical plan') && markup.includes('Membership dates') && markup.includes('Archive / Deactivate') && markup.includes('Show archived members') && markup.includes('authenticated Administrator'))
+    if (page.name === 'Members') assert.ok(markup.includes('SQLite member') && markup.includes('Historical plan') && markup.includes('Membership dates') && markup.includes('Archive / Deactivate') && markup.includes('Show archived members') && markup.includes('authenticated Administrator') && markup.includes('Remaining days') && markup.includes('<b>29 days</b>'))
     if (page.name === 'Payments') assert.ok(markup.includes('Recorded') && markup.includes('123.45') && markup.includes('Stored membership invoice') && markup.includes('New invoice') && markup.includes('Renew membership') && markup.includes('Reverse') && markup.includes('Receipt') && markup.includes('876.55'))
     if (page.name === 'Expenses') assert.ok(markup.includes('Stored electricity') && markup.includes('23.45') && markup.includes('Void / Reverse') && markup.includes('Effective expenses'))
     if (page.name === 'Sales & Inventory') assert.ok(markup.includes('Stored bottle') && markup.includes('Add product'))
@@ -71,6 +71,14 @@ try {
     else assert.ok(markup.includes('Unverified') || markup.includes('No authenticated backend'), tab+' accurately reports its capability')
   }
   console.log('PASS all seven desktop settings panels')
+  const memberCases = {...native, members: [0,1,2,3].map(index=>({...native.members[0],id:`member-${index}`})), periods: [
+    {...native.periods[0], memberId:'member-0', startsOn:'2026-10-01', endsOn:native.today, status:'Expiring'},
+    {...native.periods[0], memberId:'member-1', startsOn:'2026-09-01', endsOn:'2026-09-30', status:'Expired'},
+    {...native.periods[0], memberId:'member-2', startsOn:'2026-11-01', endsOn:'2026-11-30', status:'Scheduled'},
+  ]}
+  const membersMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,data:desktopData(memberCases),desktop:{...value.desktop,snapshot:memberCases}}},h(PageContent,{page:'Members',navigate:unexpected})))
+  for (const text of ['<b>1 day</b>','Expires today','<b>0 days</b>','<b>30 days</b>','Starts 01 Nov 2026','No membership','<b>—</b>']) assert.ok(membersMarkup.includes(text),text)
+  console.log('PASS remaining membership days, expiry day, scheduled and unassigned members')
   const businessValue = {...value,desktop:{...value.desktop,snapshot:{...native,businessSync:{available:true,pending:1,acknowledged:9,conflicts:[{id:'batch-1',reason:'Server refused the transaction: business_revision_conflict. Local history is retained.'}],lastError:'Unconfirmed changes are retained.',lastSuccessOn:null}}}}
   const businessMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:businessValue},h(DesktopSettingsPanel,{tab:'Server synchronization'})))
   for (const text of ['payments and receipts','sales and stock','Confirmed transactions','Transactions to review','Local history is retained','before later changes can upload','Sync gym records now']) assert.ok(businessMarkup.includes(text),text)
@@ -102,7 +110,17 @@ try {
   assert.ok(failedMarkup.includes('SQLite storage failure') && failedMarkup.includes('No demo records will be substituted'))
   assert.ok(!failedMarkup.includes('SQLite member') && !failedMarkup.includes('Register new member'))
   const loadingMarkup = renderToStaticMarkup(h(DesktopGymProvider, null, h(App)))
-  assert.ok(loadingMarkup.includes('Opening local storage') && !loadingMarkup.includes('login-page'))
+  assert.ok(loadingMarkup.includes('Checking your session') && loadingMarkup.includes('session-startup') && !loadingMarkup.includes('class="app"'))
+  for (const authStatus of [null, undefined]) {
+    // Even a populated snapshot must never reveal the shell before access is known.
+    const pendingValue = {...value,desktop:{...value.desktop,authStatus}}
+    const pendingMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:pendingValue},h(App)))
+    assert.ok(pendingMarkup.includes('Checking your session') && pendingMarkup.includes('role="status"'))
+    for (const text of ['class="app"','<nav>','Dashboard','SQLite member','Total Members','local test build']) assert.ok(!pendingMarkup.includes(text),text+' hidden during session check')
+    const startupFailure = renderToStaticMarkup(h(GymContext.Provider,{value:{...pendingValue,desktop:{...pendingValue.desktop,error:'Session check failed'}}},h(App)))
+    assert.ok(startupFailure.includes('Session check failed') && startupFailure.includes('Try again') && startupFailure.includes('role="alert"'))
+    assert.ok(!startupFailure.includes('class="app"') && !startupFailure.includes('SQLite member'))
+  }
   globalThis.window = { __TAURI_INTERNALS__: {} }
   assert.equal(isDesktop(), true, 'Tauri cannot silently fall back to demo if the global invoke bridge is unavailable')
   console.log('PASS desktop loading/error states and fail-closed runtime detection')
@@ -110,14 +128,14 @@ try {
   const lockedValue = {...value,desktop:{...value.desktop,snapshot:null,authStatus:lockedAuth,login:unexpected,logout:unexpected}}
   const nativeLogin = renderToStaticMarkup(h(GymContext.Provider,{value:lockedValue},h(App)))
   assert.ok(nativeLogin.includes('login-page') && nativeLogin.includes('Administrator email') && nativeLogin.includes('Internet access is required') && nativeLogin.includes('Computer registration'))
-  assert.ok(!nativeLogin.includes('SQLite member') && !nativeLogin.includes('OFFLINE-READY ACCESS'))
+  assert.ok(!nativeLogin.includes('SQLite member') && !nativeLogin.includes('OFFLINE-READY ACCESS') && !nativeLogin.includes('class="app"'))
   assert.ok(!nativeLogin.includes('Continue offline'), 'fresh computers cannot invent offline authorization')
   const offlineLogin = renderToStaticMarkup(h(GymContext.Provider,{value:{...lockedValue,desktop:{...lockedValue.desktop,authStatus:{...lockedAuth,offlineUntil:'2026-10-12T10:00:00Z'}}}},h(App)))
   assert.ok(offlineLogin.includes('Continue offline') && offlineLogin.includes('OS account') && !offlineLogin.includes('SQLite member'))
   const configuredMissing = renderToStaticMarkup(h(GymContext.Provider,{value:{...lockedValue,desktop:{...lockedValue.desktop,authStatus:{...lockedAuth,configured:false}}}},h(App)))
   assert.ok(/class="login-submit" disabled=""/.test(configuredMissing),'missing native configuration cannot submit a demo login')
   const signedIn = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,desktop:{...value.desktop,authStatus:{...lockedAuth,authenticated:true,canWrite:true,userName:'Verified Administrator',role:'Administrator',expiresAt:'2026-10-04T12:00:00Z'}}}},h(App)))
-  assert.ok(signedIn.includes('Signed in as Verified Administrator') && signedIn.includes('Administrator · Sign out') && !signedIn.includes('local test build'))
+  assert.ok(signedIn.includes('Administrator · Sign out') && signedIn.includes('class="app"') && signedIn.includes('Total Members') && !signedIn.includes('Signed in as') && !signedIn.includes('Administrator access') && !signedIn.includes('local test build'))
   console.log('PASS native sign-in gate, missing configuration and verified user shell')
 
 

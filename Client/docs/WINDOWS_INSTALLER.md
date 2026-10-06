@@ -27,7 +27,11 @@ a missing native bridge leaves access locked with a visible error.
 NSIS produces an x64 setup executable for Windows 10/11. The per-user install
 uses an embedded WebView2 offline installer, so installation does not depend on
 downloading WebView2 on the destination computer. This increases installer size;
-the build runner still needs internet. See the official
+the build runner still needs internet. `Client/.cargo/config.toml` links the
+Windows C runtime statically so the app does not require a separate Visual C++
+redistributable. Verify the finished executable's imports after packaging;
+see [Rust's runtime linkage documentation](https://doc.rust-lang.org/reference/linkage.html#static-and-dynamic-c-runtimes).
+See the official
 [Windows installer and WebView2 options](https://v2.tauri.app/distribute/windows-installer/).
 
 ## Build and download
@@ -64,6 +68,41 @@ Run these from `Client/`. The setup executable is written to
 `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/`. The public settings
 are already configured for the selected Render/Supabase endpoints. Ordinary
 `desktop:run` is still the explicit local development/test workflow.
+
+The current local source has also produced
+`Client/dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe` (209.95 MiB), with
+`SHA256SUMS` and `BUILD-INFO.txt`. This unsigned Linux cross-build includes the
+recent membership, sign-in, interface notice and startup fixes, plus the Windows
+HTTPS system-environment correction and specific connection diagnostics. Its x64 native
+app, static runtime imports, installer integrity and embedded app/WebView2
+payloads are verified. The Attendance and Reports development notices have also
+been removed. The Windows Actions workflow also runs a credential-free
+native HTTPS probe against the public Auth and gym API health endpoints before
+packaging. This check depends on those services being reachable from the runner;
+it does not authenticate an account or enroll a device. Windows installation and
+runtime acceptance remain open.
+
+### Linux cross-build fallback
+
+When a Windows builder is unavailable, Tauri supports an MSVC x64 NSIS
+cross-build using `cargo-xwin`, LLVM/Clang, LLD, NSIS and the Windows Rust target.
+See the [official cross-build instructions](https://v2.tauri.app/distribute/windows-installer/#build-windows-apps-on-linux-and-macos).
+Use Rust 1.98.0, Tauri CLI 2.12.1 and `cargo-xwin` 0.23.1 for this build:
+
+```sh
+rustup target add x86_64-pc-windows-msvc
+npm run desktop:windows:check
+npm exec --yes --package=@tauri-apps/cli@2.12.1 -- tauri build --ci \
+  --config src-tauri/tauri.windows.conf.json --runner cargo-xwin \
+  --target x86_64-pc-windows-msvc \
+  --features desktop,custom-protocol,packaged-auth --bundles nsis -- --locked
+```
+
+Run from `Client/` after installing the prerequisites. The first build downloads
+and extracts Microsoft's SDK and the embedded WebView2 installer. Keep build
+tools and caches in ignored directories. The output is the same NSIS directory
+listed above. A cross-build still requires installation and runtime acceptance
+on Windows.
 
 ## Account, offline access and remaining milestones
 

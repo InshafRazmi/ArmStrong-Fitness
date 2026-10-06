@@ -43,6 +43,8 @@ jobs:
         env:
           ARMSTRONG_BUSINESS_FIXTURE_PATH: ${{ runner.temp }}/armstrong-business-fixture.json
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib
+      - name: Verify Windows system HTTPS against public Auth and gym health
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib native_https::tests::real_system_https_client_reaches_public_auth_and_gym_health_without_credentials -- --ignored
       - name: Verify server and native business protocol compatibility
         working-directory: server
         env:

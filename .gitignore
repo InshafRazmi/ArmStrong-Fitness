@@ -18,4 +18,5 @@ Client/armstrong-desktop-changes.zip
 Client/armstrong-desktop-changes.zip.sha256
 server/armstrong-*-source.zip.sha256
 Client/dist-linux/
+Client/dist-windows/
 server/supabase/.temp/

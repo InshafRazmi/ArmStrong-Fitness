@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { loadData, saveData } from '../services/storage'
 import { pushOperations } from '../services/sync'
 import { initials, uid } from '../utils/format'
+import { colomboToday, membershipDaysRemaining, membershipEndDate } from '../utils/membership'
 import type { Attendance, Expense, GymData, Member, MembershipPlan, Payment, Product, Sale, ToastMessage } from '../types/domain'
 
 import { GymContext } from './GymContext'
@@ -13,7 +14,16 @@ export function GymProvider({children}:{children:ReactNode}){
  useEffect(()=>{const on=()=>setOnline(true),off=()=>setOnline(false);addEventListener('online',on);addEventListener('offline',off);return()=>{removeEventListener('online',on);removeEventListener('offline',off)}},[])
  const notify=useCallback((message:string,tone:ToastMessage['tone']='success')=>{const id=uid('TOAST');setToasts(v=>[...v,{id,message,tone}]);setTimeout(()=>setToasts(v=>v.filter(x=>x.id!==id)),3000)},[])
  const mutate=useCallback((entity:string,action:'create'|'update'|'delete',payload:unknown,apply:(d:GymData)=>GymData)=>setData(old=>{const changed=apply(old);const op={id:uid('SYNC'),entity,action,payload,createdAt:new Date().toISOString(),attempts:0};return{...changed,queue:[...changed.queue,op],audit:[{id:uid('AUD'),action:`${action} ${entity}`,entity,entityId:(payload as {id?:string}).id||'',user:'Prinzz',timestamp:new Date().toISOString()},...changed.audit]}}),[])
- const addMember=(v:NewMember)=>{const member:Member={...v,id:`MF-${String(Math.floor(10000+Math.random()*89999))}`,status:'Active',initials:initials(v.name),joinedAt:new Date().toISOString().slice(0,10)};mutate('member','create',member,d=>({...d,members:[member,...d.members]}));notify('Member saved locally and queued for sync')}
+ const addMember=(v:NewMember)=>{
+  const today=colomboToday();const plan=v.planId?data.plans.find(p=>p.id===v.planId&&p.status==='Active'):undefined
+  if(v.planId&&!plan)throw new Error('Select an active membership package')
+  const expiry=plan?membershipEndDate(v.startsOn??'',plan.durationMonths):''
+  if(plan&&!expiry)throw new Error('Choose a valid membership start date')
+  const days=membershipDaysRemaining(expiry,today,v.startsOn??undefined)
+  const member:Member={name:v.name,phone:v.phone,email:v.email,nfcId:v.nfcId,plan:plan?.name??'No membership',expiry,membershipStartsOn:v.startsOn??undefined,
+   id:`MF-${String(Math.floor(10000+Math.random()*89999))}`,status:!plan?'No membership':(v.startsOn??today)>today?'Scheduled':days===0?'Expired':days!==null&&days<=8?'Expiring':'Active',initials:initials(v.name),joinedAt:today}
+  mutate('member','create',member,d=>({...d,members:[member,...d.members]}));notify('Member saved in browser demo')
+ }
  const updateMember=(member:Member)=>{mutate('member','update',member,d=>({...d,members:d.members.map(x=>x.id===member.id?member:x)}));notify('Member updated')}
  const updatePlan=(plan:MembershipPlan)=>{mutate('membership plan','update',plan,d=>({...d,plans:d.plans.map(x=>x.id===plan.id?plan:x)}));notify(`${plan.name} package updated`)}
  const recordAttendance=(memberId:string,source:'NFC'|'Manual')=>{const member=data.members.find(x=>x.id===memberId||x.nfcId===memberId);if(!member){notify('Card is not linked to a member','error');return}const last=data.attendance.find(x=>x.memberId===member.id);const row:Attendance={id:uid('AT'),memberId:member.id,name:member.name,date:new Date().toISOString().slice(0,10),time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),type:last?.date===new Date().toISOString().slice(0,10)&&last.type==='Check-in'?'Check-out':'Check-in',source,syncState:online?'synced':'pending'};mutate('attendance','create',row,d=>({...d,attendance:[row,...d.attendance]}));notify(`${member.name}: ${row.type} successful`)}
