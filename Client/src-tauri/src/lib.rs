@@ -5,12 +5,21 @@ use serde_json::{json, Value};
 use std::{path::Path, time::Duration};
 use uuid::Uuid;
 
+mod attendance_profiles;
+mod business_review;
 mod business_sync;
 mod desktop_auth;
 mod finance;
+mod staff_training;
+pub use attendance_profiles::StaffAttendanceInput;
+pub use business_review::BusinessRetryInput;
 pub use desktop_auth::{
     DesktopAuth, DesktopAuthStatus, MemberSyncOutcome, PendingMemberSync, PendingSessionRenewal,
     SessionRenewal,
+};
+pub use staff_training::{
+    CombinedPaymentInput, StaffMemberInput, StaffPayoutInput, StaffRegisterInput, TrainerInput,
+    TrainingChargeInput,
 };
 mod member_conflicts;
 pub use member_conflicts::MemberConflictInput;
@@ -24,7 +33,7 @@ mod native_process;
 mod offline_access;
 pub use native_credentials::DeviceApproval;
 mod removal;
-pub use removal::{ExpenseVoidInput, MemberRemovalInput};
+pub use removal::{ExpenseVoidInput, MemberRemovalInput, StaffRemovalInput};
 mod operations;
 mod registration;
 pub use finance::{
@@ -39,7 +48,7 @@ pub use operations::{
 pub use recovery::BackupEnvelope;
 pub use reports::ReportRange;
 
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 10;
 type Result<T> = std::result::Result<T, String>;
 const ACTOR: &str = "local-test-operator (unauthenticated)";
 fn id() -> String {
@@ -181,6 +190,18 @@ impl Store {
         }
         if version <= 6 {
             tx.execute_batch(include_str!("../migrations/007_business_sync.sql"))
+                .map_err(db_error)?;
+        }
+        if version <= 7 {
+            tx.execute_batch(include_str!("../migrations/008_staff_training.sql"))
+                .map_err(db_error)?;
+        }
+        if version <= 8 {
+            tx.execute_batch(include_str!("../migrations/009_attendance_profiles.sql"))
+                .map_err(db_error)?;
+        }
+        if version <= 9 {
+            tx.execute_batch(include_str!("../migrations/010_staff_removal.sql"))
                 .map_err(db_error)?;
         }
         integrity(&tx)?;
@@ -483,7 +504,9 @@ fn snapshot_on(conn: &Connection) -> Result<Value> {
     let mut result = json!({"plans":plans,"members":members,"periods":periods,"pending":pending,"auditCount":audits,"today":today});
     operations::append_snapshot(conn, &mut result)?;
     finance::append_snapshot(conn, &mut result)?;
+    staff_training::append_snapshot(conn, &mut result)?;
     removal::append_snapshot(conn, &mut result)?;
+    attendance_profiles::append_snapshot(conn, &mut result)?;
     member_sync::append_snapshot(conn, &mut result)?;
     result["businessSync"] = business_sync::status(conn)?;
     Ok(result)

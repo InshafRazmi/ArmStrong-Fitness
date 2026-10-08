@@ -1,6 +1,337 @@
 # Status — 2026-10-08
 
-## Current update: Administrator editing access from every enrolled device
+## Current update: retained staff transaction deployment diagnosis
+
+The installed app is now schema 10. A read-only snapshot contains six confirmed,
+one refused and twenty-one pending business batches. The first refused request
+adds staff (`audit`, `trainers`). All 22 retained requests pass the corrected
+server's exact row and sequential complete-state validation against current
+production gym records. No retained request already has a server receipt.
+The restricted runtime login passes current business readiness and verified TLS.
+No SQLite records, queue states, frozen requests or production data were changed
+by these checks; this is validation, not live receipt confirmation.
+
+GitHub main still points to 6cb5aef06bdc9a36f53872ff638e9663156c9b6c and its
+business schema has no Staff tables. Render /v2/health still returns protocol 2
+without businessSchemaVersion. Production database migrations 1–8 are already
+current; publishing and deploying the prepared server source is the remaining
+live fix. Rebuilt source passes typecheck and 82 server unit tests (one existing
+probe skipped). The Render plugin is unconnected; no Render CLI/account/API key
+or deploy hook is configured locally. Connection and GitHub push status were
+requested. The user's existing preference is to handle commit/push.
+
+After publishing, use Render Manual Deploy → Deploy latest commit (a service
+restart reuses the existing code). Verify /v2/health includes
+businessSchemaVersion 10, then use Settings → Server synchronization → Review
+retained transaction → Retry original transaction. Preserve the original request
+and review any further server refusal rather than clearing history. See the
+current [Render recovery instructions](../server/docs/RENDER_SETUP.md).
+
+## Previous update: permanent staff deletion and larger NFC card panel
+
+Staff → Delete staff is available for active and inactive profiles. An
+Administrator must check the aligned confirmation. Native schema 10 adds an
+immutable removal marker; deletion deactivates the profile, revokes its NFC card
+and clears current member assignments atomically. It disappears from both normal
+lists. Show deleted staff retains payroll/training/attendance history and final
+earnings payments. Deleted profiles cannot be edited or reactivated. Existing
+schema-9 and earlier records, frozen transaction bytes and identities are retained.
+
+NFC Attendance uses a wider reader panel, a 260×166px amber card graphic, larger
+type, 48px scan controls and a separate manual selector. Short-window styling
+keeps the scan action visible at 1366×681. Existing keyboard/HID scanning, owner
+detection and manual attendance use the same native operations.
+
+Checks: browser/native-only packaged builds and 22 adapter tests PASS; all
+route/settings/confirmation renders PASS; 203 native library tests PASS, 3
+existing environment probes ignored; strict native Clippy PASS. The updated
+native two-database test also passes permanent staff deletion download and the
+reactivation guard. Native removal envelopes pass the API contract. Real
+isolated Supabase Auth/PostgreSQL acceptance passes all eight native transactions,
+exact retries, second-device download, retained salary/attendance and API/SQL
+immutability guards; all synthetic business rows roll back. Server typecheck
+and 82 unit tests PASS, 1 existing subprocess probe skipped. Desktop webview
+and restart checks verify the larger NFC controls and deletion authorization.
+
+Production server migrations 6–8 were applied with the checksummed owner runner;
+the ledger now contains exact versions 1–8. All ten application-table counts
+and fingerprints match the earlier read-only snapshot. Verified TLS and startup
+readiness pass using the actual restricted runtime login, without new grants.
+Security advisors report the existing private RLS/no-public-policy information,
+public rls_auto_enable execute warnings and disabled leaked-password protection;
+these pre-existing platform settings were not changed.
+
+Render still returns the older /v2/health body without businessSchemaVersion.
+Deploy the prepared current API source; its health reports businessSchemaVersion
+10. The Render plugin is available but unconnected and no deployment credential
+is available locally. The user handles commit/push. After deployment, review and
+retry the original retained transaction in Settings → Server synchronization.
+No installed database, frozen requests or queued transactions were changed.
+Final read-only inspection sees installed schema 9, six confirmed batches, one
+blocked batch and sixteen pending batches. The installed app remains on its
+existing build until the user installs the updated package.
+
+Updated Arch package: 7,785,807 bytes / 7.43 MiB; SHA-256
+`df3286c3d20fc3e80bc995d023b8e2fa734d6a2bea5bce707db230171bbbf477`.
+The package includes schema 10 and the new NFC layout. Archive allowlist, exact
+stripped current-release payload, README/launcher/icon, native-only frontend,
+schema/removal commands, smoke-hook exclusion, runtime dependencies and checksum
+manifest all PASS; adjacent BUILD-INFO and VERIFICATION match. Verified source
+ZIPs contain the current API/migrations and desktop patch, with baseline
+application, CRC and all file hashes checked. Private env/certificates/databases
+and build outputs are excluded. Installation, Windows rebuild,
+Render deployment and source commit/push remain separate.
+
+## Previous update: deletion controls, staff removal and visible dashboard counts
+
+Deletion confirmations use an 18px checkbox beside readable text across member,
+staff and expense dialogs. Member and staff deletion wait for explicit checkbox
+confirmation. Staff now has an Administrator-only Delete action: deactivate the
+profile, revoke its active NFC card and clear current trainer assignments
+atomically. Inactive profiles remain available for history, final earnings payouts
+and reactivation. Existing salaries, training invoices, receipts, attendance,
+audit and retry receipts retain their identities. No new database migration is
+required for removal; native schema remains 9.
+
+The dashboard puts larger Male/Female counts in the top attendance KPI and the
+first row's member card, displays today's activity and stretches its two card
+rows to the available window height. The populated fixture has no scrolling at
+1366x681 and 1920x993 actual browser viewports; the latter ends with 20px bottom
+padding. A 960x553 viewport needs 109px vertical scrolling, with both gender
+counts visible at the top. Checkbox geometry confirms 18x18px and 12px separation
+from the confirmation text.
+
+The installed Linux database was inspected read-only: its first refused batch
+is staff creation (`trainers` and `audit`). The exact frozen request passes the
+current local API validator; workspace HEAD lacks the Staff contract. Live
+Supabase catalog queries confirm production migrations 1–5 and a business table
+allowlist without Staff. Migrations 6–7 and the matching API deployment are still
+needed before Settings → Server synchronization → Review retained transaction
+can recover the original request. No local application records or queue were
+changed. New unsupported tables now receive `unsupported_business_table`; native
+refusals point to deployment support and the existing review/retry action.
+
+Checks: browser build and 22 adapter/counting tests PASS; all route/settings/
+confirmation renders PASS; 201 native library tests PASS, 3 existing environment
+probes ignored; strict native Clippy PASS; server typecheck and 82 unit tests
+PASS, 1 existing subprocess probe skipped. The real Linux webview and second
+process restart PASS, including checkbox geometry, staff deletion authorization,
+inactive-staff navigation and prominent gender counts. Native staff-removal
+envelopes pass the server contract, preserving paid amounts and attendance.
+An additional focused native check confirms removed staff keep collected unpaid
+earnings and can receive a final payout exactly once. The final read-only local
+queue check still shows the original 6 confirmed, 1 blocked and 11 pending batches.
+
+Rebuilt `Client/dist-linux/armstrong-fitness-0.1.0-1-x86_64.pkg.tar.zst`:
+7,785,106 bytes / 7.42 MiB; SHA-256
+`6d8809df653de0a93020b9f461354bd17f7f9d8deb42c551b9ba86212af721a8`.
+Package allowlist, exact stripped release payload, current README/launcher/icon,
+schema 9 and staff-removal/attendance/retry commands, exclusion of smoke hooks,
+declared GTK/WebKit/curl/libsecret dependencies, runtime library resolution and
+checksum manifest PASS. Adjacent BUILD-INFO and VERIFICATION match this build.
+Production schema/API changes, installation, commit/push and a Windows rebuild
+have not been performed for this fix.
+
+## Previous update: Linux package rebuilt with the latest confirmed changes
+
+Built `Client/dist-linux/armstrong-fitness-0.1.0-1-x86_64.pkg.tar.zst` from the current local source on Arch
+Linux x86_64. The package includes compact login/dashboard, staff NFC/manual
+attendance and separate dashboard activity, member Male/Female profiles/daily
+counts, permanent operational member removal with historical retention, and
+blocked-transaction review/exact retry. It also retains Staff/training/billing
+features and embeds the approved public login settings. No application behavior
+or version changed in this packaging milestone; SQLite migration 9 remains the
+normal data-preserving upgrade path.
+
+Package: 7,782,060 bytes / 7.42 MiB; SHA-256
+`df4805e5f6d6e7afa57011a419835e8f78997023b223d5ae8d12900aec6b893d`. Adjacent SHA256SUMS,
+BUILD-INFO.txt and VERIFICATION.json match the new build.
+
+Measured checks:
+
+- Browser and packaged frontend builds PASS; browser demo remains excluded.
+- Locked optimized native Linux compilation with desktop/custom-protocol/
+  packaged-auth PASS; no UI smoke commands in the release executable.
+- Archive file allowlist and exact stripped current-release payload PASS.
+  Packaged README, launcher and icon match their source; launcher validation PASS.
+- Full schema 9 plus staff/NFC/recovery commands present. Runtime library
+  resolution and declared GTK/WebKitGTK/curl/libsecret dependencies PASS on
+  this build host (glibc 2.44, WebKitGTK 4.1).
+- Package SHA-256 verification PASS. Earlier business/backend/webview/restart
+  checks below still apply and were not repeated for this build-only change.
+
+The package is for Arch Linux x86_64. No installation or production login/keyring/
+network/hardware acceptance is claimed. Production remains on migrations 1–5;
+new shared records need migrations 6–7 and the matching API. No production schema
+change, API deployment or source commit/push was performed. See
+[Linux installation](docs/ARCH_LINUX.md).
+
+## Previous update: compact layout, staff NFC, gender counts and permanent removal
+
+Implemented the user-confirmed changes with additive native schema 9 and server
+migration 7, preserving saved schema-8/earlier transaction bytes and historical
+rows. Login and dashboard use compact layouts. Dashboard has distinct member and
+staff attendance cards, and male/female member counts. Add/Edit member requires
+a Male/Female choice; earlier unspecified profiles remain explicit. Daily totals
+count each person once after a non-voided check-in. Staff supports unique NFC
+cards, automatic card-owner routing, manual attendance, daily check-in/out and
+two-second duplicate-scan suppression. Durable retries preserve the original
+owner even after card reassignment.
+
+Administrator permanent deletion removes active and archived members from both
+operational lists. A synchronized immutable removal marker retains the archived
+identity and all financial, receipt, membership, training, attendance and audit
+references; the active card is revoked. Archive remains separately available.
+
+Business synchronization now shows the actual server refusal and offers a native
+Administrator review-and-retry action for the first blocked transaction. A stale
+review fails; the original actor is required. Exact frozen requests and operation
+IDs are resent after saving review/audit history. This recovers refusals after a
+corrected backend deployment/configuration. General stale financial/master
+merging remains guarded; retry does not force acceptance or overwrite history.
+The specific transaction on the user's installed computer has not been inspected.
+
+Measured checks so far:
+
+- Browser and packaged frontend builds PASS; no demo code in desktop assets.
+- 22 adapter/counting tests and ten route/settings/login/receipt renders PASS.
+- Native library: 199 PASS, 3 environment probes ignored. New checks cover
+  gender/version rollback, cross-category unique cards, staff day rollover,
+  duplicate scans, reassigned-card replay/restart, backup/restore, exact blocked
+  retry and two-device deletion with immutable billing/attendance/receipt history.
+- Strict native Clippy PASS; server typecheck and 82 unit tests PASS (one
+  pre-existing sandbox CLI probe skipped).
+- Native attendance envelopes match server contract. Real isolated Supabase
+  Auth/PostgreSQL acceptance PASS with exact retries, second-device downloads,
+  duplicate-card rejection, immutable attendance and historical removal.
+  Every synthetic API fixture rolled back. Only isolated migration 7 was applied;
+  it extends the existing test schema, which has no application migration ledger.
+- Chrome dense fixtures: login fits 960x640; offline login requires 9–10px of
+  scrolling; dashboard uses two compact rows and short scrolling at small heights.
+  Final populated fixture measures 38px scrolling at 960x640 and 10px at
+  1366x768. Actual Linux desktop forms and a second process restart PASS,
+  including Male/Female registration, automatic staff NFC routing, manual staff
+  check-out, separate dashboard counts and retained financial workflows.
+- Windows x64 release/NSIS packaging PASS. Verified archive integrity, exact
+  app/WebView2 payloads, x64/static runtime/vault imports, full migration 9,
+  recovery IPC and exclusion of UI smoke hooks. Delivery installer is
+  222,072,198 bytes / 211.78 MiB, SHA-256
+  `3aee104fdcf710c0895dde57736709fc38920b3f66fe046ae8d8c1fb654b4e19`. Adjacent SHA256SUMS and BUILD-INFO match.
+  Unsigned Linux cross-build; actual Windows/hardware acceptance remains open.
+
+Production remains on server migrations 1–5. Apply migrations 6–7 with the owner
+runner, deploy the matching API and upgrade sharing desktops before using the
+new records across computers. The user handles commit/push; no production schema
+change, API deployment or source publication was performed. See [staff/attendance
+workflow](docs/STAFF.md) and [sync recovery](../server/docs/BUSINESS_SYNC.md).
+
+## Previous update: Windows x64 installer rebuilt with Staff
+
+Rebuilt `Client/dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe` from the
+current local source, including Staff/monthly training, combined collection,
+salary payouts, Administrator editing access, the Arm logo, larger Quick actions
+and scrolling computer registration. The per-user NSIS installer embeds the x64
+WebView2 offline installer and public login settings. Existing SQLite records,
+identities and pending operations use the normal data-preserving migration path.
+No application behavior or version number changed in this packaging milestone.
+
+Installer: 222,043,065 bytes / 211.76 MiB, SHA-256
+`b01c893e85c8fcd7d24a7ffdd42d137493de5706de0778be08427962e55aead7`.
+The delivery copy, adjacent `SHA256SUMS` and `BUILD-INFO.txt` match this build.
+
+Measured checks:
+
+- Browser and packaged frontend builds PASS; packaged public settings PASS;
+  browser demo access/data remain excluded from the desktop assets.
+- All 21 adapter tests and ten route/settings/login/receipt renders PASS.
+- Windows MSVC x64 optimized compilation and NSIS packaging PASS with Rust
+  1.98.0, Tauri CLI 2.12.1, cargo-xwin 0.23.1 and locked Rust dependencies.
+  Missing Microsoft SDK PDB warnings do not prevent release linking.
+- NSIS integrity and the exact eight expected files PASS. Embedded app bytes
+  match the compiled executable with Tauri's NSIS marker patch; embedded
+  WebView2 bytes match Microsoft's downloaded runtime. x64 PE, static C runtime,
+  Windows Credential Manager/system-directory imports, complete Staff migration
+  8 and exclusion of UI smoke hooks PASS. Delivery SHA-256 verification PASS.
+
+This is an unsigned Linux cross-build. Actual Windows installation, login,
+offline/reconnect, data-preserving upgrades, NFC and printing remain acceptance
+gates. Shared Staff data requires server migration 6 and the matching updated
+API; production remains on migrations 1–5. No installation, API deployment or
+source commit/push was performed. Prior native business checks are recorded
+below and were not repeated for this packaging-only rebuild.
+
+## Previous update: Staff, monthly training and payment UX
+
+The installed application now has Staff profiles with name, mobile, unique NIC,
+fixed monthly salary and personal-training fee per member per month. Member
+registration/editing selects an active trainer or None. Registration with a
+trainer creates the first monthly training invoice and any paid membership
+invoice atomically. Future training months are billed explicitly from Payments.
+The gym collects selected membership and training invoices in one payment and
+saved receipt. Staff payouts record the reviewed fixed salary plus collected,
+allocated training fees as a Salary expense; unpaid invoices earn no fee.
+Salary is paid once per month and each collected allocation once. See
+[staff operation](docs/STAFF.md) for top-ups and correction/refund behavior.
+
+Quick actions have larger cards, text and click targets. Computer registration
+has a styled expandable panel, readable setup fields and a sign-in layout that
+grows and scrolls when the panel is open.
+
+SQLite migration 8 adds five tables without replacing earlier records,
+identities, audit, queues or frozen request bytes. Backups/restores and all-module
+sync include the new records. Immutable history, rate/version checks, duplicate
+NIC/month/invoice/payout guards and Administrator IPC authorization remain native
+and server responsibilities. Trainer profiles do not create login accounts.
+
+CLI-created server migration 6 extends the private business allowlist/history
+guards and adds a gym-scoped unique NIC index. It is applied to the isolated
+test project only; production remains on migrations 1–5. Apply migration 6,
+deploy the updated API and upgrade every gym desktop before using Staff across
+computers. Older clients refuse unknown Staff rows while retaining their queues.
+No production Staff data, source publication or workspace commit/push is claimed.
+
+Measured checks:
+
+- Full native suite: 192 PASS, three intentionally ignored environment probes.
+  An additional two-database Staff download/refund test PASS; 193 distinct native
+  tests passed. Schema-7 upgrade preserves frozen queue bytes and reopening;
+  complete staff backup/restore, exact retries, stale rates/earnings, combined
+  receipts, monthly overlap and payout/refund guards PASS.
+- Native Clippy with warnings denied PASS. Native desktop IPC build PASS.
+- Server build verification: 82 PASS, one sandbox subprocess skip; strict types
+  and pinned declaration checks PASS. Five real native Staff envelopes match the
+  server contract; forged amounts, dates, NIC and payout records are refused.
+- Real isolated Supabase Auth/PostgreSQL Staff integration PASS: exact retries,
+  another Administrator device's download/edit, stale writes, duplicate salary,
+  unique NIC and immutable payout checks. All business fixtures roll back.
+- Isolated security advisers match the prior baseline: ten private RLS/no-policy
+  INFO findings ([guide](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy))
+  and the existing Auth leaked-password-protection WARN
+  ([guide](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection));
+  no new finding was introduced.
+- UI adapter: 21 PASS; all ten routes, settings, login/startup and saved receipt
+  renders PASS. Real Linux webview staff create/NIC, member assignment, monthly
+  invoice, collection, salary payout, larger Quick actions, report/backup export
+  and process restart PASS against an isolated SQLite database. This is local
+  UI acceptance, separate from production login/keyring/offline/reconnect.
+- Browser/packaged frontend builds and patch whitespace PASS. Arch release and
+  package build PASS. Package checksum, archive contents, exact stripped native
+  binary, Staff migration payload, bundled installation instructions, desktop
+  entry/icon and dynamic-library resolution PASS.
+
+Rebuilt `Client/dist-linux/armstrong-fitness-0.1.0-1-x86_64.pkg.tar.zst`:
+7,747,567 bytes, SHA-256
+`eaf9dc29f1e6fbd60be72912e969e482eeb2e6a1db5fe7385a33bd31d30eef8a`.
+The adjacent `SHA256SUMS` matches. Reinstall to update the installed app;
+installation was not performed. Staff is ready locally; shared Staff sync requires
+the migration/API deployment described above. Source delivery bundles were
+rebuilt from workspace HEAD; binary patch application and archive/hash checks PASS.
+
+The user handles source commit/push. The Windows rebuild with Staff is recorded
+above; the Windows workflow now also verifies the native Staff contract.
+Existing Windows/hardware/network release gates remain in PLAN.md.
+
+## Previous update: Administrator editing access from every enrolled device
 
 The user requires Administrator accounts to read and write from any device.
 Active Administrators now receive editing access from every valid enrolled

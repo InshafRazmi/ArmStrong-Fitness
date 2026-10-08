@@ -15,7 +15,7 @@ export function desktopData(snapshot: Snapshot): GymData {
     attendance: snapshot.attendance.map(row => ({
       id: row.id, memberId: row.memberId, name: row.name, date: row.businessOn,
       time: new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Colombo', hour: '2-digit', minute: '2-digit' }).format(new Date(row.occurredAt)),
-      type: row.type, source: row.source, syncState,
+      type: row.type, source: row.source, gender: row.gender, voidsId: row.voidsId, syncState,
     })),
     payments: snapshot.payments.map(row => ({ id: row.id, memberId: row.memberId, memberName: row.memberName, date: row.businessOn, method: row.method, amount: row.netAmountMinor / 100, status: row.status, syncState })),
     expenses: snapshot.expenses.map(row => ({ id: row.id, title: row.title, category: row.category, date: row.businessOn, method: row.method, amount: row.amountMinor / 100, recordedBy: row.actor, status: row.status, effectiveAmount: row.effectiveAmountMinor / 100, voidReason: row.voidReason, voidedAt: row.voidedAt, voidedBy: row.voidedBy, syncState })),
@@ -32,7 +32,11 @@ export function desktopMembers(snapshot: Snapshot, includeArchived = false): Mem
       const latest = [...periods].sort((a, b) => b.endsOn.localeCompare(a.endsOn))[0]
       const period = current ?? upcoming ?? latest
       return {
-        active: member.active, archivedAt: member.archivedAt, canDelete: member.canDelete,
+        active: member.active, archivedAt: member.archivedAt, canDelete: member.canDelete, gender: member.gender, genderVersion: member.genderVersion,
+        trainerId: snapshot.memberTrainers?.find(a => a.memberId === member.id)?.trainerId ?? null,
+        assignmentVersion: snapshot.memberTrainers?.find(a => a.memberId === member.id)?.version ?? null,
+        trainerVersion: snapshot.trainers?.find(t => t.id === snapshot.memberTrainers?.find(a => a.memberId === member.id)?.trainerId)?.version ?? null,
+        trainerName: snapshot.trainers?.find(t => t.id === snapshot.memberTrainers?.find(a => a.memberId === member.id)?.trainerId)?.name ?? 'None',
         id: member.id, version: member.version, name: member.name, phone: member.phone, email: member.email,
         nfcId: member.nfcId, joinedAt: member.joinedOn,
         initials: member.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(),

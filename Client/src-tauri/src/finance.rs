@@ -65,7 +65,7 @@ fn member_name(conn: &Connection, member_id: &str) -> Result<String> {
     .map_err(db_error)?
     .ok_or("Select a saved member".into())
 }
-fn insert_invoice(tx: &Transaction<'_>, input: &InvoiceInput) -> Result<Value> {
+pub(super) fn insert_invoice(tx: &Transaction<'_>, input: &InvoiceInput) -> Result<Value> {
     money(input.amount_minor, true)?;
     let description = required(&input.description, "Invoice description", 254)?;
     let name = member_name(tx, &input.member_id)?;
@@ -115,7 +115,7 @@ fn insert_invoice(tx: &Transaction<'_>, input: &InvoiceInput) -> Result<Value> {
         json!({"id":invoice,"number":invoice_number,"memberId":input.member_id,"memberName":name,"membershipPeriodId":input.membership_period_id,"amountMinor":input.amount_minor,"description":description,"issuedOn":day,"createdAt":instant,"actor":super::desktop_auth::actor_label(tx)?}),
     )
 }
-fn insert_allocation(
+pub(super) fn insert_allocation(
     tx: &Transaction<'_>,
     payment: &str,
     invoice: &str,
@@ -280,56 +280,8 @@ impl Store {
         if let Some(previous) = replay(&tx, "receive_payment", &input.request_id, &input)? {
             return Ok(previous);
         }
-        let name = member_name(&tx, &input.member_id)?;
-        let payment = id();
-        let now = Utc::now();
-        let day = business_date(now);
-        let instant = now.to_rfc3339();
-        tx.execute(
-            "INSERT INTO payments VALUES(?1,?2,?3,?4,?5,?6,?7,?8,NULL)",
-            params![
-                payment,
-                input.member_id,
-                name,
-                input.amount_minor,
-                input.method,
-                day,
-                instant,
-                super::desktop_auth::actor_label(&tx)?
-            ],
-        )
-        .map_err(db_error)?;
-        let mut allocations = vec![];
-        if let Some(invoice) = &input.invoice_id {
-            let target: Option<(Option<String>, i64)> = tx
-                .query_row(
-                    "SELECT member_id,outstanding_minor FROM invoice_balances WHERE id=?1",
-                    [invoice],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()
-                .map_err(db_error)?;
-            let (member, outstanding) = target.ok_or("Invoice no longer exists")?;
-            if member.as_deref() != Some(&input.member_id) || outstanding <= 0 {
-                return Err("Select an outstanding invoice belonging to this member".into());
-            }
-            allocations.push(insert_allocation(
-                &tx,
-                &payment,
-                invoice,
-                input.amount_minor.min(outstanding),
-            )?);
-        }
-        let document = issue_receipt(&tx, &payment, false)?;
-        record(
-            &tx,
-            "payment",
-            &payment,
-            None,
-            None,
-            json!({"id":payment,"memberId":input.member_id,"memberName":name,"amountMinor":input.amount_minor,"method":input.method,"businessOn":day,"createdAt":instant,"actor":super::desktop_auth::actor_label(&tx)?,"allocations":allocations,"receipt":document}),
-        )?;
-        let result = json!({"id":payment,"receiptNumber":document["number"]});
+        let invoice_ids = input.invoice_id.iter().cloned().collect::<Vec<_>>();
+        let result = receive_payment_on(&tx, &input, &invoice_ids)?;
         receipt(&tx, "receive_payment", &input.request_id, &input, &result)?;
         tx.commit().map_err(db_error)?;
         Ok(result)
@@ -513,4 +465,67 @@ impl Store {
             json!({"number":number,"snapshot":snapshot,"currentStatus":status,"reversalReceiptNumber":reversal}),
         )
     }
+}
+
+pub(super) fn receive_payment_on(
+    tx: &rusqlite::Transaction<'_>,
+    input: &ReceivePaymentInput,
+    invoice_ids: &[String],
+) -> Result<Value> {
+    let name = member_name(tx, &input.member_id)?;
+    let payment = id();
+    let now = Utc::now();
+    let day = business_date(now);
+    let instant = now.to_rfc3339();
+    tx.execute(
+        "INSERT INTO payments VALUES(?1,?2,?3,?4,?5,?6,?7,?8,NULL)",
+        params![
+            payment,
+            input.member_id,
+            name,
+            input.amount_minor,
+            input.method,
+            day,
+            instant,
+            super::desktop_auth::actor_label(tx)?
+        ],
+    )
+    .map_err(db_error)?;
+    let mut allocations = vec![];
+    let mut remaining = input.amount_minor;
+    for invoice in invoice_ids {
+        let target: Option<(Option<String>, i64)> = tx
+            .query_row(
+                "SELECT member_id,outstanding_minor FROM invoice_balances WHERE id=?1",
+                [invoice],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .map_err(db_error)?;
+        let (member, outstanding) = target.ok_or("Invoice no longer exists")?;
+        if member.as_deref() != Some(&input.member_id) || outstanding <= 0 {
+            return Err("Select an outstanding invoice belonging to this member".into());
+        }
+        if remaining == 0 {
+            continue;
+        }
+        allocations.push(insert_allocation(
+            tx,
+            &payment,
+            invoice,
+            remaining.min(outstanding),
+        )?);
+        remaining -= remaining.min(outstanding);
+    }
+    let document = issue_receipt(tx, &payment, false)?;
+    record(
+        tx,
+        "payment",
+        &payment,
+        None,
+        None,
+        json!({"id":payment,"memberId":input.member_id,"memberName":name,"amountMinor":input.amount_minor,"method":input.method,"businessOn":day,"createdAt":instant,"actor":super::desktop_auth::actor_label(tx)?,"allocations":allocations,"receipt":document}),
+    )?;
+    let result = json!({"id":payment,"receiptNumber":document["number"]});
+    Ok(result)
 }

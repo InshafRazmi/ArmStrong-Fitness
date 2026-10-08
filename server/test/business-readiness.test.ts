@@ -5,7 +5,7 @@ import { createApp } from '../src/app.ts';
 
 const names = ['business_records', 'business_references', 'business_operations', 'business_changes'];
 const permissions = () => names.map(name => ({ name, rls: true, can_read: true, can_insert: true, can_delete: false }));
-const guards = () => ({ record_update: true, reference_update: true, sequence_update: true, history_guards: true, immutable_triggers: true });
+const guards = () => ({ record_update: true, reference_update: true, sequence_update: true, staff_contract: true, attendance_contract:true, staff_removal_contract:true, attendance_card_guards:true, staff_nic_guard: true, history_guards: true, immutable_triggers: true });
 const fixture = (tables: Record<string, unknown>[] = permissions(), state: Record<string, unknown> = guards()) => ({
   async query(sql: string) { assert.ok(sql.startsWith('SELECT')); return { rows: sql.includes('c.relname AS name') ? tables : [state] }; }
 });
@@ -24,6 +24,6 @@ test('protocol-2 deployment health identifies all-module routes without account 
   try {
     const result = await app.inject({ url:'/v2/health' });
     assert.equal(result.statusCode,200);
-    assert.deepEqual(result.json(),{status:'ok',service:'armstrong-gym-api',protocolVersion:2});
+    assert.deepEqual(result.json(),{status:'ok',service:'armstrong-gym-api',protocolVersion:2,businessSchemaVersion:10});
   } finally { await app.close(); }
 });

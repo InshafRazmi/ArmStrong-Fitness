@@ -1707,7 +1707,7 @@ fn removal_linked_member_archive_retains_all_history_and_excludes_active_members
     let s = f.store.snapshot().unwrap();
     assert_eq!(s["members"][0]["active"], false);
     assert_eq!(s["members"][0]["archivedByUserId"], "test-admin");
-    assert_eq!(s["members"][0]["canDelete"], false);
+    assert_eq!(s["members"][0]["canDelete"], true);
     assert_eq!(s["members"][0]["version"], 2);
     assert_eq!(s["plans"][0]["activeMembers"], 0);
     for key in [
@@ -1772,13 +1772,23 @@ fn removal_linked_member_archive_retains_all_history_and_excludes_active_members
     next.starts_on = "2199-01-01".into();
     next.ends_on = "2199-01-31".into();
     assert!(f.store.add_period(next).is_err());
-    assert!(f
-        .store
-        .delete_member(removal_member_input(&f.store))
-        .is_err());
     assert_eq!(f.store.snapshot().unwrap(), s);
+    f.store
+        .delete_member(removal_member_input(&f.store))
+        .unwrap();
+    let removed = f.store.snapshot().unwrap();
+    assert_eq!(removed["members"], json!([]));
+    for key in [
+        "periods",
+        "attendance",
+        "invoices",
+        "payments",
+        "allocations",
+    ] {
+        assert_eq!(removed[key], s[key], "{key} survives permanent removal");
+    }
     let reopened = Store::open(&f.path).unwrap();
-    assert_eq!(reopened.snapshot().unwrap()["members"][0]["active"], false);
+    assert_eq!(reopened.snapshot().unwrap()["members"], json!([]));
     assert_eq!(
         reopened.snapshot().unwrap()["removalAuthorization"]["allowed"],
         false
@@ -1828,7 +1838,7 @@ fn removal_unlinked_member_deletion_retains_actor_audit_outbox_and_durable_retry
     assert_eq!(reopened.snapshot().unwrap()["auditCount"], 2);
 }
 #[test]
-fn removal_every_member_business_link_including_revoked_cards_blocks_deletion() {
+fn removal_every_member_business_link_survives_permanent_removal_and_blocks_sql_history_erasure() {
     for kind in [
         "membership",
         "attendance",
@@ -1876,14 +1886,21 @@ fn removal_every_member_business_link_including_revoked_cards_blocks_deletion() 
             _ => {}
         }
         let before = f.store.snapshot().unwrap();
-        assert_eq!(before["members"][0]["canDelete"], false);
-        assert!(
-            f.store
-                .delete_member(removal_member_input(&f.store))
-                .is_err(),
-            "{kind} linked deletion"
-        );
-        assert_eq!(f.store.snapshot().unwrap(), before);
+        assert_eq!(before["members"][0]["canDelete"], true);
+        f.store
+            .delete_member(removal_member_input(&f.store))
+            .unwrap();
+        let removed = f.store.snapshot().unwrap();
+        assert_eq!(removed["members"], json!([]));
+        for key in [
+            "periods",
+            "attendance",
+            "invoices",
+            "payments",
+            "allocations",
+        ] {
+            assert_eq!(removed[key], before[key], "{kind}: {key} preserved");
+        }
         assert!(
             f.store
                 .conn

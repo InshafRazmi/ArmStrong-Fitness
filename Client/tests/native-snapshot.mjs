@@ -1,6 +1,7 @@
 // Test-only native-shaped data. Production desktop never imports this fixture.
 export function nativeSnapshot() {
   return {
+    trainers: [], memberTrainers: [], trainingCharges: [], staffPayouts: [], staffTrainingAllocations: [],
     removalAuthorization: {allowed:false,userId:null,user:null,reason:'Removal requires an authenticated Administrator session'},
     members: [{ id:'sqlite-member',version:2,active:true,archivedAt:null,archivedByUserId:null,canDelete:false,name:'SQLite member',phone:'0771234567',email:'',nfcId:'CARD-1',joinedOn:'2026-10-01' }],
     plans: [{ id:'sqlite-plan',version:3,name:'SQLite plan',priceMinor:600050,durationMonths:1,active:true,activeMembers:1 }],

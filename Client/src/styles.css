@@ -22,3 +22,156 @@ select:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 .members-table table { min-width: 1000px; }
 .membership-days small { color: var(--muted); font-size: 10px; }
 .modal-form input[readonly] { color: var(--amber-soft); border-color: #523b09; }
+
+/* Sign-in stays within the window; setup opens alongside it on desktop. */
+body{min-width:320px}
+.app{min-width:960px}
+.login-page{display:grid;grid-template-rows:auto 1fr auto;align-items:center;gap:16px;min-height:100dvh;padding:20px 7vw 16px;overflow:visible}
+.login-brand,.login-footer{position:relative;left:auto;top:auto;bottom:auto}
+.login-card{position:relative;left:auto;top:auto;transform:none;align-self:center;width:min(440px,100%);padding:24px 28px}
+.login-card h1{margin-top:10px;font-size:30px}
+.login-card>p{margin-bottom:14px}
+.login-card>p:empty{display:none}
+.login-card form{gap:12px}
+.login-input,.login-submit{height:44px}
+.login-security{margin-top:14px;padding-top:12px}
+.login-security small{font-size:10px;line-height:1.45;color:#969c9f}
+.login-offline{display:grid;grid-template-columns:auto minmax(0,1fr)}
+.login-offline .secondary{min-height:40px;white-space:nowrap}
+@media(max-width:900px){.login-page{padding:16px 20px;gap:12px}.login-card{margin:0 auto;padding:22px}.login-brand{justify-self:center}.login-footer{text-align:center}}
+@media(max-height:740px){.login-page{padding-top:12px;padding-bottom:12px;gap:10px}.brand-mark.login-logo{width:40px;height:40px}.login-card{padding:18px 24px}.login-card h1{font-size:28px}.login-card>p{margin-bottom:10px}.login-card form{gap:8px}.login-security{margin-top:8px;padding-top:8px}.computer-registration>summary small{display:none}}
+
+/* Staff, quick actions and computer registration */
+.quick-card{min-height:258px;padding:24px}
+.quick-grid{gap:14px}
+.quick-grid button{gap:12px;min-height:96px;padding:16px 12px}
+.quick-grid button span{font-size:12px;font-weight:600;line-height:1.4}
+.quick-grid button svg{width:24px;height:24px}
+.quick-grid button:focus-visible,.computer-registration summary:focus-visible{outline:2px solid var(--amber);outline-offset:4px}
+.computer-registration{background:#121415;border:1px solid #3b3220;border-radius:12px;margin-top:14px}
+.computer-registration>summary{color:var(--amber-soft);cursor:pointer;align-items:center;gap:12px;padding:12px;font-size:13px;font-weight:600;list-style:none;display:flex}
+.computer-registration>summary::-webkit-details-marker{display:none}
+.computer-registration>summary>span:nth-child(2){flex-direction:column;gap:4px;display:flex}
+.computer-registration>summary small{color:#93999c;font-size:11px;font-weight:400}
+.computer-registration .registration-chevron{margin-left:auto;font-size:20px;transition:transform .18s}
+.computer-registration[open] .registration-chevron{transform:rotate(180deg)}
+.computer-registration[open]>summary{background:#211c12;border-bottom:1px solid #302b21}
+.computer-registration-body{position:absolute;left:calc(100% + 18px);top:0;width:min(400px,calc(93vw - 458px));max-height:calc(100dvh - 140px);overflow-y:auto;overscroll-behavior:contain;padding:20px;border:1px solid #3b3220;border-radius:16px;background:#121415;box-shadow:12px 18px 40px #0008}
+.computer-registration-body .form-card{padding:0}
+.computer-registration-body h3{color:#eee;margin:0 0 10px;font-size:15px}
+.login-card .computer-registration-body p{color:#a3a8ab;margin:0 0 14px;font-size:12px;line-height:1.7}
+.computer-registration-body .secondary{width:100%;min-height:44px;padding:12px}
+.computer-registration-body .form-grid{grid-template-columns:minmax(0,1fr);gap:12px;margin:14px 0}
+.computer-registration-body .form-grid label{min-width:0}
+.computer-registration-body .form-grid input{width:100%;min-width:0;font-family:monospace;font-size:11px}
+.computer-registration-body details{color:#c4c8ca;margin-top:16px;font-size:12px}
+.computer-registration-body details summary{cursor:pointer;padding:10px 0}
+@media(max-width:900px){.computer-registration-body{position:static;width:auto;max-height:280px;border:0;border-top:1px solid #302b21;border-radius:0 0 12px 12px;box-shadow:none}}
+
+/* Keep the dashboard in two compact rows at every supported desktop width. */
+.dashboard-main .topbar{height:80px;padding:16px 24px}
+.dashboard-main{display:flex;flex-direction:column;min-height:100dvh}
+.dashboard-main .content{padding:16px 24px 20px;flex:1;display:flex;flex-direction:column}
+.dashboard-page{flex:1;display:flex;flex-direction:column}
+.dashboard-main .foundation-meta{margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dashboard-page .kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.dashboard-page .kpi{min-width:0;min-height:88px;padding:14px;gap:12px}
+.dashboard-page .kpi strong{margin:2px 0 4px;font-size:22px;overflow-wrap:anywhere}
+.dashboard-page .icon-box{width:38px;height:38px}
+.dashboard-page .dashboard-grid{flex:1;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"members staff actions" "chart expiry sync";grid-template-rows:auto auto;gap:12px}
+.dashboard-page .chart-card{grid-area:chart;display:flex;flex-direction:column}
+.dashboard-page .quick-card{grid-area:actions}
+.dashboard-page .nfc-card{grid-area:sync}
+.dashboard-page .attendance-card{grid-area:members}
+.dashboard-page .staff-attendance-card{grid-area:staff}
+.dashboard-page .expiry-card{grid-area:expiry}
+.dashboard-page .dashboard-grid>.card{min-width:0;padding:16px}
+.dashboard-page .card-head{gap:8px;margin-bottom:12px}
+.dashboard-page .card-head h2{font-size:14px}
+.dashboard-page .card-head .link{flex-shrink:0;padding:4px 0;font-size:10px}
+.dashboard-page .bar-chart{flex:1;min-height:80px;height:112px;gap:3px}
+.dashboard-page .nfc-card .success-row{gap:10px;padding:10px}
+.dashboard-page .nfc-card .success-icon{width:30px;height:30px;flex-shrink:0;font-size:18px}
+.dashboard-page .nfc-card .member-highlight{padding:10px 0;gap:8px}
+.dashboard-page .nfc-card .member-highlight .avatar{display:none}
+.dashboard-page .nfc-card .member-highlight h3{display:none}
+.dashboard-page .nfc-card .member-highlight p{line-height:1.45}
+.dashboard-page .list-row{min-height:42px;gap:8px}
+.dashboard-page .list-row>div{min-width:0;flex:1}
+.dashboard-page .list-row b,.dashboard-page .list-row small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dashboard-page .list-row .avatar,.dashboard-page .list-row .tag,.dashboard-page .list-row time,.dashboard-page .list-row .days{flex-shrink:0}
+.dashboard-page .list-row .avatar{width:26px;height:26px}
+.dashboard-page .quick-card{min-height:0}
+.dashboard-page .quick-grid{gap:10px}
+.dashboard-page .quick-grid button{min-height:78px;padding:10px 8px;gap:8px}
+.dashboard-page .quick-grid button span{font-size:12px}
+.dashboard-page .quick-grid button svg{width:22px;height:22px}
+.dashboard-empty{margin:20px 0;color:var(--muted);font-size:12px}
+@media(max-width:1100px){.dashboard-main .topbar{padding-inline:18px}.dashboard-main .content{padding-inline:18px}.dashboard-page .kpi{padding:12px;gap:8px}.dashboard-page .kpi strong{font-size:20px}.dashboard-page .icon-box{width:32px;height:32px}.dashboard-page .card-head h2{font-size:13px}}
+@media(max-height:800px){.sidebar{padding-top:16px;padding-bottom:12px}.sidebar .brand-mark{width:112px;height:112px;margin-bottom:16px}.sidebar nav{gap:4px}.sidebar nav button{padding-top:10px;padding-bottom:10px}.dashboard-page .dashboard-grid>.card{padding:14px}.dashboard-page .bar-chart{height:96px}.dashboard-page .quick-grid button{min-height:72px}}
+@media(max-height:800px) and (max-width:1300px){.sidebar .brand-mark{width:76px;height:76px}}
+@media(max-height:700px){.dashboard-main .topbar{height:68px}.dashboard-main .content{padding-top:10px;padding-bottom:12px}.dashboard-main .foundation-meta{margin-bottom:8px}.dashboard-page .kpi-grid{margin-bottom:10px}.dashboard-page .kpi{min-height:80px;padding-block:10px}.dashboard-page .kpi span,.dashboard-page .kpi small{line-height:1.3}.dashboard-page .kpi strong{line-height:1.2}.dashboard-page .dashboard-grid>.card{padding:12px}.dashboard-page .card-head{margin-bottom:8px}.dashboard-page .list-card .card-head p,.dashboard-page .quick-card .card-head p{display:none}.dashboard-page .bar-chart{height:80px}.dashboard-page .nfc-card .member-highlight{padding-block:6px}.dashboard-page .list-row{min-height:38px}.dashboard-page .quick-grid button{min-height:66px}}
+.staff-summary{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:20px;display:grid}
+.staff-summary>.card{flex-direction:column;gap:12px;padding:22px;display:flex}
+.staff-summary small{color:var(--muted);font-size:12px}
+.staff-summary strong{color:var(--amber-soft);font-size:24px}
+.staff-payment-breakdown{border:1px solid var(--line);background:#191b1c;border-radius:12px;gap:15px;padding:18px;display:grid}
+.staff-payment-breakdown>div{color:#bac0c3;justify-content:space-between;gap:20px;font-size:12px;display:flex}
+.staff-payment-total{border-top:1px solid var(--line);padding-top:16px;color:var(--amber-soft)!important}
+.staff-payment-total strong{font-size:18px}
+.modal-form .staff-salary-choice{flex-direction:row;align-items:center;gap:12px;display:flex}
+.staff-salary-choice input{width:18px;height:18px;accent-color:var(--amber)}
+.staff-member-list .list-row{justify-content:space-between;gap:20px}
+.staff-expenses-link{margin:16px 0}
+.invoice-payment-choice{border:1px solid var(--line);border-radius:10px;align-items:center;padding:12px;flex-direction:row!important;gap:12px!important;display:flex!important}
+.invoice-payment-choice input{width:18px;height:18px;accent-color:var(--amber);flex-shrink:0}
+.invoice-payment-choice span{font-size:12px;line-height:1.6}
+
+/* Spacious NFC card and scan controls; activity scrolls inside its panel. */
+.attendance-tabs{display:flex;gap:8px;margin-bottom:12px}
+.attendance-tabs button[aria-pressed=true]{color:var(--amber);border-color:#71520e;background:#2a210f}
+.attendance-counts{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin:0 0 8px}
+.attendance-counts b{color:var(--amber-soft);margin-left:3px}
+.attendance-workspace{grid-template-columns:minmax(320px,1.05fr) minmax(0,1.2fr);gap:22px;align-items:stretch}
+.attendance-workspace .scanner{min-height:570px;padding:30px;border-color:#57401a;border-radius:24px;justify-content:flex-start;background:radial-gradient(ellipse at 50% 35%,#49341265,transparent 65%),linear-gradient(150deg,#1d1c17,#111314 75%);box-shadow:0 18px 40px #0006,inset 0 1px 0 #ffd16b12}
+.reader-eyebrow{color:var(--amber);font-size:10px;font-weight:700;letter-spacing:.2em}
+.attendance-workspace .scanner h2{font-size:26px;margin:12px 0 7px;letter-spacing:-.02em}
+.attendance-workspace .scanner>p{font-size:13px;line-height:1.6}
+.reader-stage{width:100%;min-height:240px;display:grid;place-items:center;position:relative;margin:8px 0;background:radial-gradient(ellipse,#c38b1520,transparent 65%)}
+.reader-stage:before{content:'';position:absolute;width:270px;height:215px;border:1px solid #ad7c1929;border-radius:50%;transform:rotate(-12deg)}
+.attendance-workspace .reader-device{width:260px;height:166px;margin:0;transform:rotate(-8deg);border-color:#977022;border-radius:20px;background:linear-gradient(130deg,#353126,#1b1c1b 50%,#262319);box-shadow:12px 22px 28px #0008,inset 0 1px 0 #ffdf8b35;overflow:hidden}
+.reader-device:after{content:'';position:absolute;width:200px;height:200px;border:1px solid #d7a12b24;border-radius:50%;right:-70px;bottom:-105px;box-shadow:0 0 0 18px #d7a12b08,0 0 0 37px #d7a12b06}
+.reader-device .reader-chip{position:absolute;left:25px;top:29px;width:36px;height:28px;border:1px solid #ad893d;border-radius:6px;background:linear-gradient(90deg,transparent 46%,#ad893d 48% 51%,transparent 53%),linear-gradient(0deg,transparent 46%,#ad893d 48% 51%,transparent 53%),#a4833526}
+.reader-device svg{position:absolute;top:28px;right:25px;color:var(--amber-soft);transform:rotate(90deg)}
+.attendance-workspace .reader-device>span{left:25px;top:auto;bottom:43px;transform:none;font-size:24px;letter-spacing:.13em}
+.reader-device>small{position:absolute;left:25px;bottom:22px;color:#bfab7d;font-size:9px;letter-spacing:.15em}
+.attendance-workspace .scanner .reader-instruction{color:#c7c0ae;font-size:12px;margin-bottom:6px}
+.attendance-workspace .scanner .modal-form{width:100%;margin-top:16px}
+.attendance-workspace .scan-form{width:100%;max-width:420px;margin:16px 0 20px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px}
+.attendance-workspace .scan-form input,.attendance-workspace .scan-form button{min-height:48px;font-size:13px}
+.attendance-workspace .scan-form input{text-align:center;border-color:#5b4724;background:#0f1112;border-radius:12px}
+.attendance-workspace .scan-form input:focus{outline:2px solid var(--amber);outline-offset:2px}
+.manual-attendance{width:100%;max-width:420px;padding-top:18px;border-top:1px solid #51401e;display:grid;gap:10px}
+.manual-attendance>span{font-size:11px;color:var(--muted)}
+.attendance-workspace .manual-attendance select{min-height:44px;font-size:12px}
+.finance-actions .danger-action{color:#ffa39b;border-color:#6c3932}
+.finance-actions .danger-action:hover{background:#371d19;border-color:#a95b50}
+.business-review-rows{max-height:280px;overflow:auto}
+.attendance-workspace .scanner input,.attendance-workspace .scanner select{width:100%}
+.attendance-workspace .attendance-activity{max-height:calc(100dvh - 250px);min-height:250px;overflow-y:auto;overscroll-behavior:contain}
+.dashboard-page .kpi small{font-size:10px;line-height:1.4}
+.dashboard-page .kpi-attendance-counts{display:flex;gap:12px;flex-wrap:wrap}
+.dashboard-page .kpi-attendance-counts span{color:#c7cacc;font-size:12px;white-space:nowrap}
+.dashboard-page .kpi-attendance-counts b{color:var(--amber-soft);font-size:16px;margin-left:3px}
+.dashboard-page .attendance-counts{gap:8px;margin-bottom:12px;font-size:13px}
+.dashboard-page .attendance-counts>span{padding:8px 10px;border:1px solid #493714;border-radius:8px;background:#211c12}
+.dashboard-page .attendance-counts b{font-size:18px}
+.modal-form .foundation-fields .confirmation-choice{grid-column:1/-1;flex-direction:row;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--line);border-radius:10px;background:#101213;cursor:pointer}
+.confirmation-choice input[type=checkbox]{flex:0 0 18px;width:18px;height:18px;margin:2px 0 0;padding:0;accent-color:var(--amber)}
+.modal-form .confirmation-choice span{color:#c7cacc;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.confirmation-choice b{display:block;margin-bottom:3px;color:var(--amber-soft);font-size:12px}
+.confirmation-choice:focus-within{outline:2px solid var(--amber);outline-offset:2px}
+@media(max-height:700px){.dashboard-page .attendance-counts{margin-bottom:8px}.dashboard-page .attendance-counts>span{padding:5px 8px}.dashboard-page .attendance-counts b{font-size:16px}}
+@media(max-height:700px){.attendance-workspace .scanner{padding:24px;min-height:540px}.reader-stage{min-height:210px}.attendance-workspace .list-row{min-height:40px}}
+@media(max-height:800px){.attendance-workspace .scanner{min-height:500px;padding:24px}.reader-stage{min-height:190px}.attendance-workspace .scanner h2{margin-top:8px;font-size:24px}}
+@media(max-width:1000px){.attendance-workspace{grid-template-columns:minmax(300px,1fr) minmax(0,1fr);gap:16px}.attendance-workspace .scanner{padding:24px 20px}.attendance-workspace .reader-device{width:240px;height:156px}.attendance-workspace .scan-form{grid-template-columns:1fr}}

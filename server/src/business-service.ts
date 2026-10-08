@@ -26,7 +26,13 @@ export class GymService extends MemberService {
         // Complete state validation precedes writes: a failed invoice/payment,
         // sale/stock or foreign reference never leaves a partially accepted group.
         applyChanges(proposed, batch.changes);
-        for (const c of batch.changes) {
+        const writeOrder = (c: typeof batch.changes[number]) =>
+          ['nfc_cards','staff_nfc_cards'].includes(c.table) && c.before !== null && c.after.revoked_at !== null ? 0 :
+          ['member_deletions','staff_deletions'].includes(c.table) ? 2 : 1;
+        // Revoke cards before replacement and finish deactivation before the
+        // immutable removal marker makes later profile edits impossible.
+        const writes=[...batch.changes].sort((a,b)=>writeOrder(a)-writeOrder(b));
+        for (const c of writes) {
           await db.query('INSERT INTO armstrong.business_records(gym_id,table_name,record_id,data) VALUES($1,$2,$3,$4) ON CONFLICT(gym_id,table_name,record_id) DO UPDATE SET data=EXCLUDED.data WHERE armstrong.business_records.data<>EXCLUDED.data', [gymId, c.table, c.id, JSON.stringify(c.after)]);
         }
         for (const c of batch.changes) for (const ref of byTable.get(c.table)!.references) {

@@ -11,6 +11,7 @@ import { colomboToday, membershipDaysRemaining, membershipEndDate } from '../uti
 
 const blank = {
        name: "",
+       gender: "" as "" | "Male" | "Female",
        phone: "",
        email: "",
        plan: "No membership",
@@ -20,6 +21,8 @@ const blank = {
        durationMonths: 0,
        startsOn: "",
        nfcId: "",
+       trainerId: "",
+       trainerVersion: null as number | null,
 };
 
 function RemainingDays({ member, today }: { member: Member; today: string }) {
@@ -104,7 +107,8 @@ export function MembersPage() {
                      setError('Choose a valid start date within the supported membership date range.');
                      return;
               }
-              const clean = { name: form.name, phone: form.phone, email: form.email, plan: form.plan, expiry, nfcId: card };
+              if (!form.gender) { setError('Choose Male or Female.'); return; }
+              const clean = { name: form.name, gender: form.gender, phone: form.phone, email: form.email, plan: form.plan, expiry, nfcId: card, trainerId: form.trainerId || null, trainerVersion: form.trainerId ? form.trainerVersion : null };
               setBusy(true); setError("");
               try {
                      if (editing) await updateMember({ ...editing, ...clean });
@@ -120,11 +124,14 @@ export function MembersPage() {
               setForm({
                      ...blank,
                      name: member.name,
+                     gender: member.gender ?? '',
                      phone: member.phone,
                      email: member.email,
                      plan: member.plan,
                      expiry: member.expiry,
                      nfcId: member.nfcId,
+                     trainerId: member.trainerId ?? '',
+                     trainerVersion: member.trainerVersion ?? null,
               });
               setScanComplete(false);
        };
@@ -173,6 +180,7 @@ export function MembersPage() {
                                           <tr>
                                                  <th>Member</th>
                                                  <th>Phone</th>
+                                                 <th>Gender</th>
                                                  <th>NFC card</th>
                                                  <th>Membership</th>
                                                  <th>Expiry</th>
@@ -206,6 +214,7 @@ export function MembersPage() {
                                                                </div>
                                                         </td>
                                                         <td>{m.phone}</td>
+                                                        <td>{m.gender ?? 'Unspecified'}</td>
                                                         <td>
                                                                {m.nfcId ||
                                                                       "Not linked"}
@@ -243,7 +252,7 @@ export function MembersPage() {
                                                                </button>
                                                                {desktop && <><button className="secondary compact" onClick={() => setPeriodMember(m)}>{m.active === false ? 'Membership history' : 'Membership dates'}</button>
                                                                {m.active !== false && <button className="secondary compact" onClick={() => setRemoval({ member: m, kind: 'archive' })}>Archive / Deactivate</button>}
-                                                               {m.canDelete && <button className="secondary compact" onClick={() => setRemoval({ member: m, kind: 'delete' })}>Delete permanently</button>}
+                                                               <button className="secondary compact" onClick={() => setRemoval({ member: m, kind: 'delete' })}>Delete permanently</button>
                                                                </>}
                                                         </td>
                                                  </tr>
@@ -266,6 +275,7 @@ export function MembersPage() {
                                           className="modal-form"
                                           onSubmit={event => void submit(event)}
                                    ><fieldset className="foundation-fields" disabled={busy}>
+                                          <label><span>Gender</span><select required value={form.gender} onChange={event => setForm({...form, gender: event.target.value as typeof form.gender})}><option value="" disabled>Select gender</option><option value="Male">Male</option><option value="Female">Female</option></select></label>
                                           <label>
                                                  <span>Full name</span>
                                                  <input
@@ -311,6 +321,11 @@ export function MembersPage() {
                                                         }
                                                  />
                                           </label>
+                                          {desktop && <label><span>Personal trainer</span><select value={form.trainerId} onChange={event => {
+                                                 const trainer = desktop.snapshot!.trainers.find(t => t.id === event.target.value);
+                                                 setForm({ ...form, trainerId: trainer?.id ?? '', trainerVersion: trainer?.version ?? null });
+                                          }}><option value="">None — no personal training</option>{desktop.snapshot!.trainers.filter(t => t.active || t.id === editing?.trainerId).map(t => <option key={t.id} value={t.id} disabled={!t.active}>{t.name} · {money(t.trainingFeeMinor / 100)} / month{!t.active ? ' (Inactive — select another staff or None)' : ''}</option>)}</select></label>}
+                                          {desktop && adding && form.trainerId && <p className="form-note">Monthly training fee: {money((desktop.snapshot!.trainers.find(t => t.id === form.trainerId)?.trainingFeeMinor ?? 0) / 100)}. The first training invoice starts {displayDate(form.planId ? form.startsOn : today)}. The gym collects membership and training payments together.</p>}
                                           {adding && <>
                                                  <label className="membership-package-field">
                                                         <span>Membership package</span>
@@ -406,7 +421,7 @@ export function MembersPage() {
                                                  </small>
                                           </label>
                                           {editing && !desktop && <label><span>Plan</span><select value={form.plan} onChange={event => setForm({ ...form, plan: event.target.value })}>{plans.map(plan => <option key={plan.id}>{plan.name}</option>)}</select></label>}
-                                          {desktop && <p className="form-note">{editing ? 'Editing member details keeps the recorded membership dates. Use Membership dates or Renew membership to change the membership.' : 'The member and selected membership are saved together. Record invoices and payments in Payments.'}</p>}
+                                          {desktop && <p className="form-note">{editing ? 'Changing the trainer applies to future training invoices. Existing invoices and membership dates are kept.' : form.trainerId ? 'Saving creates membership and first-month training invoices. Collect both together in Payments.' : 'The member and selected membership are saved together. Record invoices and payments in Payments.'}</p>}
                                           {error && <div className="login-error" role="alert">{error}</div>}
                                           <button
                                                  className="primary"

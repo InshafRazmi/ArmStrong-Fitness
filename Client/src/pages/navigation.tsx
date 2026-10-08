@@ -9,11 +9,13 @@ import { MembershipsPage } from './MembershipsPage'
 import { PaymentsPage } from './PaymentsPage'
 import { ReportsPage } from './ReportsPage'
 import { SettingsPage } from './SettingsPage'
+import { StaffPage } from './StaffPage'
 
 type Navigate = (page: Page) => void
 export const pages: { name: Page; icon: string; Screen: ComponentType<{ navigate: Navigate }> }[] = [
   { name: 'Dashboard', icon: 'grid', Screen: DashboardPage },
   { name: 'Members', icon: 'users', Screen: MembersPage },
+  { name: 'Staff', icon: 'users', Screen: StaffPage },
   { name: 'NFC Attendance', icon: 'signal', Screen: AttendancePage },
   { name: 'Memberships', icon: 'card', Screen: MembershipsPage },
   { name: 'Payments', icon: 'money', Screen: PaymentsPage },

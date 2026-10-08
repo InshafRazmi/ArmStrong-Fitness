@@ -31,6 +31,21 @@ Administrator can read and write from any valid enrolled computer. Migration 5
 upgrades older read-only enrollments on online sign-in without replacing device
 credentials. If an open session still reports read-only access, sign out and
 sign in online to obtain the current permission.
+This update includes Staff, monthly personal-training invoices, combined member
+payments and salary-plus-collected-fee payouts. It also includes compact login/
+dashboard layouts, staff NFC/manual attendance with its own dashboard panel,
+Male/Female member profiles and daily counts, permanent removal from both member
+lists while retaining history, and review/retry for retained sync transactions.
+Native schema 10 preserves existing records and queued transactions on upgrade.
+The latest update aligns deletion confirmation checkboxes, adds Administrator
+permanent staff deletion from active/inactive lists with retained payment history, and displays larger male/female
+attendance counts at the top of a dashboard that fills the available height.
+The NFC page has a larger amber card, spacious reader panel and larger scan
+controls. Deleted staff remain in **Show deleted staff** for history and final
+payments; they cannot be edited or reactivated.
+Shared records require server migrations 6–8 and the matching API. Production
+deployment status is recorded in the delivery guide. Upgrade every desktop sharing the gym. See
+[staff payments](STAFF.md) and [deployment](DELIVERY.md).
 All gym modules use the native HTTPS worker after online sign-in, with bounded
 automatic retries and a manual action in Settings. Shared download preserves
 atomic financial/stock groups and refuses conflicting local history. Deploy the
@@ -56,9 +71,9 @@ The application data directory is `~/.local/share/lk.armstrong.fitness/` under
 the standard XDG layout. Package removal does not remove gym data or OS vault
 items. Export a backup from Settings and keep a copy off the computer.
 
-Package creation, archive contents and dynamic-library resolution passed on the
-build host. Real Linux webview local forms, finance receipts and process restart
-passed in an isolated database. Production login/keyring/network acceptance must
+Package creation, archive contents and dynamic-library resolution are verified on
+the build host. Real Linux webview local forms, staff attendance, gender counts,
+finance receipts and process restart passed in an isolated database. Production login/keyring/network acceptance must
 still be completed in a normal desktop session.
 Verify the package checksum with `sha256sum -c SHA256SUMS` before installation.
 

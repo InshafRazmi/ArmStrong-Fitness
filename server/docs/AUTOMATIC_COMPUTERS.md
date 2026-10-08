@@ -10,8 +10,11 @@ The CLI-created migration
 `armstrong.enroll_desktop` function. It is applied to both the existing test
 project and production, with application ledger version 2/checksum recorded in
 production. Existing version 1, business records, other gyms and registrations
-were retained. The normal owner `npm run migrate` now supports versions 1–5,
-including `20261008015730_administrator_device_access.sql`.
+were retained. The normal owner `npm run migrate` now supports versions 1–8,
+including `20261008015730_administrator_device_access.sql` and the new Staff
+migrations. Production has versions 1–8, with existing application records
+retained and restricted-runtime readiness verified. They do not change computer
+enrollment. The updated Staff/attendance/removal API still needs deployment.
 
 The function derives one gym from an existing active Administrator subject. It
 never creates a staff role, accepts a client gym/role/write permission, revives

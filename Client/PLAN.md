@@ -2,6 +2,20 @@
 
 ## Active release gates — 2026-10-08
 
+Permanent deletion for active/inactive staff, retained financial/attendance
+history, larger NFC card/controls, dashboard counts and the updated Arch package
+are checked. Production migrations 6–8 are applied with all existing data
+fingerprints retained; actual restricted-runtime readiness/TLS checks pass.
+Render still runs the older API. Deploy the current source before retrying the existing batch;
+preserve its operation ID and queued transactions. See current STATUS.md.
+
+Staff/personal training is implemented locally with schema 10 and tested against
+the isolated authenticated backend. Production has server migrations 1–8.
+Deploy the matching API, then upgrade all sharing desktops
+before staff NFC/profile/removal synchronization acceptance. The user handles commit/push. Confirm
+the salary-plus-collected-fee workflow with actual gym operation; monthly billing
+uses explicit training invoices. See [staff workflow](docs/STAFF.md).
+
 Windows installation remains mandatory; Arch is optional. Preserve the
 black/amber UI, transactional SQLite, stored identities/history and existing
 queues. The user now requires active Administrator accounts to read and write
@@ -27,19 +41,24 @@ conflicts. Full offline/reconnect acceptance remains a gate.
    The verified source patch is available for transfer to another checkout.
    Tracked env is removed;
    historically exposed database/Auth/Administrator credentials still need rotation.
-2. Deploy current Render source with `AUTOMATIC_DEVICE_ENROLLMENT=true`,
+2. Production migrations 6–8 are applied; preserve their exact checksums and
+   keep owner credentials outside the runtime service.
+   Deploy current Render source with `AUTOMATIC_DEVICE_ENROLLMENT=true`,
    restricted runtime login and the existing verified CA. Verify deployed
    revision, real native login/enrollment/download, dropped-response/restart
    retries, offline/reconnect, logout, renewal and revocation. Public health is
    reachable but does not certify these workflows.
 3. Accept the new same-computer online restore path on a real desktop; finish
-   general conflict review and bounded large/legacy bootstrap. Unreconciled
+   general stale master/financial conflict resolution (safe exact business retry is implemented) and bounded large/legacy bootstrap. Unreconciled
    backups and conflicting financial/master transactions remain blocked,
    retaining queues/history. Existing legacy cloud members must
    be reconciled explicitly; the approved production gym currently has none.
-4. A local Windows x64 NSIS acceptance installer is built in `Client/dist-windows/`.
-   It now corrects the HTTPS child's Windows system environment and reports
-   specific connection failures. Confirm sign-in on the reporting Windows PC;
+4. A local Windows x64 NSIS acceptance installer is rebuilt in `Client/dist-windows/`
+   on 2026-10-08 with Staff, Administrator editing access and the latest interface
+   changes. It retains the HTTPS child's Windows system environment correction
+   and specific connection failures. Rebuild from current schema-10 source for
+   the subsequent staff deletion and larger NFC layout. Shared data requires
+   migrations 6–8 (applied) and the updated API. Confirm sign-in on the reporting Windows PC;
    Linux login and browser API health do not establish Windows app Auth connectivity.
    Run the Windows Actions workflow and obtain a Windows-runner installer. Verify
    fresh install, Credential Manager, offline saves/restart, live reconnect,

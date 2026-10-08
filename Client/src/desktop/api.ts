@@ -1,5 +1,5 @@
 export interface Plan { id: string; version: number; name: string; durationMonths: number; priceMinor: number; active: boolean; activeMembers: number }
-export interface Member { id: string; version: number; name: string; phone: string; email: string; nfcId: string; joinedOn: string; active: boolean; archivedAt: string | null; archivedByUserId: string | null; canDelete: boolean }
+export interface Member { gender?: import("../types/domain").Gender | null; genderVersion?: number | null; id: string; version: number; name: string; phone: string; email: string; nfcId: string; joinedOn: string; active: boolean; archivedAt: string | null; archivedByUserId: string | null; canDelete: boolean }
 export interface MemberSyncConflict { id: string; memberId: string; operationId: string | null; reason: string; remote: { name?: string; phone?: string; email?: string; nfcId?: string | null; archivedAt?: string | null } | null; createdAt: string }
 export interface RecordedMember { id: string; name: string; phone: string; email: string; nfcId: string | null; joinedOn: string; archivedAt: string | null; revision?: number; version?: number }
 export interface MemberConflictPreview { conflictId: string; memberId: string; fingerprint: string; local: RecordedMember | null; remote: RecordedMember | null; conflicts: {id: string; reason: string; createdAt: string}[]; operations: {id: string; action: string}[]; useServer: {allowed: boolean; reason: string}; keepLocal: {allowed: boolean; reason: string} }
@@ -9,7 +9,7 @@ export interface MemberSyncStatus { resolved?: number; superseded?: number; revi
 export interface BusinessSyncStatus { available: boolean; acknowledged: number; pending: number; conflicts: {id: string; reason: string}[]; lastError?: string | null; lastSuccessOn?: string | null }
 export interface Period { id: string; memberId: string; planId: string; planName: string; priceMinor: number; startsOn: string; endsOn: string; status: 'Scheduled' | 'Active' | 'Expiring' | 'Expired' }
 export interface Profile { version: number; name: string; location: string; phone: string; email: string }
-export interface NativeAttendance { id: string; memberId: string; name: string; cardId: string | null; cardUid: string; type: 'Check-in' | 'Check-out'; source: 'NFC' | 'Manual'; businessOn: string; occurredAt: string; voidsId: string | null }
+export interface NativeAttendance { gender?: import("../types/domain").Gender | null; id: string; memberId: string; name: string; cardId: string | null; cardUid: string; type: 'Check-in' | 'Check-out'; source: 'NFC' | 'Manual'; businessOn: string; occurredAt: string; voidsId: string | null }
 export interface NativePayment { id: string; memberId: string; memberName: string; amountMinor: number; method: 'Cash' | 'Card' | 'Transfer'; businessOn: string; createdAt: string; actor: string; reversesId: string | null; netAmountMinor: number; allocatedMinor: number; unallocatedMinor: number; status: 'Recorded' | 'Partly allocated' | 'Allocated' | 'Reversed' | 'Reversal'; receiptNumber: string; reversalReason: string | null }
 export interface RemovalAuthorization { allowed: boolean; userId: string | null; user: string | null; reason: string }
 export interface MemberRemovalInput { requestId: string; memberId: string; version: number }
@@ -28,7 +28,19 @@ export interface ReceivePaymentInput { requestId: string; memberId: string; amou
 export interface RenewalInput { requestId: string; memberId: string; planId: string; planVersion: number; expectedLastPeriodId: string | null; startsOn: string; endsOn: string }
 export interface ReversalInput { requestId: string; paymentId: string; reason: string }
 export interface ReceiptDocument { number: string; currentStatus: NativePayment['status']; reversalReceiptNumber: string | null; snapshot: { formatVersion: number; number: string; payment: Pick<NativePayment, 'id' | 'memberId' | 'memberName' | 'amountMinor' | 'method' | 'businessOn' | 'createdAt' | 'actor' | 'reversesId'>; gym: Omit<Profile, 'version'>; allocations: { invoiceNumber: string; description: string; amountMinor: number; outstandingMinor: number; released: boolean | 0 | 1 }[]; unallocatedAtIssueMinor: number; originalReceiptNumber: string | null; reason: string | null; issuedAt: string; legacy: boolean } }
-export interface Snapshot { businessSync?: BusinessSyncStatus; memberSync?: MemberSyncStatus; removalAuthorization: RemovalAuthorization; invoices: NativeInvoice[]; allocations: NativeAllocation[]; financialAccounts: FinancialAccount[]; plans: Plan[]; members: Member[]; periods: Period[]; pending: number; auditCount: number; today: string; profile: Profile; attendance: NativeAttendance[]; payments: NativePayment[]; products: NativeProduct[]; sales: NativeSale[]; expenses: NativeExpense[]; audit: NativeAudit[]; users: NativeUser[]; restoreRequiresReconciliation: boolean }
+export interface NativeStaffAttendance { id: string; staffId: string; name: string; cardId: string | null; cardUid: string; type: "Check-in" | "Check-out"; source: "NFC" | "Manual"; businessOn: string; occurredAt: string }
+export interface Trainer { deletedAt?: string | null; nfcId?: string; id: string; version: number; name: string; phone: string; nic: string; salaryMinor: number; trainingFeeMinor: number; active: boolean; assignedMembers: number; unpaidTrainingMinor: number }
+export interface MemberTrainer { memberId: string; trainerId: string | null; version: number }
+export interface TrainingCharge { id: string; invoiceId: string; memberId: string; trainerId: string; trainerName: string; feeMinor: number; startsOn: string; endsOn: string }
+export interface StaffPayout { id: string; trainerId: string; trainerName: string; expenseId: string; salaryMonth: string; salaryMinor: number; trainingMinor: number; amountMinor: number; businessOn: string; method: string; active: boolean }
+export interface TrainerInput { nfcId?: string; requestId: string; id?: string; version?: number; name: string; phone: string; nic: string; salaryMinor: number; trainingFeeMinor: number; active: boolean }
+export interface StaffRemovalInput { requestId: string; staffId: string; version: number }
+export interface TrainingChargeInput { requestId: string; memberId: string; trainerId: string; trainerVersion: number; startsOn: string }
+export interface StaffPayoutInput { requestId: string; trainerId: string; trainerVersion: number; salaryMonth: string; includeSalary: boolean; expectedSalaryMinor: number; expectedTrainingMinor: number; allocationIds: string[]; method: 'Cash' | 'Card' | 'Bank' }
+export interface StaffRegisterInput { gender?: import("../types/domain").Gender | null; member: RegisterMemberInput; trainerId: string | null; trainerVersion: number | null }
+export interface StaffMemberInput { gender?: import("../types/domain").Gender | null; genderVersion?: number | null; member: MemberInput; trainerId: string | null; trainerVersion: number | null; assignmentVersion: number | null }
+export interface CombinedPaymentInput { payment: ReceivePaymentInput; invoiceIds: string[] }
+export interface Snapshot { staffAttendance?: NativeStaffAttendance[]; trainers: Trainer[]; memberTrainers: MemberTrainer[]; trainingCharges: TrainingCharge[]; staffPayouts: StaffPayout[]; staffTrainingAllocations: {id: string; trainerId: string; amountMinor: number}[]; businessSync?: BusinessSyncStatus; memberSync?: MemberSyncStatus; removalAuthorization: RemovalAuthorization; invoices: NativeInvoice[]; allocations: NativeAllocation[]; financialAccounts: FinancialAccount[]; plans: Plan[]; members: Member[]; periods: Period[]; pending: number; auditCount: number; today: string; profile: Profile; attendance: NativeAttendance[]; payments: NativePayment[]; products: NativeProduct[]; sales: NativeSale[]; expenses: NativeExpense[]; audit: NativeAudit[]; users: NativeUser[]; restoreRequiresReconciliation: boolean }
 export type PlanInput = Omit<Plan, 'id' | 'version' | 'activeMembers'> & { id?: string; version?: number }
 export type MemberInput = Pick<Member, 'name' | 'phone' | 'email' | 'nfcId'> & { id?: string; version?: number }
 export interface RegisterMemberInput extends Pick<Member, 'name' | 'phone' | 'email' | 'nfcId'> { requestId: string; planId: string | null; planVersion: number | null; startsOn: string | null }
@@ -51,7 +63,7 @@ function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> 
   return window.__TAURI__.core.invoke<T>(command, args)
 }
 export function requireSnapshot(value: Snapshot): Snapshot {
-  const arrays = ['members', 'plans', 'periods', 'attendance', 'payments', 'products', 'sales', 'expenses', 'audit', 'users', 'invoices', 'allocations', 'financialAccounts'] as const
+  const arrays = ['members', 'plans', 'periods', 'attendance', 'payments', 'products', 'sales', 'expenses', 'audit', 'users', 'invoices', 'allocations', 'financialAccounts', 'trainers', 'memberTrainers', 'trainingCharges', 'staffPayouts', 'staffTrainingAllocations'] as const
   if (!value || !value.removalAuthorization || typeof value.removalAuthorization.allowed !== 'boolean' || arrays.some(key => !Array.isArray(value[key])) || value.members.some(member => typeof member.active !== 'boolean') || !value.profile || !Number.isInteger(value.profile.version) || !Number.isInteger(value.pending)) throw new Error('Desktop storage returned an incompatible snapshot. Rebuild/relaunch the app; no demo data was substituted.')
   return value
 }
@@ -71,6 +83,8 @@ export const addPeriod = (input: PeriodInput) => invoke<void>('add_membership_pe
 export const saveProfile = (input: Profile) => invoke<WriteOutcome>('save_gym_profile', { input })
 export const saveProduct = (input: ProductInput) => invoke<WriteOutcome>('save_product', { input })
 export const recordAttendance = (input: { requestId: string; memberOrCard: string; source: 'NFC' | 'Manual' }) => invoke<WriteOutcome>('record_attendance', { input })
+export const recordStaffAttendance = (input: { requestId: string; staffOrCard: string; source: 'NFC' | 'Manual' }) => invoke<WriteOutcome>('record_staff_attendance', { input })
+export const recordNfcAttendance = (input: { requestId: string; memberOrCard: string; source: 'NFC' }) => invoke<WriteOutcome & {entity: 'Staff' | 'Member'}>('record_nfc_attendance', { input })
 export const recordPayment = (input: { requestId: string; memberId: string; amountMinor: number; method: 'Cash' | 'Card' | 'Transfer' }) => invoke<WriteOutcome>('record_payment', { input })
 export const recordExpense = (input: { requestId: string; title: string; category: string; amountMinor: number; method: 'Cash' | 'Card' | 'Bank' }) => invoke<WriteOutcome>('record_expense', { input })
 export const adjustStock = (input: { requestId: string; productId: string; amount: number }) => invoke<WriteOutcome>('adjust_stock', { input })
@@ -99,3 +113,15 @@ export const voidExpense = (input: ExpenseVoidInput) => invoke<WriteOutcome>('vo
 
 export const previewMemberConflict = (conflictId: string) => invoke<MemberConflictPreview>('preview_member_conflict', { conflictId })
 export const resolveMemberConflict = (input: MemberConflictInput) => invoke<MemberConflictResult>('resolve_member_conflict', { input })
+
+export const saveTrainer = (input: TrainerInput) => invoke<WriteOutcome>('save_trainer', { input })
+export const deleteStaff = (input: StaffRemovalInput) => invoke<WriteOutcome>('delete_staff', { input })
+export const registerMemberWithTrainer = (input: StaffRegisterInput) => invoke<WriteOutcome>('register_member_with_trainer', { input })
+export const saveMemberWithTrainer = (input: StaffMemberInput) => invoke<void>('save_member_with_trainer', { input })
+export const createTrainingCharge = (input: TrainingChargeInput) => invoke<WriteOutcome>('create_training_charge', { input })
+export const receiveCombinedPayment = (input: CombinedPaymentInput) => invoke<WriteOutcome>('receive_combined_payment', { input })
+export const payStaff = (input: StaffPayoutInput) => invoke<WriteOutcome>('pay_staff', { input })
+
+export interface BusinessRetryPreview {batchId: string; fingerprint: string; reason: string; changes: {table: string;id: string;action: string;name?: string|null}[]}
+export const previewBusinessRetry = (batchId: string) => invoke<BusinessRetryPreview>('preview_business_retry',{batchId})
+export const retryBusinessTransaction = (input: {requestId: string;batchId: string;fingerprint: string}) => invoke<WriteOutcome>('retry_business_transaction',{input})

@@ -79,6 +79,81 @@ struct Mock {
     after_push: Option<Box<dyn FnOnce()>>,
     after_pull: Option<Box<dyn FnOnce()>>,
 }
+
+#[test]
+fn administrator_review_retries_identical_blocked_bytes_and_receipts_survive_restart() {
+    let subject = id();
+    let gym = id();
+    let mut f = Fixture::new(&subject, &gym, true);
+    let tx = f.store.conn.transaction().unwrap();
+    capture(&tx).unwrap();
+    tx.commit().unwrap();
+    let (batch, encoded): (String, String) = f
+        .store
+        .conn
+        .query_row(
+            "SELECT id,request_json FROM business_batches ORDER BY ordinal LIMIT 1",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    record_failure(
+        &mut f.store,
+        RemoteFailure::BusinessConflict {
+            code: "business_constraint_conflict".into(),
+        },
+        Some(&batch),
+        Utc::now(),
+    )
+    .unwrap();
+    let review = f.store.preview_business_retry(&batch).unwrap();
+    let input = BusinessRetryInput {
+        request_id: id(),
+        batch_id: batch.clone(),
+        fingerprint: review["fingerprint"].as_str().unwrap().into(),
+    };
+    let mut stale = input.clone();
+    stale.fingerprint = "different".into();
+    assert!(f.store.retry_business_transaction(stale).is_err());
+    let result = f.store.retry_business_transaction(input.clone()).unwrap();
+    assert_eq!(
+        f.store.retry_business_transaction(input.clone()).unwrap(),
+        result
+    );
+    assert_eq!(
+        f.store
+            .conn
+            .query_row(
+                "SELECT request_json FROM business_batches WHERE id=?1",
+                [&batch],
+                |r| r.get::<_, String>(0)
+            )
+            .unwrap(),
+        encoded
+    );
+    let mut reopened = Store::open(&f.path).unwrap();
+    reopened.removal_session = f.store.removal_session.clone();
+    assert_eq!(reopened.retry_business_transaction(input).unwrap(), result);
+    let mut remote = Mock::for_store(&reopened, &subject, &gym);
+    let run = reopened
+        .run_business_sync(
+            &mut remote,
+            Utc::now(),
+            Limits {
+                pushes: 10,
+                pages: 10,
+            },
+        )
+        .unwrap();
+    assert!(matches!(run, Run::Complete { .. }));
+    assert_eq!(
+        remote.changes[0]["request"],
+        serde_json::from_str::<Value>(&encoded).unwrap()
+    );
+    assert_eq!(status(&reopened.conn).unwrap()["pending"], 0);
+    reopened.removal_session = None;
+    assert!(reopened.preview_business_retry(&batch).is_err());
+}
 impl Mock {
     fn for_store(store: &Store, subject: &str, gym: &str) -> Self {
         let device: String = store
@@ -350,6 +425,283 @@ fn business_all_modules_download_exact_receipts_ledgers_and_audit_without_granti
     if let Ok(path) = std::env::var("ARMSTRONG_BUSINESS_FIXTURE_PATH") {
         std::fs::write(path, serde_json::to_vec(&download.changes).unwrap()).unwrap();
     }
+}
+
+#[test]
+fn shared_permanent_removal_preserves_billing_and_attendance_on_another_device() {
+    let subject = id();
+    let gym = id();
+    let mut writer = Fixture::new(&subject, &gym, true);
+    let (member, payment) = setup_operations(&mut writer.store);
+    let before = writer.store.snapshot().unwrap();
+    writer
+        .store
+        .delete_member(MemberRemovalInput {
+            request_id: id(),
+            member_id: member.clone(),
+            version: 1,
+        })
+        .unwrap();
+    let mut cloud = Mock::for_store(&writer.store, &subject, &gym);
+    assert!(matches!(
+        writer
+            .store
+            .run_business_sync(
+                &mut cloud,
+                Utc::now(),
+                Limits {
+                    pushes: 100,
+                    pages: 100
+                }
+            )
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    let mut reader = Fixture::new(&subject, &gym, false);
+    let mut download = Mock::for_store(&reader.store, &subject, &gym);
+    download.changes = cloud.changes;
+    assert!(matches!(
+        reader
+            .store
+            .run_business_sync(
+                &mut download,
+                Utc::now(),
+                Limits {
+                    pushes: 100,
+                    pages: 100
+                }
+            )
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    let after = reader.store.snapshot().unwrap();
+    assert_eq!(after["members"], json!([]));
+    for key in [
+        "attendance",
+        "periods",
+        "payments",
+        "invoices",
+        "allocations",
+    ] {
+        assert_eq!(
+            before[key], after[key],
+            "{key} preserved on sharing computer"
+        );
+    }
+    assert_eq!(
+        writer.store.payment_receipt(payment.clone()).unwrap(),
+        reader.store.payment_receipt(payment).unwrap()
+    );
+    assert_eq!(
+        reader
+            .store
+            .conn
+            .query_row("SELECT count(*) FROM member_deletions", [], |r| r
+                .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+}
+#[test]
+fn business_staff_download_preserves_rates_receipts_payouts_and_refund_guards() {
+    let subject = id();
+    let gym = id();
+    let mut writer = Fixture::new(&subject, &gym, true);
+    let mut staff_input = TrainerInput {
+        request_id: id(),
+        id: None,
+        version: None,
+        name: "Synthetic trainer".into(),
+        phone: "0771234567".into(),
+        nic: "900000001V".into(),
+        salary_minor: 3_000_000,
+        training_fee_minor: 500_025,
+        active: true,
+        nfc_id: None,
+    };
+    let staff = writer.store.save_trainer(staff_input.clone()).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let member = writer
+        .store
+        .register_member_with_trainer(StaffRegisterInput {
+            member: RegisterMemberInput {
+                request_id: id(),
+                name: "Synthetic training member".into(),
+                phone: "0771234567".into(),
+                email: "".into(),
+                nfc_id: "".into(),
+                plan_id: None,
+                plan_version: None,
+                starts_on: None,
+            },
+            trainer_id: Some(staff.clone()),
+            trainer_version: Some(1),
+            gender: None,
+        })
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let snapshot = writer.store.snapshot().unwrap();
+    let invoice = snapshot["invoices"][0]["id"].as_str().unwrap().to_owned();
+    let payment = writer
+        .store
+        .receive_combined_payment(CombinedPaymentInput {
+            payment: ReceivePaymentInput {
+                request_id: id(),
+                member_id: member,
+                amount_minor: 500_025,
+                method: "Cash".into(),
+                invoice_id: None,
+            },
+            invoice_ids: vec![invoice],
+        })
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let snapshot = writer.store.snapshot().unwrap();
+    let payout = writer
+        .store
+        .pay_staff(StaffPayoutInput {
+            request_id: id(),
+            trainer_id: staff.clone(),
+            trainer_version: 1,
+            salary_month: snapshot["today"].as_str().unwrap()[..7].into(),
+            include_salary: true,
+            expected_salary_minor: 3_000_000,
+            expected_training_minor: 500_025,
+            allocation_ids: snapshot["staffTrainingAllocations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|a| a["id"].as_str().unwrap().into())
+                .collect(),
+            method: "Cash".into(),
+        })
+        .unwrap();
+    staff_input.request_id = id();
+    staff_input.id = Some(staff);
+    staff_input.version = Some(1);
+    staff_input.training_fee_minor = 600_025;
+    writer.store.save_trainer(staff_input).unwrap();
+    let mut cloud = Mock::for_store(&writer.store, &subject, &gym);
+    let limits = || Limits {
+        pushes: 100,
+        pages: 100,
+    };
+    assert!(matches!(
+        writer
+            .store
+            .run_business_sync(&mut cloud, Utc::now(), limits())
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    let mut reader = Fixture::new(&subject, &gym, false);
+    let mut download = Mock::for_store(&reader.store, &subject, &gym);
+    download.changes = cloud.changes.clone();
+    assert!(matches!(
+        reader
+            .store
+            .run_business_sync(&mut download, Utc::now(), limits())
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    let a = writer.store.snapshot().unwrap();
+    let b = reader.store.snapshot().unwrap();
+    for key in [
+        "trainers",
+        "memberTrainers",
+        "trainingCharges",
+        "staffTrainingAllocations",
+        "staffPayouts",
+        "invoices",
+        "payments",
+        "allocations",
+        "expenses",
+        "financialAccounts",
+        "audit",
+    ] {
+        assert_eq!(a[key], b[key], "{key}");
+    }
+    assert_eq!(b["trainers"][0]["version"], 2);
+    assert_eq!(b["trainers"][0]["trainingFeeMinor"], 600_025);
+    assert_eq!(b["trainingCharges"][0]["feeMinor"], 500_025);
+    assert_eq!(b["trainers"][0]["unpaidTrainingMinor"], 0);
+    assert_eq!(
+        writer.store.payment_receipt(payment.clone()).unwrap(),
+        reader.store.payment_receipt(payment.clone()).unwrap()
+    );
+    let reversal = ReversalInput {
+        request_id: id(),
+        payment_id: payment,
+        reason: "Synthetic refund".into(),
+    };
+    assert!(
+        reader.store.reverse_payment(reversal.clone()).is_err(),
+        "downloaded payout must still prevent refunding paid earnings"
+    );
+    writer
+        .store
+        .void_expense(ExpenseVoidInput {
+            request_id: id(),
+            expense_id: payout["expenseId"].as_str().unwrap().into(),
+            reason: "Synthetic payout correction".into(),
+        })
+        .unwrap();
+    writer.store.reverse_payment(reversal).unwrap();
+    writer
+        .store
+        .delete_staff(StaffRemovalInput {
+            request_id: id(),
+            staff_id: writer.store.snapshot().unwrap()["trainers"][0]["id"]
+                .as_str()
+                .unwrap()
+                .into(),
+            version: 2,
+        })
+        .unwrap();
+    assert!(matches!(
+        writer
+            .store
+            .run_business_sync(&mut cloud, Utc::now(), limits())
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    download.changes = cloud.changes;
+    assert!(matches!(
+        reader
+            .store
+            .run_business_sync(&mut download, Utc::now(), limits())
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    let a = writer.store.snapshot().unwrap();
+    let b = reader.store.snapshot().unwrap();
+    for key in [
+        "trainers",
+        "staffPayouts",
+        "staffTrainingAllocations",
+        "payments",
+        "allocations",
+        "expenses",
+        "financialAccounts",
+        "audit",
+    ] {
+        assert_eq!(a[key], b[key], "after refund: {key}");
+    }
+    assert_eq!(b["staffPayouts"][0]["active"], false);
+    assert_eq!(b["trainers"][0]["unpaidTrainingMinor"], 0);
+    assert_eq!(b["trainers"][0]["active"], false);
+    assert!(b["trainers"][0]["deletedAt"].as_str().is_some());
+    assert!(b["memberTrainers"][0]["trainerId"].is_null());
+    assert!(reader
+        .store
+        .conn
+        .execute("UPDATE trainers SET active=1,version=version+1", [])
+        .is_err());
 }
 #[test]
 fn business_dropped_response_restart_retries_same_request_and_keeps_outbox_history() {

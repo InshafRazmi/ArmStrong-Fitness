@@ -1,9 +1,10 @@
-export type Page = 'Dashboard' | 'Members' | 'NFC Attendance' | 'Memberships' | 'Payments' | 'Sales & Inventory' | 'Expenses' | 'Reports' | 'Settings'
+export type Page = 'Dashboard' | 'Members' | 'Staff' | 'NFC Attendance' | 'Memberships' | 'Payments' | 'Sales & Inventory' | 'Expenses' | 'Reports' | 'Settings'
 export type MemberStatus = 'Active' | 'Expiring' | 'Expired' | 'Frozen' | 'Scheduled' | 'No membership'|'Archived'
 export type SyncState = 'synced' | 'pending' | 'failed'
 
-export interface Member { active?:boolean; archivedAt?:string|null; canDelete?:boolean; id:string; version?:number; name:string; phone:string; email:string; plan:string; expiry:string; membershipStartsOn?:string; status:MemberStatus; initials:string; nfcId:string; joinedAt:string }
-export interface Attendance { id:string; memberId:string; name:string; time:string; date:string; type:'Check-in'|'Check-out'; source:'NFC'|'Manual'; syncState:SyncState }
+export type Gender = "Male" | "Female"
+export interface Member { gender?: Gender | null; genderVersion?: number | null; trainerId?:string|null; trainerVersion?:number|null; assignmentVersion?:number|null; trainerName?:string; active?:boolean; archivedAt?:string|null; canDelete?:boolean; id:string; version?:number; name:string; phone:string; email:string; plan:string; expiry:string; membershipStartsOn?:string; status:MemberStatus; initials:string; nfcId:string; joinedAt:string }
+export interface Attendance { gender?: Gender | null; voidsId?: string | null; id:string; memberId:string; name:string; time:string; date:string; type:'Check-in'|'Check-out'; source:'NFC'|'Manual'; syncState:SyncState }
 export interface MembershipPlan { id:string; version?:number; name:string; durationMonths:number; price:number; activeMembers:number; status:'Active'|'Inactive' }
 export interface Payment { id:string; requestId?:string; memberId:string; memberName:string; date:string; method:'Cash'|'Card'|'Transfer'; amount:number; status:'Paid'|'Partial'|'Recorded'|'Partly allocated'|'Allocated'|'Reversed'|'Reversal'; syncState:SyncState }
 export interface Product { id:string; version?:number; name:string; sku:string; stock:number; reorderLevel:number; cost:number; price:number }

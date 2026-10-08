@@ -27,8 +27,8 @@ try {
   }
   globalThis.localStorage = { getItem: unexpected, setItem: unexpected }
   globalThis.sessionStorage = { getItem: unexpected, setItem: unexpected }
-  const names = ['Dashboard', 'Members', 'NFC Attendance', 'Memberships', 'Payments', 'Sales & Inventory', 'Expenses', 'Reports', 'Settings']
-  const components = ['DashboardPage', 'MembersPage', 'AttendancePage', 'MembershipsPage', 'PaymentsPage', 'InventoryPage', 'ExpensesPage', 'ReportsPage', 'SettingsPage']
+  const names = ['Dashboard', 'Members', 'Staff', 'NFC Attendance', 'Memberships', 'Payments', 'Sales & Inventory', 'Expenses', 'Reports', 'Settings']
+  const components = ['DashboardPage', 'MembersPage', 'StaffPage', 'AttendancePage', 'MembershipsPage', 'PaymentsPage', 'InventoryPage', 'ExpensesPage', 'ReportsPage', 'SettingsPage']
   assert.deepEqual(pages.map(page => page.name), names)
   for (const [index, page] of pages.entries()) {
     assert.equal(page.Screen.name, components[index], `${page.name} maps to the intended component`)
@@ -44,7 +44,7 @@ try {
     assert.ok(!markup.includes('storage unavailable') && !markup.includes('storage not implemented'), `${page.name} reads implemented storage`)
     if (page.name === 'Dashboard') {
       assert.ok(markup.includes('Total Members') && markup.includes('Sign in online to synchronize members.'))
-      assert.ok(!markup.includes('Auto-sync on reconnection') && markup.includes('last 28 business days') && markup.includes('Payments + retail sales'))
+      assert.ok(!markup.includes('Auto-sync on reconnection') && markup.includes('last 28 days') && markup.includes('Payments + retail sales'))
       assert.ok(markup.includes('524.45'), 'today received amounts include native payments and sales')
     }
     if (page.name === 'Members') assert.ok(markup.includes('SQLite member') && markup.includes('Historical plan') && markup.includes('Membership dates') && markup.includes('Archive / Deactivate') && markup.includes('Show archived members') && markup.includes('authenticated Administrator') && markup.includes('Remaining days') && markup.includes('<b>29 days</b>'))
@@ -81,7 +81,7 @@ try {
   console.log('PASS remaining membership days, expiry day, scheduled and unassigned members')
   const businessValue = {...value,desktop:{...value.desktop,snapshot:{...native,businessSync:{available:true,pending:1,acknowledged:9,conflicts:[{id:'batch-1',reason:'Server refused the transaction: business_revision_conflict. Local history is retained.'}],lastError:'Unconfirmed changes are retained.',lastSuccessOn:null}}}}
   const businessMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:businessValue},h(DesktopSettingsPanel,{tab:'Server synchronization'})))
-  for (const text of ['payments and receipts','sales and stock','Confirmed transactions','Transactions to review','Local history is retained','before later changes can upload','Sync gym records now']) assert.ok(businessMarkup.includes(text),text)
+  for (const text of ['payments and receipts','sales and stock','Confirmed transactions','Transactions to review','Local history is retained','Review retained transaction','Sync gym records now']) assert.ok(businessMarkup.includes(text),text)
   assert.ok(!businessMarkup.includes('Other modules are saved locally') && !businessMarkup.includes('Last server confirmation:'))
   console.log('PASS all-module sync status and retained conflict display')
   const restoredMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,desktop:{...value.desktop,snapshot:{...native,restoreRequiresReconciliation:true}}}},h(DesktopSettingsPanel,{tab:'Server synchronization'})))
@@ -161,6 +161,7 @@ try {
 
   const { MemberRemovalDialog } = await server.ssrLoadModule('/src/desktop/MemberRemovalDialog.tsx')
   const { ExpenseVoidDialog } = await server.ssrLoadModule('/src/desktop/ExpenseVoidDialog.tsx')
+  const { StaffRemovalDialog } = await server.ssrLoadModule('/src/desktop/StaffRemovalDialog.tsx')
   const member=desktopMembers(native,true)[0]
   for (const kind of ['archive','delete']) {
     const markup=renderToStaticMarkup(h(GymContext.Provider,{value},h(MemberRemovalDialog,{member:{...member,canDelete:true},kind,onClose:unexpected})))
@@ -171,6 +172,12 @@ try {
   const voidMarkup=renderToStaticMarkup(h(GymContext.Provider,{value},h(ExpenseVoidDialog,{expense:desktopData(native).expenses[0],onClose:unexpected})))
   assert.ok(voidMarkup.includes('Required void reason') && voidMarkup.includes('maxLength="254"') && voidMarkup.includes('type="checkbox"') && voidMarkup.includes('authenticated Administrator') && voidMarkup.includes('disabled=""'))
   const authorizedValue={...value,desktop:{...value.desktop,snapshot:{...native,removalAuthorization:{allowed:true,userId:'verified',user:'Verified administrator',reason:''}}}}
+  for (const kind of ['archive', 'delete']) {
+    const markup = renderToStaticMarkup(h(GymContext.Provider, {value: authorizedValue}, h(MemberRemovalDialog, {member, kind, onClose: unexpected})))
+    assert.ok(markup.includes('class="confirmation-choice"') && /<button class="primary" disabled="">/.test(markup), 'Authorized removal still waits for explicit checkbox confirmation')
+  }
+  const staffRemoval = renderToStaticMarkup(h(GymContext.Provider, {value: authorizedValue}, h(StaffRemovalDialog, {staff:{id:'staff-1',name:'Saved trainer',version:1,assignedMembers:2},onClose:unexpected})))
+  assert.ok(staffRemoval.includes('class="confirmation-choice"') && staffRemoval.includes('Salary payments, training invoices, attendance and unpaid earnings remain') && staffRemoval.includes('2 current member assignment(s)') && /<button class="primary" disabled="">Confirm staff deletion/.test(staffRemoval))
   const authorizedVoid=renderToStaticMarkup(h(GymContext.Provider,{value:authorizedValue},h(ExpenseVoidDialog,{expense:desktopData(native).expenses[0],onClose:unexpected})))
   assert.ok(!authorizedVoid.includes('disabled=""'), 'verified administrator can confirm after filling reason/confirmation')
   const voidSnapshot={...native,expenses:[{...native.expenses[0],status:'Voided',effectiveAmountMinor:0,voidReason:'Duplicate electricity entry',voidedBy:'Verified administrator',voidedAt:'2026-10-03T02:00:00Z'}]}
@@ -192,9 +199,10 @@ try {
   assert.ok(browserMarkup.includes('Prinzz') && !browserMarkup.includes('Desktop SQLite'), 'demo remains separate')
   for (const name of names) {
     const markup = renderToStaticMarkup(h(GymProvider, null, h(PageContent, { page: name, navigate: unexpected })))
-    assert.ok(markup.length > 300, `${name} browser demo screen renders`)
+    if (name === 'Staff') assert.ok(markup.includes('Open the installed desktop application to manage staff.'), 'browser does not invent staff records')
+    else assert.ok(markup.length > 300, `${name} browser demo screen renders`)
   }
-  console.log('PASS separate browser demo login, provider and all nine routes')
+  console.log('PASS separate browser demo login, provider and all ten routes')
 } finally {
   await server.close()
 }

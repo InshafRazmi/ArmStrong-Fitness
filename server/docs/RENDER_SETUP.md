@@ -1,5 +1,37 @@
 # Render API hosting preparation
 
+## Recover the retained Staff transaction
+
+On 2026-10-08, GitHub main is still
+`6cb5aef06bdc9a36f53872ff638e9663156c9b6c`; its row contract does not contain
+Staff tables. Render `/v2/health` still lacks `businessSchemaVersion`. The
+installed schema-10 desktop's refused transaction adds `trainers` and `audit`.
+All 22 retained requests pass the current server's row/state validation against
+production data in a read-only check. Production migrations 1–8 and restricted
+runtime readiness are verified; the running API needs the current source.
+
+1. Review, commit and push the current `server/` source to the branch linked to
+   this existing service. Include the updated row manifest, validator, history
+   guards, readiness checks and migrations. The verified standalone
+   `server/armstrong-render-source.zip` is available for transfer/review. Keep
+   populated env, certificates and local databases outside the repository.
+2. In the existing Render service, choose **Manual Deploy → Deploy latest
+   commit** and wait for a successful live deployment. Preserve the restricted
+   database login, `/etc/secrets/hi3.crt` and existing runtime settings. Restart
+   service runs the same previously deployed commit.
+   [Render deployment options](https://render.com/docs/deploys#manual-deploys)
+3. Verify `https://armstrong-fitness.onrender.com/v2/health` includes
+   `"businessSchemaVersion":10` alongside `"protocolVersion":2`.
+4. In the desktop application, open **Settings → Server synchronization →
+   Review retained transaction → Retry original transaction**. This preserves
+   the frozen operation and sends it to the corrected API for its real receipt.
+
+The user handles commit/push. The Render plugin is available but unconnected,
+and no Render CLI login, API key or deploy hook is configured locally. Live
+deployment and retained-request acceptance remain pending that access/source
+publication. Local changes and database migrations alone do not replace Render's
+running application code.
+
 Render is now the selected provider. Following the free-hosting discussion,
 the setup target is **Free in Singapore** for testing. The latest user selection
 authorizes this Render setup and supersedes the earlier hosting decision gate.

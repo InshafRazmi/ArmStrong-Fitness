@@ -4,7 +4,7 @@ import { useGym } from '../context/GymContext'
 import { version } from '../../package.json'
 import { prepareNativeDevice, type BackupEnvelope, type DeviceApproval, type RestorePreview } from './api'
 import { MemberConflictDialog } from './MemberConflictDialog'
-import type { MemberConflictPreview } from './api'
+import type { BusinessRetryPreview, MemberConflictPreview } from './api'
 import { errorText } from './DesktopGymProvider'
 
 function GymProfile() {
@@ -101,13 +101,30 @@ function BusinessSyncPanel() {
   const { desktop, syncing, syncNow } = useGym()
   const snapshot = desktop?.snapshot
   const sync = snapshot?.businessSync
+  const [review,setReview] = useState<BusinessRetryPreview | null>(null)
+  const [busy,setBusy] = useState(false)
+  const [error,setError] = useState('')
+  async function openReview() {
+    const first=sync?.conflicts[0]; if(!first || busy) return
+    setBusy(true);setError('')
+    try {setReview(await desktop!.previewBusinessRetry(first.id))}
+    catch(error){setError(errorText(error))} finally {setBusy(false)}
+  }
+  async function retry() {
+    if(!review || busy) return
+    setBusy(true);setError('')
+    try {await desktop!.retryBusinessTransaction({requestId:crypto.randomUUID(),batchId:review.batchId,fingerprint:review.fingerprint});setReview(null);await syncNow()}
+    catch(error){setError(errorText(error))} finally {setBusy(false)}
+  }
   return <>
     <p>{sync?.available ? 'Gym records synchronize with your verified account. Changes made during an outage are retained and retried when the connection returns.' : 'Sign in online to synchronize gym records. Your offline changes are retained.'}</p>
-    <p>Members, memberships, attendance, payments and receipts, sales and stock, expenses, profile and audit are included. One approved computer can edit; other computers download the shared records.</p>
+    <p>Members, memberships, attendance, payments and receipts, sales and stock, expenses, profile and audit are included. Active Administrators can edit from every enrolled computer. Staff, training invoices and staff payments are included.</p>
     {sync?.lastError && <p role="status" className="form-note">{sync.lastError}</p>}
     {snapshot?.restoreRequiresReconciliation && <p className="form-note">This restored database requires server reconciliation before synchronization can resume.</p>}
     <div className="summary-grid"><div><small>Storage</small><strong>SQLite</strong></div><div><small>Pending operations</small><strong>{snapshot?.pending ?? 0}</strong></div><div><small>Confirmed transactions</small><strong>{sync?.acknowledged ?? 0}</strong></div><div><small>Transactions to review</small><strong>{sync?.conflicts.length ?? 0}</strong></div></div>
-    {!!sync?.conflicts.length && <div role="alert" className="login-error"><p>These transactions remain on this computer. Reconciliation is required before later changes can upload.</p>{sync.conflicts.map(c => <p key={c.id}>{c.reason}</p>)}</div>}
+    {!!sync?.conflicts.length && <div role="alert" className="login-error"><p>The server refused a retained transaction. Review its reason and retry after correcting the server problem.</p>{sync.conflicts.map(c => <p key={c.id}>{c.reason}</p>)}<button className="secondary" disabled={busy || syncing || !sync.available || !snapshot?.removalAuthorization.allowed} onClick={() => void openReview()}>Review retained transaction</button></div>}
+    {error && <p role="alert" className="login-error">{error}</p>}
+    {review && <Modal title="Review retained transaction" onClose={() => {if(!busy)setReview(null)}}><p>{review.reason}</p><p className="form-note">Retry sends the original transaction for another server check. Use this after correcting a server configuration or deployment problem. A conflicting edit still needs resolution; the server can refuse it again. Past payments and saved history remain intact.</p><div className="card table-card business-review-rows"><table><thead><tr><th>Action</th><th>Records</th><th>Name / ID</th></tr></thead><tbody>{review.changes.map(c=><tr key={`${c.table}:${c.id}`}><td>{c.action}</td><td>{c.table.replaceAll('_',' ')}</td><td>{c.name || c.id}</td></tr>)}</tbody></table></div><div className="settings-actions"><button className="primary" disabled={busy} onClick={() => void retry()}>{busy?'Checking server…':'Retry original transaction'}</button><button className="secondary" disabled={busy} onClick={() => setReview(null)}>Cancel</button></div></Modal>}
     {sync?.lastSuccessOn && <p>Last server confirmation: {new Date(sync.lastSuccessOn).toLocaleString()}.</p>}
     <button className="primary" disabled={!sync?.available || syncing} onClick={() => void syncNow()}>{syncing ? 'Synchronizing gym records…' : sync?.available ? 'Sync gym records now' : 'Sync unavailable'}</button>
   </>

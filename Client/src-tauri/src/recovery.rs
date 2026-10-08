@@ -233,6 +233,21 @@ fn verify_file(path: &Path, version: i64) -> Result<()> {
             .execute_batch(include_str!("../migrations/007_business_sync.sql"))
             .map_err(db_error)?;
     }
+    if version >= 8 {
+        expected
+            .execute_batch(include_str!("../migrations/008_staff_training.sql"))
+            .map_err(db_error)?;
+    }
+    if version >= 9 {
+        expected
+            .execute_batch(include_str!("../migrations/009_attendance_profiles.sql"))
+            .map_err(db_error)?;
+    }
+    if version >= 10 {
+        expected
+            .execute_batch(include_str!("../migrations/010_staff_removal.sql"))
+            .map_err(db_error)?;
+    }
     if schema(&conn)? != schema(&expected)? {
         return Err("Backup contains an unrecognized schema, index or trigger".into());
     }
@@ -243,6 +258,15 @@ fn verify_file(path: &Path, version: i64) -> Result<()> {
         .map_err(db_error)?
     {
         date(&value.map_err(db_error)?)?;
+    }
+    if version >= 8 {
+        let mut dates=conn.prepare("SELECT starts_on FROM training_charges UNION ALL SELECT ends_on FROM training_charges UNION ALL SELECT salary_month||'-01' FROM staff_payouts").map_err(db_error)?;
+        for value in dates
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(db_error)?
+        {
+            date(&value.map_err(db_error)?)?;
+        }
     }
     Ok(())
 }
@@ -563,6 +587,16 @@ impl Store {
                 "business_batches",
                 "business_batch_operations",
                 "business_cursor",
+                "trainers",
+                "member_trainers",
+                "training_charges",
+                "staff_payouts",
+                "staff_payout_items",
+                "member_profiles",
+                "member_deletions",
+                "staff_nfc_cards",
+                "staff_attendance",
+                "staff_deletions",
             ];
             if tables.len() != order.len()
                 || tables.iter().any(|table| !order.contains(&table.as_str()))

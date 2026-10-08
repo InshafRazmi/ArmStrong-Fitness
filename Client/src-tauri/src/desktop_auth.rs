@@ -533,7 +533,7 @@ impl DesktopAuth {
                 "blocked",
                 0,
                 0,
-                "A retained gym transaction needs reconciliation before synchronization can continue.".into(),
+                super::business_sync::status(&worker.conn)?["lastError"].as_str().map(|s|format!("{s} Open Settings → Server synchronization to review and retry the retained transaction.")).unwrap_or_else(||"A retained gym transaction needs review in Settings → Server synchronization.".into()),
             ),
         };
         let denied = worker.removal_session.is_none();

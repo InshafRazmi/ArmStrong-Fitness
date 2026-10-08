@@ -4,6 +4,13 @@ import { nativeSnapshot } from './native-snapshot.mjs'
 import { minorUnits, requireSnapshot } from '../src/desktop/api.ts'
 import { desktopData, desktopMembers, emptyDesktopData } from '../src/desktop/adapter.ts'
 import { colomboToday, membershipDaysRemaining, membershipEndDate } from '../src/utils/membership.ts'
+import { attendanceTotals } from '../src/utils/attendance.ts'
+
+test('daily attendance counts people once and separates gender without counting checkouts or voided visits', () => {
+  const entry=(id,personId,gender,type='Check-in',date='2026-10-08',voidsId=null)=>({id,personId,gender,type,date,voidsId})
+  const rows=[entry('a','man','Male'),entry('b','man','Male','Check-out'),entry('c','man','Male'),entry('d','woman','Female'),entry('e','unknown',null),entry('f','checkout-only','Female','Check-out'),entry('g','yesterday','Male','Check-in','2026-10-07'),entry('h','voided','Female'),entry('i','voided','Female','Check-in','2026-10-08','h')]
+  assert.deepEqual(attendanceTotals(rows,'2026-10-08'),{total:3,male:1,female:1,unspecified:1})
+})
 
 test('package dates handle inclusive calendar months, leap years and supported bounds', () => {
   for (const [start, months, end] of [

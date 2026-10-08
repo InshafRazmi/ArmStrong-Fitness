@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { parseBatch, stateFrom, applyChanges, validateState } from '../src/business-protocol.ts';
+
+test('native staff, monthly training, combined receipts and payouts match the server financial contract', async () => {
+  assert.ok(process.env.ARMSTRONG_STAFF_FIXTURE_PATH, 'Generate native staff fixture first');
+  const batches = JSON.parse(await readFile(process.env.ARMSTRONG_STAFF_FIXTURE_PATH, 'utf8')) as any[];
+  const records = () => {
+    const state=stateFrom([]);
+    for (const request of batches) applyChanges(state,parseBatch(request).changes);
+    return state;
+  };
+  const state=records();
+  assert.equal(state.get('trainers')!.size,1);
+  assert.equal(state.get('training_charges')!.size,1);
+  assert.equal(state.get('payment_receipts')!.size,1);
+  assert.equal(state.get('payment_allocations')!.size,2);
+  const payout=[...state.get('staff_payouts')!.values()][0];
+  assert.equal(payout.salary_minor,3000000);assert.equal(payout.training_minor,500025);
+  const charge=[...state.get('training_charges')!.values()][0];
+  assert.equal(charge.ends_on,'2026-02-28');
+  const broken=records(); broken.get('training_charges')!.set(String(charge.id),{...charge,fee_minor:1});
+  assert.throws(()=>validateState(broken),/training_invoice_conflict/);
+  const wrongMonth=records();wrongMonth.get('training_charges')!.set(String(charge.id),{...charge,ends_on:'2026-03-01'});
+  assert.throws(()=>validateState(wrongMonth),/training_month_conflict/);
+  const duplicateSalary=records();
+  const expense=[...state.get('expenses')!.values()][0]; const expenseId=randomUUID();
+  duplicateSalary.get('expenses')!.set(expenseId,{...expense,id:expenseId,amount_minor:3000000});
+  const duplicate={...payout,id:randomUUID(),expense_id:expenseId,training_minor:0};
+  duplicateSalary.get('staff_payouts')!.set(String(duplicate.id),duplicate);
+  assert.throws(()=>validateState(duplicateSalary),/business_unique_conflict/);
+  const invalidEarnings=records();const item=[...invalidEarnings.get('staff_payout_items')!.values()][0];
+  invalidEarnings.get('staff_payout_items')!.set(String(item.id),{...item,amount_minor:500026});
+  assert.throws(()=>validateState(invalidEarnings),/staff_payout_total_conflict/);
+  const duplicateNic=records();const trainer=[...state.get('trainers')!.values()][0];
+  duplicateNic.get('trainers')!.set(randomUUID(),{...trainer,id:randomUUID()});
+  assert.throws(()=>validateState(duplicateNic),/business_unique_conflict/);
+});

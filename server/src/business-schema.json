@@ -1072,6 +1072,456 @@
           "key": "id"
         }
       ]
+    },
+    {
+      "name": "trainers",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "phone",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "nic",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "salary_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "training_fee_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "active",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [
+        "name",
+        "phone",
+        "nic",
+        "salary_minor",
+        "training_fee_minor",
+        "active",
+        "version"
+      ],
+      "references": []
+    },
+    {
+      "name": "member_trainers",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "trainer_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [
+        "trainer_id",
+        "version"
+      ],
+      "references": [
+        {
+          "column": "id",
+          "table": "members",
+          "key": "id"
+        },
+        {
+          "column": "trainer_id",
+          "table": "trainers",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "training_charges",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "invoice_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "member_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "trainer_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "trainer_name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "fee_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "starts_on",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "ends_on",
+          "type": "text",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "invoice_id",
+          "table": "invoices",
+          "key": "id"
+        },
+        {
+          "column": "member_id",
+          "table": "members",
+          "key": "id"
+        },
+        {
+          "column": "trainer_id",
+          "table": "trainers",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "staff_payouts",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "trainer_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "expense_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "salary_month",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "salary_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "training_minor",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "trainer_id",
+          "table": "trainers",
+          "key": "id"
+        },
+        {
+          "column": "expense_id",
+          "table": "expenses",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "staff_payout_items",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "payout_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "allocation_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "amount_minor",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "payout_id",
+          "table": "staff_payouts",
+          "key": "id"
+        },
+        {
+          "column": "allocation_id",
+          "table": "payment_allocations",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "member_profiles",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "gender",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [
+        "gender",
+        "version"
+      ],
+      "references": [
+        {
+          "column": "id",
+          "table": "members",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "member_deletions",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor_user_id",
+          "type": "text",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "id",
+          "table": "members",
+          "key": "id"
+        },
+        {
+          "column": "actor_user_id",
+          "table": "users",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "staff_nfc_cards",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "trainer_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "uid",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "assigned_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "revoked_at",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "mutable": [
+        "revoked_at"
+      ],
+      "references": [
+        {
+          "column": "trainer_id",
+          "table": "trainers",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "staff_attendance",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "trainer_id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "card_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "staff_name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "card_uid",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "source",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "business_on",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "occurred_at",
+          "type": "text",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "trainer_id",
+          "table": "trainers",
+          "key": "id"
+        },
+        {
+          "column": "card_id",
+          "table": "staff_nfc_cards",
+          "key": "id"
+        }
+      ]
+    },
+    {
+      "name": "staff_deletions",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "deleted_at",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "actor_user_id",
+          "type": "text",
+          "nullable": false
+        }
+      ],
+      "mutable": [],
+      "references": [
+        {
+          "column": "id",
+          "table": "trainers",
+          "key": "id"
+        },
+        {
+          "column": "actor_user_id",
+          "table": "users",
+          "key": "id"
+        }
+      ]
     }
   ]
 }

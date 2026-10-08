@@ -347,7 +347,10 @@ fn apply_page(store: &mut Store, transport: &impl BusinessTransport, page: Value
                 } else {
                     rank
                 };
-                (rank, c["before"].is_null())
+                let revocation = matches!(table, "nfc_cards" | "staff_nfc_cards")
+                    && !c["before"].is_null()
+                    && !c["after"]["revoked_at"].is_null();
+                (if revocation { 0 } else { rank + 1 }, c["before"].is_null())
             });
             for c in ordered {
                 let t = by_name
@@ -413,7 +416,10 @@ fn record_failure(
     let (conflicted, reason) = match &failure {
         RemoteFailure::BusinessConflict { code } => (
             true,
-            format!("Server refused the transaction: {code}. Local history is retained."),
+            match code.as_str() {
+                "invalid_business_data" | "unsupported_business_table" => format!("Server refused the transaction: {code}. Check that the deployed server supports the latest staff and attendance records, then review and retry this transaction in Settings. Local history is retained."),
+                _ => format!("Server refused the transaction: {code}. Local history is retained."),
+            },
         ),
         _ if denied => (
             false,

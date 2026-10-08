@@ -20,7 +20,7 @@ export function GymProvider({children}:{children:ReactNode}){
   const expiry=plan?membershipEndDate(v.startsOn??'',plan.durationMonths):''
   if(plan&&!expiry)throw new Error('Choose a valid membership start date')
   const days=membershipDaysRemaining(expiry,today,v.startsOn??undefined)
-  const member:Member={name:v.name,phone:v.phone,email:v.email,nfcId:v.nfcId,plan:plan?.name??'No membership',expiry,membershipStartsOn:v.startsOn??undefined,
+  const member:Member={gender:v.gender,name:v.name,phone:v.phone,email:v.email,nfcId:v.nfcId,plan:plan?.name??'No membership',expiry,membershipStartsOn:v.startsOn??undefined,
    id:`MF-${String(Math.floor(10000+Math.random()*89999))}`,status:!plan?'No membership':(v.startsOn??today)>today?'Scheduled':days===0?'Expired':days!==null&&days<=8?'Expiring':'Active',initials:initials(v.name),joinedAt:today}
   mutate('member','create',member,d=>({...d,members:[member,...d.members]}));notify('Member saved in browser demo')
  }

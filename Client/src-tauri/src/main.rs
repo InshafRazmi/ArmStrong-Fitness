@@ -4,10 +4,12 @@ compile_error!("Installer builds must not include UI smoke commands");
 #[cfg(all(windows, not(debug_assertions), not(feature = "packaged-auth")))]
 compile_error!("Windows release builds require the packaged-auth feature");
 use armstrong_core::{
-    AllocationInput, AttendanceInput, BackupEnvelope, ExpenseInput, ExpenseVoidInput, InvoiceInput,
-    MemberConflictInput, MemberInput, MemberRemovalInput, PaymentInput, PeriodInput, PlanInput,
-    ProductInput, ProfileInput, ReceivePaymentInput, RegisterMemberInput, RenewalInput,
-    ReportRange, ReversalInput, SaleInput, StockInput, Store,
+    AllocationInput, AttendanceInput, BackupEnvelope, BusinessRetryInput, CombinedPaymentInput,
+    ExpenseInput, ExpenseVoidInput, InvoiceInput, MemberConflictInput, MemberInput,
+    MemberRemovalInput, PaymentInput, PeriodInput, PlanInput, ProductInput, ProfileInput,
+    ReceivePaymentInput, RegisterMemberInput, RenewalInput, ReportRange, ReversalInput, SaleInput,
+    StaffAttendanceInput, StaffMemberInput, StaffPayoutInput, StaffRegisterInput,
+    StaffRemovalInput, StockInput, Store, TrainerInput, TrainingChargeInput,
 };
 use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{Manager, State};
@@ -110,12 +112,70 @@ async fn synchronize_members(
     db.1.finish_member_sync(&mut store, outcome)
 }
 #[tauri::command]
+fn preview_business_retry(
+    db: State<Database>,
+    batch_id: String,
+) -> Result<serde_json::Value, String> {
+    let store = db.access(false)?;
+    db.1.prepare_member_sync(&store)?;
+    store.preview_business_retry(&batch_id)
+}
+#[tauri::command]
+fn retry_business_transaction(
+    db: State<Database>,
+    input: BusinessRetryInput,
+) -> Result<serde_json::Value, String> {
+    let mut store = db.access(true)?;
+    db.1.prepare_member_sync(&store)?;
+    store.retry_business_transaction(input)
+}
+#[tauri::command]
 fn save_plan(db: State<Database>, input: PlanInput) -> Result<(), String> {
     db.access(true)?.save_plan(input)
 }
 #[tauri::command]
 fn save_member(db: State<Database>, input: MemberInput) -> Result<(), String> {
     db.access(true)?.save_member(input)
+}
+#[tauri::command]
+fn save_trainer(db: State<Database>, input: TrainerInput) -> Result<serde_json::Value, String> {
+    db.access(true)?.save_trainer(input)
+}
+#[tauri::command]
+fn delete_staff(
+    db: State<Database>,
+    input: StaffRemovalInput,
+) -> Result<serde_json::Value, String> {
+    db.access(true)?.delete_staff(input)
+}
+#[tauri::command]
+fn register_member_with_trainer(
+    db: State<Database>,
+    input: StaffRegisterInput,
+) -> Result<serde_json::Value, String> {
+    db.access(true)?.register_member_with_trainer(input)
+}
+#[tauri::command]
+fn save_member_with_trainer(db: State<Database>, input: StaffMemberInput) -> Result<(), String> {
+    db.access(true)?.save_member_with_trainer(input)
+}
+#[tauri::command]
+fn create_training_charge(
+    db: State<Database>,
+    input: TrainingChargeInput,
+) -> Result<serde_json::Value, String> {
+    db.access(true)?.create_training_charge(input)
+}
+#[tauri::command]
+fn receive_combined_payment(
+    db: State<Database>,
+    input: CombinedPaymentInput,
+) -> Result<serde_json::Value, String> {
+    db.access(true)?.receive_combined_payment(input)
+}
+#[tauri::command]
+fn pay_staff(db: State<Database>, input: StaffPayoutInput) -> Result<serde_json::Value, String> {
+    db.access(true)?.pay_staff(input)
 }
 #[tauri::command]
 fn register_member(
@@ -246,6 +306,20 @@ fn delete_member(
     db.access(true)?.delete_member(input)
 }
 #[tauri::command]
+fn record_staff_attendance(
+    db: State<Database>,
+    input: StaffAttendanceInput,
+) -> Result<serde_json::Value, String> {
+    db.access(true)?.record_staff_attendance(input)
+}
+#[tauri::command]
+fn record_nfc_attendance(
+    db: State<Database>,
+    input: AttendanceInput,
+) -> Result<serde_json::Value, String> {
+    db.access(true)?.record_nfc_attendance(input)
+}
+#[tauri::command]
 fn void_expense(db: State<Database>, input: ExpenseVoidInput) -> Result<serde_json::Value, String> {
     db.access(true)?.void_expense(input)
 }
@@ -295,12 +369,23 @@ fn main() {
         prepare_native_device,
         foundation_snapshot,
         synchronize_members,
+        preview_business_retry,
+        retry_business_transaction,
         save_plan,
         save_member,
+        save_trainer,
+        delete_staff,
+        register_member_with_trainer,
+        save_member_with_trainer,
+        create_training_charge,
+        receive_combined_payment,
+        pay_staff,
         register_member,
         add_membership_period,
         save_gym_profile,
         record_attendance,
+        record_staff_attendance,
+        record_nfc_attendance,
         record_payment,
         create_invoice,
         allocate_payment,
@@ -334,12 +419,23 @@ fn main() {
             prepare_native_device,
             foundation_snapshot,
             synchronize_members,
+            preview_business_retry,
+            retry_business_transaction,
             save_plan,
             save_member,
+            save_trainer,
+            delete_staff,
+            register_member_with_trainer,
+            save_member_with_trainer,
+            create_training_charge,
+            receive_combined_payment,
+            pay_staff,
             register_member,
             add_membership_period,
             save_gym_profile,
             record_attendance,
+            record_staff_attendance,
+            record_nfc_attendance,
             record_payment,
             create_invoice,
             allocate_payment,

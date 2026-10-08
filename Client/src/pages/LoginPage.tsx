@@ -132,15 +132,15 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
                                           <i>→</i>
                                    </button>
                             </form>
-                            {native && desktop?.authStatus?.offlineUntil && <div className="login-security"><div>
+                            {native && desktop?.authStatus?.offlineUntil && <div className="login-security login-offline">
                                    <button type="button" className="secondary" disabled={loading} onClick={async () => {
                                           setLoading(true); setError("");
                                           try { await desktop.unlockOffline(); onLogin(); }
                                           catch (error) { setError(errorText(error)); }
                                           finally { setLoading(false); }
                                    }}>Continue offline</button>
-                                   <small>Unlock with this computer's OS account. Offline access ends {new Date(desktop.authStatus.offlineUntil).toLocaleString()}.</small>
-                            </div></div>}
+                                   <small>Use this computer's OS account. Available until {new Date(desktop.authStatus.offlineUntil).toLocaleString()}.</small>
+                            </div>}
                             <div className="login-security">
                                    <span>●</span>
                                    <div>
@@ -150,7 +150,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
                                           </small>
                                    </div>
                             </div>
-                            {native && <details><summary>Computer registration</summary><DevicePreparation/></details>}
+                            {native && <details className="computer-registration"><summary><Icon name="settings" size={18}/><span>Computer registration<small>Setup and troubleshooting</small></span><span className="registration-chevron" aria-hidden="true">⌄</span></summary><div className="computer-registration-body"><DevicePreparation/></div></details>}
                      </section>
                      <footer className="login-footer">
                             ARMSTRONG FITNESS · MATALE <span>•</span> DESKTOP

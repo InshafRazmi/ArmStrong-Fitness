@@ -20,6 +20,7 @@ test('business protocol accepts exact typed rows and stable canonical hashes; id
   assert.throws(() => parseBatch({ ...input, actorRole: 'Administrator' }));
 });
 test('business protocol refuses fractional money, duplicate rows, immutable changes and unsafe sizes', () => {
+  assert.throws(() => parseBatch(batch([change('unknown_future_table', member)])), /unsupported_business_table/);
   for (const patch of [{ price_minor: 1.5 }, { price_minor: 2 ** 53 }, { price_minor: -1 }, { duration_months: 0 }, { active: 2 }]) assert.throws(() => parseBatch(batch([change('plans', { ...plan, ...patch })])));
   assert.throws(() => parseBatch(batch([change('members', member), change('members', member)])));
   assert.throws(() => parseBatch(batch([change('members', { ...member, joined_on: '2026-10-06', version: 2 }, member)])), /immutable_business_history/);

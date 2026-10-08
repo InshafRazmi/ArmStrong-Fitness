@@ -27,7 +27,7 @@ export function ExpenseVoidDialog({ expense, onClose }: { expense: Expense; onCl
     {!authorization.allowed && <p role="note" className="foundation-warning">{authorization.reason}</p>}
     <form className="modal-form" onSubmit={event => void submit(event)}><fieldset className="foundation-fields" disabled={busy}>
       <label><span>Required void reason</span><input required maxLength={254} value={reason} onChange={event => setReason(event.target.value)}/></label>
-      <label><span>Confirmation</span><input required type="checkbox" aria-label="I confirm voiding this expense"/>I confirm voiding {expense.title}.</label>
+      <label className="confirmation-choice"><input required type="checkbox" aria-label="I confirm voiding this expense"/><span><b>Confirmation</b>I confirm voiding {expense.title}.</span></label>
       <button className="primary" disabled={!canVoid}>{busy ? 'Saving…' : 'Confirm expense void'}</button>
     </fieldset>{error && <div role="alert" className="login-error">{error}</div>}</form>
   </Modal>

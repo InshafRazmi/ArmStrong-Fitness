@@ -1,9 +1,18 @@
 import { createContext, useContext } from 'react'
 import type { Expense, GymData, Member, MembershipPlan, Payment, ToastMessage } from '../types/domain'
 import type { MemberRemovalInput, ExpenseVoidInput, AllocationInput, InvoiceInput, ReceivePaymentInput, RenewalInput, ReversalInput, ReceiptDocument, BackupEnvelope, FileResult, PeriodInput, PlanInput, ProductInput, Profile, ReportRange, ReportSummary, RestorePreview, RestoreResult, Snapshot } from '../desktop/api'
-export type NewMember = Pick<Member, 'name' | 'phone' | 'email' | 'plan' | 'expiry' | 'nfcId'> & import('../desktop/api').RegisterMemberInput
+export type NewMember = {gender?: import("../types/domain").Gender;trainerId?: string | null; trainerVersion?: number | null} & Pick<Member, 'name' | 'phone' | 'email' | 'plan' | 'expiry' | 'nfcId'> & import('../desktop/api').RegisterMemberInput
 type WriteResult = void | Promise<void>
 export interface DesktopData {
+  previewBusinessRetry: (batchId: string) => Promise<import('../desktop/api').BusinessRetryPreview>
+  retryBusinessTransaction: (input: {requestId: string;batchId: string;fingerprint: string}) => Promise<void>
+  recordStaffAttendance: (input: {requestId: string; staffOrCard: string; source: "NFC" | "Manual"}) => Promise<void>
+  recordNfcAttendance: (input: {requestId: string; memberOrCard: string; source: "NFC"}) => Promise<{entity?: "Staff" | "Member"; duplicate?: boolean}>
+  saveTrainer: (input: import('../desktop/api').TrainerInput) => Promise<void>
+  deleteStaff: (input: import('../desktop/api').StaffRemovalInput) => Promise<void>
+  createTrainingCharge: (input: import('../desktop/api').TrainingChargeInput) => Promise<void>
+  receiveCombinedPayment: (input: import('../desktop/api').CombinedPaymentInput) => Promise<void>
+  payStaff: (input: import('../desktop/api').StaffPayoutInput) => Promise<void>
   previewMemberConflict: (conflictId: string) => Promise<import('../desktop/api').MemberConflictPreview>
   resolveMemberConflict: (input: import('../desktop/api').MemberConflictInput) => Promise<void>
   authStatus?: import('../desktop/api').DesktopAuthStatus | null

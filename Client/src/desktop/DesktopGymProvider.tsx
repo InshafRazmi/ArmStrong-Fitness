@@ -107,6 +107,8 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
         await refresh()
       },
       snapshot: native, error, refresh,
+      previewBusinessRetry: api.previewBusinessRetry,
+      retryBusinessTransaction: input => commit(() => api.retryBusinessTransaction(input), 'Original transaction queued for another server check.'),
       previewMemberConflict: api.previewMemberConflict,
       resolveMemberConflict: async input => {
         const result = await api.resolveMemberConflict(input)
@@ -114,10 +116,22 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
         await afterCommit()
       },
       archiveMember: input => commit(() => api.archiveMember(input), 'Member archived in SQLite. History retained.'),
-      deleteMember: input => commit(() => api.deleteMember(input), 'Unlinked member deleted in SQLite. Audit retained.'),
+      deleteMember: input => commit(() => api.deleteMember(input), 'Member permanently removed. Past payments and attendance retained.'),
       voidExpense: input => commit(() => api.voidExpense(input), 'Expense void committed in SQLite. Original retained.'),
       createInvoice: input => commit(() => api.createInvoice(input), 'Invoice saved in SQLite.'),
       allocatePayment: input => commit(() => api.allocatePayment(input), 'Payment allocation committed in SQLite.'),
+      saveTrainer: input => commit(() => api.saveTrainer(input), 'Staff details saved.'),
+      deleteStaff: input => commit(() => api.deleteStaff(input), 'Staff deleted. Salary and training history retained.'),
+      recordStaffAttendance: input => commit(() => api.recordStaffAttendance(input), 'Staff attendance saved.'),
+      recordNfcAttendance: async input => {
+        const result = await api.recordNfcAttendance(input)
+        notify(result.duplicate ? 'Duplicate scan ignored.' : `${result.entity} attendance saved.`, result.duplicate ? 'info' : 'success')
+        await afterCommit()
+        return result
+      },
+      createTrainingCharge: input => commit(() => api.createTrainingCharge(input), 'Monthly training invoice saved.'),
+      receiveCombinedPayment: input => commit(() => api.receiveCombinedPayment(input), 'Payment and receipt saved.'),
+      payStaff: input => commit(() => api.payStaff(input), 'Staff payment recorded as a Salary expense.'),
       receivePayment: input => commit(() => api.receivePayment(input), 'Payment and receipt saved in SQLite.'),
       renewMembership: input => commit(() => api.renewMembership(input), 'Membership dates and invoice committed in SQLite.'),
       reversePayment: input => commit(() => api.reversePayment(input), 'Payment reversal and allocation releases committed in SQLite.'),
@@ -134,8 +148,8 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
         return result
       },
     },
-    addMember: member => commit(() => api.registerMember({ requestId: member.requestId, name: member.name, phone: member.phone, email: member.email, nfcId: member.nfcId, planId: member.planId, planVersion: member.planVersion, startsOn: member.startsOn }), 'Member and selected membership saved in SQLite.'),
-    updateMember: member => commit(() => api.saveMember({ id: member.id, version: member.version, name: member.name, phone: member.phone, email: member.email, nfcId: member.nfcId })),
+    addMember: member => commit(() => api.registerMemberWithTrainer({gender: member.gender ?? null, trainerId: member.trainerId ?? null, trainerVersion: member.trainerVersion ?? null, member: { requestId: member.requestId, name: member.name, phone: member.phone, email: member.email, nfcId: member.nfcId, planId: member.planId, planVersion: member.planVersion, startsOn: member.startsOn } }), 'Member, trainer and invoices saved.'),
+    updateMember: member => commit(() => api.saveMemberWithTrainer({gender: member.gender ?? null, genderVersion: member.genderVersion ?? null, trainerId: member.trainerId ?? null, trainerVersion: member.trainerVersion ?? null, assignmentVersion: member.assignmentVersion ?? null, member: { id: member.id, version: member.version, name: member.name, phone: member.phone, email: member.email, nfcId: member.nfcId } })),
     updatePlan: plan => commit(() => api.savePlan({ id: plan.id, version: plan.version, name: plan.name, durationMonths: plan.durationMonths, priceMinor: api.minorUnits(plan.price), active: plan.status === 'Active' })),
     recordAttendance: (memberOrCard, source, operationId) => commit(() => api.recordAttendance({ requestId: request(operationId), memberOrCard, source })),
     addPayment: payment => commit(() => api.recordPayment({ requestId: request(payment.requestId), memberId: payment.memberId, amountMinor: api.minorUnits(payment.amount), method: payment.method }), 'Payment amount recorded in SQLite. No invoice allocation or membership renewal was made.'),

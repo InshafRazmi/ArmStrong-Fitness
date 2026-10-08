@@ -42,6 +42,8 @@ jobs:
       - name: Run native business and authorization checks on Windows
         env:
           ARMSTRONG_BUSINESS_FIXTURE_PATH: ${{ runner.temp }}/armstrong-business-fixture.json
+          ARMSTRONG_STAFF_FIXTURE_PATH: ${{ runner.temp }}/armstrong-staff-fixture.json
+          ARMSTRONG_ATTENDANCE_FIXTURE_PATH: ${{ runner.temp }}/armstrong-attendance-fixture.json
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib
       - name: Verify Windows system HTTPS against public Auth and gym health
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib native_https::tests::real_system_https_client_reaches_public_auth_and_gym_health_without_credentials -- --ignored
@@ -49,12 +51,18 @@ jobs:
         working-directory: server
         env:
           ARMSTRONG_BUSINESS_FIXTURE_PATH: ${{ runner.temp }}/armstrong-business-fixture.json
+          ARMSTRONG_STAFF_FIXTURE_PATH: ${{ runner.temp }}/armstrong-staff-fixture.json
+          ARMSTRONG_ATTENDANCE_FIXTURE_PATH: ${{ runner.temp }}/armstrong-attendance-fixture.json
         run: |
           npm ci --include=dev --ignore-scripts --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run build:verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:native-contract
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:staff-contract
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:attendance-contract
       - name: Verify the bundled login settings on Windows
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --lib --features packaged-auth desktop_auth::tests
       - name: Run interface checks

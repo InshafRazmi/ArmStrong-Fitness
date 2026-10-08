@@ -1,12 +1,25 @@
 # Acceptance-build delivery
 
 The approved account is `armstrong@gmail.com`, Administrator **ArmStrong**, gym
-**ArmStrong Fitness**. Production has onboarding and protocol-2 migrations 1–5.
+**ArmStrong Fitness**. Production has onboarding and protocol-2 migrations 1–8.
 The installed app covers local gym operations and all-module synchronization,
 with seven-day OS-vault offline access and native session renewal. Active
 Administrators can edit from any valid enrolled computer. Database migration 5
 replaces the old single-writer policy; existing read-only sessions require fresh
 online sign-in to receive editing access.
+
+The current source adds Staff with NIC/mobile, fixed monthly salaries,
+per-member monthly training fees, trainer selection, combined collection and
+salary-plus-collected-fee payouts. Native schema 10 preserves earlier rows and
+pending operations. Staff NFC/manual attendance, separate staff dashboard activity,
+Male/Female member profiles and daily counts, permanent operational member removal
+with retained history, and review/retry for blocked transactions are included.
+Login and dashboard have compact layouts with short scrolling at small heights. See [staff workflow](STAFF.md).
+Permanent staff deletion works from active/inactive lists, keeps history and
+final payouts in Show deleted staff, and prevents reactivation. NFC Attendance
+has a larger amber card panel and scan controls. Server migrations 6–8 are
+applied to production; existing application data fingerprints are unchanged.
+The current Render API still needs the updated source deployed.
 
 This remains an acceptance build. General conflict review,
 large-database/legacy bootstrap and real Windows/network/hardware acceptance are
@@ -14,8 +27,9 @@ open. See [current status](../STATUS.md).
 
 ## Publish the tested source
 
-Earlier changes are committed on GitHub main at
-`ef1faa0a729db3c74aa21c8c4dd5d6a498bbc9df`. Tracked `server/.env` is removed;
+The current source patch is based on workspace HEAD
+`6cb5aef06bdc9a36f53872ff638e9663156c9b6c`. No commit/push is performed by this
+update. Tracked `server/.env` is removed;
 its historical exposed credentials still require rotation.
 
 The all-module changes are in `Client/armstrong-desktop-changes.zip`, with a
@@ -41,6 +55,16 @@ certificates, credentials, SQLite and build outputs are excluded.
 
 ## Deploy the API
 
+Before deploying the new Staff API, run `npm run migrate` from the updated
+`server` source in a controlled administrative session using the owner connection
+and verified TLS. The checksummed runner verifies existing migrations 1–5 and
+applies migrations 6–8 atomically. These are already applied to production and
+repeat runs verify their exact checksums. Keep owner credentials outside the deployed
+service. Startup checks require the new Staff/attendance allowlist, shared card uniqueness and NIC/history guards;
+it cannot start this source against the earlier schema. Upgrade all gym desktops
+before creating Staff records. Existing older clients retain their queues and
+refuse unknown Staff rows.
+
 Deploy the updated source in the existing Render service, root directory
 `server`. Preserve the restricted runtime `DATABASE_URL`, verified TLS and
 secret CA `/etc/secrets/hi3.crt`.
@@ -51,7 +75,7 @@ Start: npm start
 AUTOMATIC_DEVICE_ENROLLMENT=true
 ```
 
-Migrations 3–5 are already applied to production, with exact source checksums
+Migrations 1–8 are already applied to production, with exact source checksums
 and preserved existing records. Migration 5 updates the enrollment function used
 by the existing automatic endpoint, so Administrator permission refresh needs
 online sign-in rather than an API restart. The additional role-based request
@@ -60,18 +84,26 @@ required business tables, narrow
 runtime column permissions and immutable guards; it never runs owner migrations.
 Real production runtime TLS/catalog checks pass. Independently observed
 `/health` returns the existing protocol-1 compatibility body. After deployment,
-`/v2/health` must return `{"status":"ok","service":"armstrong-gym-api","protocolVersion":2}`.
-This identifies the all-module endpoint; actual login/data acceptance is separate.
+`/v2/health` must return `{"status":"ok","service":"armstrong-gym-api","protocolVersion":2,"businessSchemaVersion":10}`.
+The older response without businessSchemaVersion does not establish support
+for current Staff/attendance/removal rows. Render remains on that older response.
+After the new deployment, open Settings → Server synchronization, review the
+retained transaction and retry its original request. Actual desktop acceptance is separate.
 
 `server/armstrong-render-source.zip` is the verified standalone API source
-snapshot. It includes migrations 1–5, the business row manifest and vendored
+snapshot. It includes migrations 1–8, the business row manifest and vendored
 types. Extract its `server/` folder into a separate source checkout if needed.
 See [computer setup](../../server/docs/AUTOMATIC_COMPUTERS.md) and
 [business protocol](../../server/docs/BUSINESS_SYNC.md).
 
 ## Install Arch or build Windows
 
-For Arch x86_64, copy the package and `SHA256SUMS` from `Client/dist-linux/`:
+The Arch x86_64 package in `Client/dist-linux/` was rebuilt on 2026-10-08 with
+all the latest confirmed changes, including schema 10, permanent staff deletion,
+larger NFC card/controls, staff NFC attendance,
+gender counts, permanent operational removal and compact layouts. Package
+contents, current-release payload, library resolution and checksum are verified.
+Copy the package and `SHA256SUMS` from that directory:
 
 ```sh
 sha256sum -c SHA256SUMS
@@ -86,11 +118,21 @@ for up to seven days; logout removes it. An offline restart requires online
 sign-in before synchronization resumes. Linux webview local forms and restart
 passed; production login/keyring/network acceptance remains separate.
 
-For Windows, run **Actions → Windows installer → Run workflow** after publishing
-the updated source. Download `ArmStrong-Fitness-Windows-x64` from a successful
-run. The workflow runs native business, interface and cross-language contract
-checks before building the NSIS setup. No Windows executable exists yet.
-See [Windows guide](WINDOWS_INSTALLER.md).
+For Windows, the current local installer is
+`Client/dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe`, rebuilt on
+2026-10-08 with Staff and the latest interface changes. Copy it with the adjacent
+`SHA256SUMS` and `BUILD-INFO.txt`. This unsigned Linux cross-build includes
+WebView2 for offline installation; Windows runtime acceptance remains open.
+The existing Windows installer predates the new schema-10 staff deletion and
+larger NFC layout. Rebuild it from current source to include these changes.
+Shared Staff/attendance/profile/removal synchronization requires migrations 6–8
+(already applied to production) and the matching updated API.
+
+For a Windows-runner build, run **Actions → Windows installer → Run workflow**
+after publishing the updated source. Download `ArmStrong-Fitness-Windows-x64`
+from a successful run. The workflow runs native business, interface and
+cross-language contract checks before building the NSIS setup, including the
+native Staff contract. See [Windows guide](WINDOWS_INSTALLER.md).
 
 Same-computer backup recovery reconciles an isolated copy during online sign-in
 before unlocking. See [recovery and limits](RESTORE_RECOVERY.md).

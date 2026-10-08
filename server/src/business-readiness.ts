@@ -17,6 +17,19 @@ export async function verifyBusinessReadiness(client: { query(sql: string, value
     has_column_privilege(current_user,'armstrong.business_records','data','UPDATE') AS record_update,
     has_column_privilege(current_user,'armstrong.business_references','target_id','UPDATE') AS reference_update,
     has_column_privilege(current_user,'armstrong.gyms','business_sequence','UPDATE') AS sequence_update,
+    EXISTS(SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid='armstrong.business_records'::regclass
+      AND conname='business_records_table_name_check' AND convalidated
+      AND pg_catalog.pg_get_constraintdef(oid) LIKE '%staff_payout_items%') AS staff_contract,
+    EXISTS(SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid='armstrong.business_records'::regclass
+      AND conname='business_records_table_name_check' AND convalidated
+      AND pg_catalog.pg_get_constraintdef(oid) LIKE '%staff_attendance%') AS attendance_contract,
+    EXISTS(SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid='armstrong.business_records'::regclass
+      AND conname='business_records_table_name_check' AND convalidated
+      AND pg_catalog.pg_get_constraintdef(oid) LIKE '%staff_deletions%') AS staff_removal_contract,
+    (SELECT count(*)=2 FROM pg_catalog.pg_indexes WHERE schemaname='armstrong'
+      AND indexname IN ('active_attendance_card_per_gym','active_staff_card_per_gym')) AS attendance_card_guards,
+    EXISTS(SELECT 1 FROM pg_catalog.pg_indexes WHERE schemaname='armstrong'
+      AND indexname='trainer_nic_per_gym') AS staff_nic_guard,
     (SELECT count(*)=2 FROM pg_catalog.pg_constraint WHERE conrelid='armstrong.business_records'::regclass
       AND conname IN ('business_record_key_matches','business_identity_reference_only') AND convalidated) AS history_guards,
     (SELECT count(*)=3 FROM pg_catalog.pg_trigger WHERE NOT tgisinternal AND tgenabled<>'D'

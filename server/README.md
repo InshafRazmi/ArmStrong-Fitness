@@ -96,7 +96,8 @@ loading any account/database credentials.
 Authenticated business requests require bearer, gym/device IDs and the native
 device secret in headers; caller IDs alone cannot grant access.
 `GET /health` retains the protocol-1 compatibility response.
-`GET /v2/health` identifies the all-module deployment with protocol version 2.
+`GET /v2/health` identifies the all-module deployment with protocol version 2 and
+`businessSchemaVersion: 10` for current staff, attendance and removal support.
 
 Legacy member-only routes remain for older clients. After protocol-2 history
 exists, new protocol-1 writes are refused. Existing legacy cloud members require

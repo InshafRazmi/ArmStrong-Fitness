@@ -9,11 +9,12 @@ export function MemberRemovalDialog({ member, kind, onClose }: { member: Member;
   const [requestId] = useState(() => crypto.randomUUID())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
   const authorization = desktop!.snapshot!.removalAuthorization
-  const canRemove = authorization.allowed && (kind !== 'delete' || member.canDelete)
+  const canRemove = authorization.allowed
   async function submit(event: React.FormEvent) {
     event.preventDefault()
-    if (busy || !canRemove) return
+    if (busy || !canRemove || !confirmed) return
     setBusy(true); setError('')
     try {
       const input = { requestId, memberId: member.id, version: member.version! }
@@ -23,15 +24,16 @@ export function MemberRemovalDialog({ member, kind, onClose }: { member: Member;
     } catch (error) { setError(errorText(error)) }
     finally { setBusy(false) }
   }
-  return <Modal title={kind === 'archive' ? 'Archive / deactivate member' : 'Permanently delete unlinked member'} onClose={() => { if (!busy) onClose() }}>
+  return <Modal title={kind === 'archive' ? 'Archive / deactivate member' : 'Permanently delete member'} onClose={() => { if (!busy) onClose() }}>
     <p>{member.name} · {member.id}</p>
     <p className="form-note">{kind === 'archive'
       ? 'Hide this member from active lists and prevent new attendance and memberships. Existing dates, NFC assignment, invoices, payments and all history remain in SQLite. This does not cancel debt or free the card.'
-      : 'Delete this member only if there are no membership, attendance, invoice, payment or NFC history links. This cannot be undone from this screen. Audit and pending operation history remain.'}</p>
+      : 'Permanently remove this member from active and archived lists and stop further attendance and memberships. Past payments, receipts, attendance and memberships remain as historical records. This cannot be undone from this screen. Audit and pending operation history remain.'}</p>
     {!authorization.allowed && <p role="note" className="foundation-warning">{authorization.reason}</p>}
     <form className="modal-form" onSubmit={event => void submit(event)}>
-      <fieldset className="foundation-fields" disabled={busy}><label><span>Confirmation</span><input required type="checkbox" aria-label={kind === 'archive' ? 'I confirm archiving this member' : 'I confirm permanent deletion of this member'}/>I confirm this action for {member.name}.</label>
-        <button className="primary" disabled={!canRemove}>{busy ? 'Saving…' : kind === 'archive' ? 'Confirm archive' : 'Confirm permanent deletion'}</button>
+      <fieldset className="foundation-fields" disabled={busy}>
+        <label className="confirmation-choice"><input required type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} aria-label={kind === 'archive' ? 'I confirm archiving this member' : 'I confirm permanent deletion of this member'}/><span><b>Confirmation</b>I confirm this action for {member.name}.</span></label>
+        <button className="primary" disabled={!canRemove || !confirmed}>{busy ? 'Saving…' : kind === 'archive' ? 'Confirm archive' : 'Confirm permanent deletion'}</button>
       </fieldset>{error && <div role="alert" className="login-error">{error}</div>}
     </form>
   </Modal>

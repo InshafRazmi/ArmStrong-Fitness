@@ -1,2 +1,8 @@
-import type { ReactNode } from 'react';import { Sidebar } from './Sidebar';import { Topbar } from './Topbar';import type { Member,Page } from '../types/domain'
-export function AppLayout({page,setPage,onSelect,onLogout,children}:{page:Page;setPage:(p:Page)=>void;onSelect:(m:Member)=>void;onLogout:()=>void;children:ReactNode}){return <div className="app"><Sidebar page={page} setPage={setPage}/><main><Topbar title={page} onSelect={onSelect} onLogout={onLogout}/><div className="content">{children}</div></main></div>}
+import type { ReactNode } from 'react'
+import { Sidebar } from './Sidebar'
+import { Topbar } from './Topbar'
+import type { Member, Page } from '../types/domain'
+
+export function AppLayout({page,setPage,onSelect,onLogout,children}:{page:Page;setPage:(p:Page)=>void;onSelect:(m:Member)=>void;onLogout:()=>void;children:ReactNode}) {
+  return <div className="app"><Sidebar page={page} setPage={setPage}/><main className={page === 'Dashboard' ? 'dashboard-main' : undefined}><Topbar title={page} onSelect={onSelect} onLogout={onLogout}/><div className="content">{children}</div></main></div>
+}

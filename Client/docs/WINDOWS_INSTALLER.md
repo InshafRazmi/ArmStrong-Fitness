@@ -70,17 +70,28 @@ are already configured for the selected Render/Supabase endpoints. Ordinary
 `desktop:run` is still the explicit local development/test workflow.
 
 The current local source has also produced
-`Client/dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe` (209.95 MiB), with
-`SHA256SUMS` and `BUILD-INFO.txt`. This unsigned Linux cross-build includes the
-recent membership, sign-in, interface notice and startup fixes, plus the Windows
-HTTPS system-environment correction and specific connection diagnostics. Its x64 native
-app, static runtime imports, installer integrity and embedded app/WebView2
-payloads are verified. The Attendance and Reports development notices have also
-been removed. The Windows Actions workflow also runs a credential-free
+`Client/dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe`, rebuilt on
+2026-10-08 (222,072,198 bytes / 211.78 MiB), with `SHA256SUMS` and
+`BUILD-INFO.txt`. Its SHA-256 is
+`3aee104fdcf710c0895dde57736709fc38920b3f66fe046ae8d8c1fb654b4e19`.
+This unsigned Linux cross-build includes Staff/monthly training, combined
+collection, salary payouts, Administrator editing access, the Arm logo, compact
+login/dashboard, staff NFC/manual attendance, male/female member counts, permanent
+operational removal and retained-transaction review/retry, plus the earlier membership,
+sign-in, Windows HTTPS and startup fixes. Its x64 native app, static runtime
+imports, installer integrity, exact embedded app/WebView2 payloads, Staff
+migration 9, recovery IPC and exclusion of UI smoke hooks are verified. Shared Staff data
+requires server migrations 6–7 and the matching updated API; this build does not
+deploy them. The Windows Actions workflow also runs a credential-free
 native HTTPS probe against the public Auth and gym API health endpoints before
 packaging. This check depends on those services being reachable from the runner;
 it does not authenticate an account or enroll a device. Windows installation and
 runtime acceptance remain open.
+
+The current source has since added native schema 10, permanent staff deletion
+from active/inactive lists and a larger NFC card panel. The existing Windows
+installer above does not include those subsequent changes. Rebuild from the
+current source and deploy the API supporting migrations 6–8 before shared use.
 
 ### Linux cross-build fallback
 

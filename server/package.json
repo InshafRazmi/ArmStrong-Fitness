@@ -30,7 +30,13 @@
     "test:native-contract": "node --test --test-isolation=none test/business-native.fixture.ts",
     "test:config": "node --env-file-if-exists=.env.test scripts/check-test-config.ts",
     "migrate": "node --env-file-if-exists=.env src/migrate.ts",
-    "types:verify": "node scripts/check-vendored-types.ts"
+    "types:verify": "node scripts/check-vendored-types.ts",
+    "test:integration:staff": "node --env-file-if-exists=.env.test --test --test-isolation=none test/staff.integration.ts",
+    "test:attendance-contract": "node --test --test-isolation=none test/attendance-native.fixture.ts",
+    "test:integration:attendance": "node --env-file-if-exists=.env.test --test --test-isolation=none test/attendance.integration.ts",
+    "test:staff-contract": "node --test --test-isolation=none test/staff-native.fixture.ts",
+    "test:staff-removal-contract": "node --test --test-isolation=none test/staff-removal-native.fixture.ts",
+    "test:integration:staff-removal": "node --env-file-if-exists=.env.test --test --test-isolation=none test/staff-removal.integration.ts"
   },
   "dependencies": {
     "@supabase/server": "^1.9.0",

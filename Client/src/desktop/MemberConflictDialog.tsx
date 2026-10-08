@@ -40,7 +40,7 @@ export function MemberConflictDialog({ preview, onClose }: {preview: MemberConfl
       <label><input type="radio" name="resolution" checked={choice === 'keep_local'} disabled={!preview.keepLocal.allowed} onChange={() => setChoice('keep_local')}/>Keep current local version. Supersede the reviewed edits and queue a fresh retry.</label>
       {!preview.keepLocal.allowed && <p className="form-note">{preview.keepLocal.reason}</p>}
       <label><span>Review reason</span><textarea required maxLength={500} value={reason} onChange={event => setReason(event.target.value)}/></label>
-      <label><input required type="checkbox" aria-label="I confirm the reviewed member conflict choice"/>I confirm this choice for this member.</label>
+      <label className="confirmation-choice"><input required type="checkbox" aria-label="I confirm the reviewed member conflict choice"/><span>I confirm this choice for this member.</span></label>
       <button className="primary" disabled={!allowed}>{busy ? 'Saving review…' : 'Confirm member review'}</button>
     </fieldset>{error && <div role="alert" className="login-error">{error}</div>}</form>
   </Modal>
