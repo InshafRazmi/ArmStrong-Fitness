@@ -14,9 +14,10 @@ required-features = ["desktop"]
 [features]
 default = []
 ui-smoke = ["desktop", "custom-protocol"]
-desktop = ["dep:tauri", "dep:tauri-build"]
+desktop = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-updater", "dep:tauri-plugin-process"]
 custom-protocol = ["tauri/custom-protocol"]
 packaged-auth = ["desktop"]
+windows-updater = ["desktop"]
 
 [dependencies]
 rusqlite = { version = "=0.31.0", features = ["bundled", "backup"] }
@@ -24,7 +25,9 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 uuid = { version = "=1.26.0", features = ["v4"] }
 chrono = { version = "=0.4.45", features = ["serde"] }
-tauri = { version = "=2.11.5", optional = true }
+tauri = { version = "=2.11.5", optional = true , features = [] }
+tauri-plugin-updater = { version = "=2.11.0", optional = true }
+tauri-plugin-process = { version = "=2.3.0", optional = true }
 
 sha2 = "=0.10.9"
 url = "=2.5.8"
@@ -32,4 +35,4 @@ base64 = "=0.22.1"
 getrandom = "=0.4.3"
 
 [build-dependencies]
-tauri-build = { version = "=2.6.3", optional = true }
+tauri-build = { version = "=2.6.3", optional = true , features = [] }

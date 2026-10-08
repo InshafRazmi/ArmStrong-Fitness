@@ -143,7 +143,52 @@ Deploy the updated source before native live acceptance. Pending/conflicting
 transactions are retained. Same-computer online backup recovery is implemented;
 live recovery acceptance, general conflict review and large/legacy bootstrap
 remain open. See [restore recovery](RESTORE_RECOVERY.md).
-Automatic updates use manual package upgrades.
+
+### Signed automatic updates
+
+Windows has a Tauri updater in Settings → Application updates. Opening the page
+checks the latest GitHub Release; updates are signature-verified, and staff
+choose when to install and restart. The updater replaces application files only;
+gym records remain in the separate app-data SQLite database.
+
+The signing keypair is backed up outside the repository at
+`/home/prinzz/.tauri/armstrong-fitness/updater.key` and `updater.key.pub`.
+The backup directory has mode 700 and both files have mode 600. The saved files
+match the originals, and the public key matches `src-tauri/tauri.conf.json`.
+This persistent backup survives clearing `/tmp`; do not commit or share the
+private key. Keep this key for future releases. It has no password, so
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` can remain unset.
+
+To enable releases:
+
+1. Open [repository Actions secrets](https://github.com/InshafRazmi/ArmStrong-Fitness/settings/secrets/actions)
+   and select **New repository secret**. Name it `TAURI_SIGNING_PRIVATE_KEY`,
+   paste the complete contents of the backed-up private key into **Secret**, and
+   select **Add secret**. Use the key contents, not its path or the `.pub` file.
+   Alternatively, with GitHub CLI installed and signed in, run the command below.
+2. Commit and push the prepared source changes. Before each release, select an
+   unused semantic version and keep `Client/package.json`,
+   `Client/src-tauri/Cargo.toml` and `Client/src-tauri/tauri.conf.json` consistent;
+   refresh their lock files. The current version is `0.1.0`.
+3. Push the matching `v<version>` tag. For a first release at the current version,
+   if `v0.1.0` is unused, run `git tag v0.1.0` and then
+   `git push origin v0.1.0` after committing the source.
+4. Wait for **Actions → Windows installer** to pass. Download the setup `.exe`
+   from the resulting [GitHub Release](https://github.com/InshafRazmi/ArmStrong-Fitness/releases)
+   and install it once on each Windows computer. Future releases with higher
+   versions can be installed from **Settings → Application updates**.
+
+```sh
+gh secret set TAURI_SIGNING_PRIVATE_KEY --repo InshafRazmi/ArmStrong-Fitness < /home/prinzz/.tauri/armstrong-fitness/updater.key
+```
+
+The [GitHub CLI command](https://cli.github.com/manual/gh_secret_set) reads the
+private key directly from the file without printing it. The Windows workflow
+builds the signed NSIS updater package and publishes `latest.json` to the release.
+Pull requests continue using unsigned acceptance installers and do not need
+signing secrets. Existing installs only receive updates after they have installed
+a build that includes the updater and its public key.
+
 The build is not the final all-features release.
 
 Windows acceptance must cover fresh installation, real Credential Manager

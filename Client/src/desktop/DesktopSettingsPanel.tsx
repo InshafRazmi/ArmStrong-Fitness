@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Modal } from '../components/ui/Modal'
 import { useGym } from '../context/GymContext'
 import { version } from '../../package.json'
+import { check, type Update } from '@tauri-apps/plugin-updater'
+import { relaunch } from '@tauri-apps/plugin-process'
 import { prepareNativeDevice, type BackupEnvelope, type DeviceApproval, type RestorePreview } from './api'
 import { MemberConflictDialog } from './MemberConflictDialog'
 import type { BusinessRetryPreview, MemberConflictPreview } from './api'
@@ -165,11 +167,55 @@ function MemberSyncPanel() {
 }
 export function DesktopSettingsPanel({ tab }: { tab: string }) {
   const { desktop, notify } = useGym()
+  const [update, setUpdate] = useState<Update | null>(null)
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
+  const [installingUpdate, setInstallingUpdate] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState('')
+  const [updateError, setUpdateError] = useState('')
+  async function checkForUpdates() {
+    if (checkingUpdates || installingUpdate) return
+    if (!/Windows/i.test(navigator.userAgent)) {
+      setUpdateStatus('Automatic application updates are available in the Windows version.')
+      return
+    }
+    setCheckingUpdates(true)
+    setUpdateError('')
+    setUpdateStatus('Checking for a signed Windows update…')
+    try {
+      const available = await check()
+      setUpdate(available)
+      setUpdateStatus(available ? `Version ${available.version} is ready to install.` : 'You’re up to date.')
+    } catch (error) {
+      setUpdate(null)
+      setUpdateStatus('')
+      setUpdateError(errorText(error))
+    } finally {
+      setCheckingUpdates(false)
+    }
+  }
+  async function installUpdate() {
+    if (!update || installingUpdate) return
+    setInstallingUpdate(true)
+    setUpdateError('')
+    setUpdateStatus('Downloading and verifying the signed update…')
+    try {
+      await update.downloadAndInstall()
+      setUpdateStatus('Update installed. Restarting ArmStrong Fitness…')
+      await relaunch()
+    } catch (error) {
+      setUpdateStatus('')
+      setUpdateError(errorText(error))
+      setInstallingUpdate(false)
+    }
+  }
+  useEffect(() => {
+    if (tab === 'Application updates' && !updateStatus && !updateError) void checkForUpdates()
+  }, [tab])
   if (tab === 'Gym profile') return <GymProfile/>
   if (tab === 'Backup & restore') return <BackupActions/>
   if (tab === 'Users & roles') return <><p>{desktop?.authStatus?.requiresLogin ? 'First sign-in verifies the Administrator account and computer online. After verification, Continue offline uses this computer’s unlocked OS account for up to seven days. Signing out removes offline access. Permissions are checked whenever you use the app.' : 'Authentication is not configured. This local test operator has unrestricted access. Use test records only. Demo accounts are not enrolled users.'}</p>{desktop?.authStatus?.offlineUntil && <p>Offline access until {new Date(desktop.authStatus.offlineUntil).toLocaleString()}.</p>}{desktop?.snapshot?.users.length ? desktop.snapshot.users.map(user => <div className="setting-line" key={user.id}><div><b>{user.name}</b><small>{user.roles.join(', ') || 'No roles'}</small></div><span>{user.active ? 'Active' : 'Inactive'}</span></div>) : <p>No users have been enrolled.</p>}</>
   if (tab === 'NFC reader') return <><p>Use a USB HID reader that types the card UID and Enter. Card linking and attendance logs are saved locally; no hardware has been detected or verified.</p><div className="setting-line"><div><b>Reader mode</b><small>Keyboard / HID input</small></div><span>Unverified</span></div><button className="primary" onClick={() => notify('Open NFC Attendance, focus the card field and scan. Verify the recorded UID and member; hardware has not been certified.', 'info')}>Test reader</button></>
   if (tab === 'Receipt printing') return <><p>Open a saved payment in Payments to preview or reprint its receipt. Print opens the webview system print dialog; Windows dialog and physical printer acceptance remain unverified. Direct printer selection is not implemented.</p><div className="setting-line"><div><b>Paper size</b><small>80 mm receipt layout; select the printer in the print dialog</small></div><span>Unverified</span></div></>
   if (tab === 'Server synchronization') return desktop?.snapshot?.businessSync ? <BusinessSyncPanel/> : <MemberSyncPanel/>
-  return <><p>Install an approved newer package to update this app. Gym records are stored separately from the application. Automatic update checks are not available.</p><div className="setting-line"><div><b>Installed version</b><small>{version}</small></div><span>Manual updates</span></div></>
+  return <><p>ArmStrong checks for signed Windows updates when you open this page. Choose when to install; your gym records stay in their separate local database.</p><div className="setting-line"><div><b>Installed version</b><small>{version}</small></div><span>{update ? 'Update available' : updateStatus === 'You’re up to date.' ? 'Current' : 'Windows updater'}</span></div>{updateStatus && <p role="status">{updateStatus}</p>}{updateError && <div role="alert" className="login-error">{updateError}</div>}<div className="settings-actions"><button className="primary" disabled={checkingUpdates || installingUpdate} onClick={() => void checkForUpdates()}>{checkingUpdates ? 'Checking…' : 'Check for updates'}</button>{update && <button className="secondary" disabled={checkingUpdates || installingUpdate} onClick={() => void installUpdate()}>{installingUpdate ? 'Installing…' : `Install ${update.version} and restart`}</button>}</div></>
 }

@@ -7,9 +7,12 @@ on:
       - 'Client/**'
       - 'server/**'
       - '.github/workflows/windows-installer.yml'
+  push:
+    tags:
+      - 'v*'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   windows:
@@ -71,7 +74,25 @@ jobs:
         run: cargo install tauri-cli --version 2.12.1 --locked
       - name: Build the Windows installer with embedded public settings
         run: npm run desktop:windows:build
+      - name: Publish signed Windows installer and updater feed
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: Client
+          tauriScript: cargo tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: ArmStrong Fitness ${{ github.ref_name }}
+          releaseBody: Signed Windows installer and automatic update package.
+          releaseDraft: false
+          prerelease: false
+          updaterJsonPreferNsis: true
+          args: --config src-tauri/tauri.windows.conf.json --config src-tauri/tauri.windows-updater.conf.json --target x86_64-pc-windows-msvc --features desktop,custom-protocol,packaged-auth,windows-updater --bundles nsis --ci
       - name: Upload the installer for desktop acceptance
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ArmStrong-Fitness-Windows-x64

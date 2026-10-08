@@ -340,7 +340,11 @@ fn smoke_finished(app: tauri::AppHandle, error: Option<String>) {
     }
 }
 fn main() {
-    let builder = tauri::Builder::default().setup(|app| {
+    let builder = tauri::Builder::default();
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+    let builder = builder.setup(|app| {
         #[cfg(not(feature = "ui-smoke"))]
         let dir = app.path().app_data_dir()?;
         #[cfg(feature = "ui-smoke")]

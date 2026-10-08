@@ -1,5 +1,28 @@
 # Status — 2026-10-08
 
+## Current update: signed Windows application updater
+
+Windows builds now include Tauri's signed updater runtime and a Settings page
+that checks GitHub Releases when opened, shows the installed version and offers
+to install/restart only after staff choose. Updater artifacts are restricted to
+the Windows release config; the GitHub Actions workflow publishes signed NSIS
+packages and `latest.json` on `v*` tags. Local SQLite stays in app-data.
+
+The signing keypair is generated and backed up outside Git at
+`/home/prinzz/.tauri/armstrong-fitness/updater.key` and `updater.key.pub`.
+The backup directory is mode 700 and both key files are mode 600; their contents
+match the originals, and the public key matches the app's `tauri.conf.json`.
+This persistent backup survives clearing `/tmp`. Configure the private key
+contents as the GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY` before pushing
+a tagged release. No secret was sent to GitHub, and no commit or push was made.
+Existing installations need one manual install of an updater-enabled build
+before they can self-update. See [setup steps](docs/WINDOWS_INSTALLER.md).
+
+Validation: frontend production build passes; locked native Rust updater check
+passes; Tauri debug build passes with both Windows installer/updater configs
+merged and bundling disabled. A real Windows NSIS build and live signed update
+remain unverified until Windows Actions runs with the GitHub signing secret.
+
 ## Current update: retained staff transaction deployment diagnosis
 
 The installed app is now schema 10. A read-only snapshot contains six confirmed,
@@ -2425,7 +2448,7 @@ This describes the preceding local-persistence milestone. Current finance status
 | Sales & Inventory | Add/edit products, opening stock, +/-1 movements, atomic single-product sales, native prices and no local overselling. | No returns/corrections, multi-product cart or on-screen sale/ledger history. |
 | Expenses | Description/category/amount/method persist with native day/unauthenticated actor. | No reversals or date filters. |
 | Reports | Real totals and all six CSV exports: attendance, memberships, income, inventory, expenses and full audit. | No report date filters or full on-screen audit/history explorer. |
-| Settings | Gym name/location/phone/email persist with versions; validated SQLite backup/preview/restore; actual pending/version status. | Accounts/roles enforcement, certified reader/printer, authenticated sync and updater checks remain unavailable. These panels have no additional saved configuration inputs. |
+| Settings | Gym profile and backup actions use native storage; sync counts are native; Windows updater checks GitHub Releases and installs signed updates on request. | Accounts/roles enforcement, certified reader/printer and full authenticated sync remain incomplete. |
 
 ### Verification
 
