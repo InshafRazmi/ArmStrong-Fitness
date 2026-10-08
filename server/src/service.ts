@@ -27,7 +27,10 @@ export class MemberService {
       if (!staff.rowCount) throw new ApiError(403, 'staff_not_authorized');
       const device = await db.query('SELECT secret_sha256,can_write FROM armstrong.devices WHERE gym_id=$1 AND id=$2 AND active', [gymId, scope.deviceId]);
       const digest = createHash('sha256').update(scope.deviceSecret).digest();
-      if (!device.rowCount || !timingSafeEqual(digest, Buffer.from(device.rows[0].secret_sha256,'hex')) || (write && !device.rows[0].can_write)) throw new ApiError(403,'device_not_authorized');
+      // A verified active Administrator can edit from any active enrolled
+      // device. Device proof and revocation are still checked on every request.
+      const canWrite = staff.rows[0].role === 'Administrator' || device.rows[0]?.can_write === true;
+      if (!device.rowCount || !timingSafeEqual(digest, Buffer.from(device.rows[0].secret_sha256,'hex')) || (write && !canWrite)) throw new ApiError(403,'device_not_authorized');
       const result = await run(db, staff.rows[0].role, gymId);
       await db.query('COMMIT'); return result;
     } catch (error) { await db.query('ROLLBACK'); throw error; }
@@ -55,7 +58,7 @@ export class MemberService {
       const staff = (await db.query('SELECT display_name FROM armstrong.staff WHERE gym_id=$1 AND user_id=$2 AND active', [gymId, userId])).rows[0];
       const device = (await db.query('SELECT can_write FROM armstrong.devices WHERE gym_id=$1 AND id=$2 AND active', [gymId, enrollment.deviceId])).rows[0];
       if (!gym || !staff || !device) throw new ApiError(403, 'registration_not_authorized');
-      return { protocolVersion: 1, gym: { id: gymId, name: gym.name }, staff: { id: userId, name: staff.display_name, role }, device: { id: enrollment.deviceId, canWrite: device.can_write } };
+      return { protocolVersion: 1, gym: { id: gymId, name: gym.name }, staff: { id: userId, name: staff.display_name, role }, device: { id: enrollment.deviceId, canWrite: role === 'Administrator' || device.can_write === true } };
     });
   }
   async push(scope: Scope, body: unknown) {

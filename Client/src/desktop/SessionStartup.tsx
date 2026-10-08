@@ -1,8 +1,10 @@
+import armLogo from '../img/ArmLogo.png'
+
 export function SessionStartup({ error, onRetry }: { error?: string; onRetry?: () => void }) {
   return <div className="login-page session-startup">
     <div className="login-shade"/>
     <div className="login-brand">
-      <div className="brand-mark login-logo">A</div>
+      <img className="brand-mark login-logo" src={armLogo} alt="Armstrong Fitness Gym"/>
       <div><span>ARMSTRONG</span><b>FITNESS</b></div>
     </div>
     <section className="login-card" aria-busy={!error}>

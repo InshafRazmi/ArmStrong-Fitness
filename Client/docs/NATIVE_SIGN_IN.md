@@ -20,9 +20,12 @@ login is a demo and cannot grant a native session.
 ## Automatic preparation and the older-server fallback
 
 Normal online login prepares this computer's OS credential and asks the API to
-approve it against the existing verified Administrator/gym. One active computer
-can edit; additional approved computers are read-only. Exact retries keep their
-identity/hash/permissions, and revoked computers cannot register themselves again.
+approve it against the existing verified Administrator/gym. Every valid enrolled
+computer used by an active Administrator can read and write. Migration 5 upgrades
+older read-only enrollments on online sign-in while keeping their identity and
+credential hash. Exact retries preserve that grant, and revoked computers cannot
+register themselves again. Sign out and sign in online to refresh an older
+read-only session.
 No caller-supplied role, gym or writer flag is accepted. The following manual
 workflow remains for older deployed API versions and Administrator diagnostics.
 
@@ -105,9 +108,10 @@ browser demo state grant no access. A Reception account cannot operate this
 single-Administrator desktop.
 
 Every configured business IPC checks the current native account, expiry, active
-Administrator role and device writer permission. Read-only approved computers
-can browse/export while writes are refused. New records, audit entries and saved
-receipt actor labels use the verified local actor. Existing history is retained.
+Administrator role and verified enrollment permission. Cached read-only sessions
+refuse writes until online sign-in refreshes their grant. New records, audit
+entries and saved receipt actor labels use the verified local actor. Existing
+history is retained.
 
 Account and rotating refresh tokens remain in native process memory, outside
 SQLite/backups/webview/OS offline grants. The open app checks for renewal every

@@ -62,7 +62,9 @@ login must establish its own securely stored session. See Supabase's
 
 Registration is an administrative database operation. Before making it,
 identify and approve the gym, staff Auth identity/role and device. The runtime
-API only verifies existing registrations; it cannot create them or grant roles.
+API cannot create gyms or staff roles. With automatic enrollment enabled, the
+private function approves a computer for an existing active Administrator.
+The commands below remain available for manual registration and diagnostics.
 
 | Record | Required relationship |
 | --- | --- |
@@ -72,8 +74,10 @@ API only verifies existing registrations; it cannot create them or grant roles.
 
 For an actual desktop database, use its existing persisted device UUID. A
 backend-only synthetic acceptance check can use its own fixture device UUID;
-that result does not bind a desktop database. The current migration permits at
-most one active writer per gym.
+that result does not bind a desktop database. Migration 5 permits an active
+Administrator to read and write from every valid enrolled computer. Automatic
+online enrollment upgrades older read-only device grants without changing their
+identity or credential hash; existing sessions need online sign-in to refresh.
 
 Inspect existing registrations before provisioning. Preserve their IDs and
 permissions; do not silently replace a gym, duplicate the Administrator,
@@ -137,8 +141,11 @@ npm run registration:apply
 Apply rechecks the registration inside a transaction with an advisory lock and
 the existing gym's row lock. It inserts missing approved records only; exact
 retries preserve matching registrations. Different names, gyms, identities,
-roles, revocations, hashes or active writers fail without implicit replacement,
-promotion, reactivation or secret rotation. Failures roll back the transaction.
+roles, revocations or hashes fail without implicit replacement,
+reactivation or secret rotation. Other editing computers do not block
+registration. Manual registration preserves an existing device's stored write
+flag; automatic Administrator enrollment refreshes it. Failures roll back the
+transaction.
 No member data is accessed or written, and no API client can call this tool.
 Local SQL-mock tests verify command behavior; actual PostgreSQL race/constraint
 verification remains separate integration work.

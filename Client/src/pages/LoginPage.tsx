@@ -4,6 +4,7 @@ import { useGym } from "../context/GymContext";
 import { DevicePreparation } from "../desktop/DesktopSettingsPanel";
 import { errorText } from "../desktop/DesktopGymProvider";
 import { version } from '../../package.json';
+import armLogo from '../img/ArmLogo.png';
 
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
        const { mode, desktop } = useGym();
@@ -40,7 +41,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
               <div className="login-page">
                      <div className="login-shade" />
                      <div className="login-brand">
-                            <div className="brand-mark login-logo">A</div>
+                            <img className="brand-mark login-logo" src={armLogo} alt="Armstrong Fitness Gym" />
                             <div>
                                    <span>ARMSTRONG</span>
                                    <b>FITNESS</b>

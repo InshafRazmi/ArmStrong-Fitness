@@ -1,10 +1,12 @@
 # Acceptance-build delivery
 
 The approved account is `armstrong@gmail.com`, Administrator **ArmStrong**, gym
-**ArmStrong Fitness**. Production has onboarding and protocol-2 migrations 1–4.
+**ArmStrong Fitness**. Production has onboarding and protocol-2 migrations 1–5.
 The installed app covers local gym operations and all-module synchronization,
-with seven-day OS-vault offline access and native session renewal. One approved
-computer edits; additional computers download shared records.
+with seven-day OS-vault offline access and native session renewal. Active
+Administrators can edit from any valid enrolled computer. Database migration 5
+replaces the old single-writer policy; existing read-only sessions require fresh
+online sign-in to receive editing access.
 
 This remains an acceptance build. General conflict review,
 large-database/legacy bootstrap and real Windows/network/hardware acceptance are
@@ -49,8 +51,12 @@ Start: npm start
 AUTOMATIC_DEVICE_ENROLLMENT=true
 ```
 
-Migrations 3 and 4 are already applied to production, with exact source checksums
-and preserved existing records. Startup checks required business tables, narrow
+Migrations 3–5 are already applied to production, with exact source checksums
+and preserved existing records. Migration 5 updates the enrollment function used
+by the existing automatic endpoint, so Administrator permission refresh needs
+online sign-in rather than an API restart. The additional role-based request
+checks remain in local source until it is published/deployed. Startup checks
+required business tables, narrow
 runtime column permissions and immutable guards; it never runs owner migrations.
 Real production runtime TLS/catalog checks pass. Independently observed
 `/health` returns the existing protocol-1 compatibility body. After deployment,
@@ -58,7 +64,7 @@ Real production runtime TLS/catalog checks pass. Independently observed
 This identifies the all-module endpoint; actual login/data acceptance is separate.
 
 `server/armstrong-render-source.zip` is the verified standalone API source
-snapshot. It includes migrations 1–4, the business row manifest and vendored
+snapshot. It includes migrations 1–5, the business row manifest and vendored
 types. Extract its `server/` folder into a separate source checkout if needed.
 See [computer setup](../../server/docs/AUTOMATIC_COMPUTERS.md) and
 [business protocol](../../server/docs/BUSINESS_SYNC.md).

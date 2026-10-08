@@ -56,7 +56,7 @@ test('registration / SQL mock: exact retry retains IDs, permissions and credenti
   assert.equal(client.queries.filter(q => q.sql.startsWith('INSERT')).length, 0);
 });
 
-test('registration / SQL mock: different gyms, roles, revocations, names and competing writers fail before any insert', async () => {
+test('registration / SQL mock: different gyms, roles, revocations, names and device proofs fail before any insert', async () => {
   for (const patch of [
     { gyms: [{ ...gym, name: 'Different name' }] },
     { staff: [{ ...staff, gym_id: randomUUID() }] },
@@ -69,7 +69,6 @@ test('registration / SQL mock: different gyms, roles, revocations, names and com
     { devices: [{ ...device, id: randomUUID() }] },
     { devices: [{ ...device, secret_sha256: 'b'.repeat(64) }] },
     { devices: [{ ...device, active: false }] },
-    { devices: [{ ...device, can_write: false }] },
     { devices: [device, { ...device, id: randomUUID() }] }
   ]) {
     const client = fixture(patch);
@@ -77,6 +76,18 @@ test('registration / SQL mock: different gyms, roles, revocations, names and com
     assert.ok(!client.queries.some(q => q.sql.startsWith('INSERT')));
     assert.equal(client.queries.at(-1)!.sql, 'ROLLBACK');
   }
+});
+
+test('registration / SQL mock: another editing device does not block Administrator registration', async () => {
+  const client = fixture({ gyms: [gym], staff: [staff] });
+  assert.deepEqual(await registerAdministrator(client, userId, requested, true), { gym: 'existing', administrator: 'existing', device: 'create' });
+  const lookup = client.queries.find(q => q.sql.startsWith('SELECT gym_id,id'))!;
+  assert.equal(lookup.sql, 'SELECT gym_id,id,secret_sha256,active,can_write FROM armstrong.devices WHERE id=$1');
+  assert.deepEqual(lookup.values, [deviceId]);
+  assert.equal(client.queries.filter(q => q.sql.startsWith('INSERT')).length, 1);
+  const existing = fixture({ gyms: [gym], staff: [staff], devices: [{ ...device, can_write: false }] });
+  assert.deepEqual(await registerAdministrator(existing, userId, requested, true), { gym: 'existing', administrator: 'existing', device: 'existing' });
+  assert.ok(!existing.queries.some(q => /^(INSERT|UPDATE|DELETE)/.test(q.sql)));
 });
 
 test('registration / SQL mock: unconfirmed or different-project identity fails before registry reads/writes', async () => {

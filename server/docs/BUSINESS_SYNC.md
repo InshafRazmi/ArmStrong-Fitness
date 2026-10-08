@@ -1,7 +1,7 @@
 # Transactional gym synchronization, protocol 2
 
-The installed application uses one approved editing computer. Other approved
-computers download the same records. Every local business transaction freezes
+An active Administrator can edit from any valid enrolled computer. Computers
+download the same gym records. Every local business transaction freezes
 its changed rows, historical audit and associated outbox IDs in SQLite before
 commit. The server verifies the account, gym, device secret and writer permission
 again under the gym lock, then validates the complete proposed business state.
@@ -37,7 +37,9 @@ replacement. See [restore recovery](../../Client/docs/RESTORE_RECOVERY.md).
 Migration 3 adds private RLS tables without public/Data API grants. Migration 4
 enforces immutable fields, exact master versions, identity-only users and fixed
 trigger search paths. Both are applied to the existing test project and production;
-production's checksummed ledger records versions 1–4. The existing restricted API
+Migration 5 removes the single-writer restriction and upgrades valid Administrator
+enrollments without changing credentials. The migration runner includes versions
+1–5. The existing restricted API
 role has only SELECT/INSERT and permitted mutable record/reference columns. Existing member
 and onboarding history is preserved. A gym using protocol 2 refuses further
 protocol 1 member writes so older clients cannot change a separate member copy.
@@ -57,5 +59,7 @@ ordered read-only download, stale edits, immutable financial/master guards,
 closed-payment refusal, denial and rollback. Production business fixtures were
 not created. Actual restricted-runtime TLS/catalog checks also pass. Real Linux
 local webview forms and restart pass; production native HTTPS/OS-vault and
-Windows/hardware acceptance remain. This protocol does not enable concurrent
-offline financial writers or declare the final release complete.
+Windows/hardware acceptance remain. Multiple Administrator computers may queue
+changes offline; conflicting master or financial groups are refused and retained,
+never silently overwritten. General conflict resolution and real multi-computer
+offline/reconnect acceptance remain release work.

@@ -77,8 +77,15 @@ test(`${liveAuth ? 'LIVE Supabase PostgreSQL + Auth' : 'REAL PostgreSQL / MOCK A
     assert.equal((await push(entries[0].request, { ...headers, 'x-gym-id': foreignGym })).statusCode, 403);
     assert.equal((await push(entries[0].request, { ...headers, 'x-device-secret': '0'.repeat(64) })).statusCode, 403);
     const readerHeaders = { ...headers, 'x-device-id': reader };
-    const readerAttempt = { ...entries[0].request, operationId: randomUUID(), deviceId: reader };
-    assert.equal((await push(readerAttempt, readerHeaders)).statusCode, 403);
+    const readerAttempt = structuredClone(entries[0].request);
+    readerAttempt.operationId = randomUUID(); readerAttempt.deviceId = reader;
+    readerAttempt.changes.find((c: any) => c.table === 'plans').after.name += ' stale second-device baseline';
+    const permittedReader = await push(readerAttempt, readerHeaders);
+    assert.equal(permittedReader.statusCode, 409, 'Administrator on the second device passes authorization but stale rows still conflict');
+    assert.equal(permittedReader.json().error, 'business_revision_conflict');
+    await db.query("UPDATE armstrong.staff SET role='Reception' WHERE gym_id=$1 AND user_id=$2", [gym,user]);
+    assert.equal((await push(readerAttempt, readerHeaders)).statusCode, 403, 'a read-only Reception device does not gain Administrator editing');
+    await db.query("UPDATE armstrong.staff SET role='Administrator' WHERE gym_id=$1 AND user_id=$2", [gym,user]);
     let cursor = 0, downloaded = 0;
     phase = 'ordered read-only download';
     for (;;) {
@@ -109,8 +116,16 @@ test(`${liveAuth ? 'LIVE Supabase PostgreSQL + Auth' : 'REAL PostgreSQL / MOCK A
     await assert.rejects(() => db!.query("UPDATE armstrong.business_records SET data=jsonb_set(data,'{amount_minor}','1') WHERE gym_id=$1 AND table_name='payments'", [gym]));
     await db.query('ROLLBACK TO SAVEPOINT immutable_test');
     phase = 'master version and immutable fields';
-    const oldPlan = expected.get('plans')!.values().next().value!;
-    const edit = { protocolVersion: 2, operationId: randomUUID(), deviceId: device, actorSubject: user, operationIds: [], changes: [{ table: 'plans', id: oldPlan.id, before: oldPlan, after: { ...oldPlan, name: 'Updated plan', version: 2 } }] };
+    const originalPlan = expected.get('plans')!.values().next().value!;
+    const readerEdit = { protocolVersion: 2, operationId: randomUUID(), deviceId: reader, actorSubject: user, operationIds: [], changes: [{ table: 'plans', id: originalPlan.id, before: originalPlan, after: { ...originalPlan, id: String(originalPlan.id), name: 'Second computer plan', version: Number(originalPlan.version) + 1 } }] };
+    const secondComputer = await push(readerEdit, readerHeaders);
+    assert.equal(secondComputer.statusCode, 200, 'Administrator can commit from the second enrolled device');
+    assert.deepEqual((await push(readerEdit, readerHeaders)).json(), secondComputer.json(), 'second-device retry returns its exact committed receipt');
+    const staleWriter = await push({ ...readerEdit, operationId: randomUUID(), deviceId: device });
+    assert.equal(staleWriter.statusCode, 409, 'the first computer cannot overwrite the second computer with stale state');
+    assert.equal(staleWriter.json().error, 'business_revision_conflict');
+    const oldPlan = readerEdit.changes[0].after;
+    const edit = { protocolVersion: 2, operationId: randomUUID(), deviceId: device, actorSubject: user, operationIds: [], changes: [{ table: 'plans', id: oldPlan.id, before: oldPlan, after: { ...oldPlan, name: 'Updated plan', version: oldPlan.version + 1 } }] };
     assert.equal((await push(edit)).statusCode, 200);
     assert.equal((await push({ ...edit, operationId: randomUUID() })).statusCode, 409);
     await db.query('SAVEPOINT immutable_master_test');

@@ -120,6 +120,17 @@ test('Fastify enrollment / mock registry: Reception and read-only device do not 
   } finally { await f.app.close(); }
 });
 
+test('Fastify enrollment / mock registry: Administrator can edit from a previously read-only enrolled device', async () => {
+  const f = fixture({ role: 'Administrator', canWrite: false });
+  try {
+    const result = await f.enroll();
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.json().staff.role, 'Administrator');
+    assert.equal(result.json().device.canWrite, true);
+    assert.ok(f.queries.every(q => /^(SELECT|BEGIN|COMMIT)/.test(q.sql)));
+  } finally { await f.app.close(); }
+});
+
 test('Fastify route / service mock: invalid JSON, oversized bodies and internal errors stay bounded and sanitized', async () => {
   const service = {
     async enroll() { throw new Error('postgres-password secret-token member-PII'); },

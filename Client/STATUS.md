@@ -1,6 +1,102 @@
-# Status — 2026-10-05
+# Status — 2026-10-08
 
-## Current update: remove Attendance and Reports implementation notices
+## Current update: Administrator editing access from every enrolled device
+
+The user requires Administrator accounts to read and write from any device.
+Active Administrators now receive editing access from every valid enrolled
+computer. CLI-created PostgreSQL migration 5 removes the single-writer index
+and upgrades earlier read-only enrollments during online sign-in. It retains
+device IDs, credential hashes, gym boundaries, revocation and active-role checks.
+Local API request authorization also derives Administrator write access from
+the verified private staff role; other roles keep their operation restrictions.
+Manual registration no longer rejects a computer because another writer exists.
+
+Migration 5 was applied first to the isolated test project, then to production
+with versions 1–4 checksum guards and the matching version 5 ledger entry.
+All ten existing application tables have identical before/after row counts and
+fingerprints. The runtime can execute private enrollment but cannot directly
+update staff/devices; anon/authenticated cannot execute it. Rolled-back probes
+against the existing active Administrator devices confirm write access without
+changing identities or credentials. Security advisers match the existing
+baseline; no new finding was introduced.
+
+The live enrollment function works with the existing automatic API endpoint,
+so the installed client can receive the new grant without an API restart or
+reinstallation. Sign out and sign in online to refresh an older read-only
+session and its offline grant. The additional role-based API request checks
+remain local until the user publishes/deploys this source; no commit/push or
+API source deployment is claimed in this update.
+
+Measured checks:
+
+- Server verification: 82 tests PASS, one sandbox subprocess test skipped;
+  strict type checking and vendored declaration verification PASS.
+- Real PostgreSQL enrollment regression PASS: multiple editing devices,
+  legacy grant upgrade, exact retries, unchanged credentials, and invalid
+  secret/account/role/revocation/gym/JWT-subject denials. Fixtures roll back.
+- Native all-module fixture generator PASS. Live Supabase Auth/PostgreSQL
+  integration PASS using those native envelopes: two Administrator computers
+  commit changes, exact retries preserve receipts, stale writes conflict, and
+  immutable finance/stock/history, gym isolation and revocation checks pass.
+  Test data rolls back. This is separate from GUI/offline acceptance.
+- Browser/packaged frontend and Arch Linux release/package build PASS. Package checksum,
+  exact stripped release-binary match, current Arm-logo/styles and bundled
+  installation instructions PASS.
+
+Rebuilt `Client/dist-linux/armstrong-fitness-0.1.0-1-x86_64.pkg.tar.zst`:
+7,699,218 bytes, SHA-256
+`1dc2a3973f6cb79aa2d3e1fba96a0b99ff5f10269fe7d93ea203f53ffff50098`.
+The adjacent `SHA256SUMS` matches. Installation was not performed; the package
+includes the larger supplied sidebar logo. Windows was not rebuilt here.
+Real multi-computer offline/reconnect, general conflict recovery and existing
+Windows/network/hardware acceptance remain release gates in PLAN.md.
+
+## Previous update: larger sidebar logo and rebuilt Linux installer
+
+The sidebar logo is centered and enlarged from 52 px to 144 px in the full
+sidebar and 76 px in the compact sidebar. The compact sidebar is now 100 px
+wide to accommodate the larger image. Sidebar scrolling keeps navigation
+accessible in shorter windows. Login and startup logo sizes remain 52 px.
+
+Browser and packaged desktop builds PASS, including the existing packaged
+frontend check. The Arch Linux x86_64 release/package build PASS. Package
+checksum, expected archive contents, exact stripped release-binary match and
+inclusion of the latest stylesheet/logo assets PASS. Patch whitespace PASS.
+This is a CSS-only change; native business/authentication logic is unchanged.
+
+Rebuilt `Client/dist-linux/armstrong-fitness-0.1.0-1-x86_64.pkg.tar.zst`:
+7,699,120 bytes, SHA-256
+`c22fd233988b94b0679dbdd85736a69fde1f446697745b6c8a473cc2d5d2fce8`.
+The adjacent `SHA256SUMS` matches. Reinstall this package and reopen the app to
+apply the larger sidebar logo. Installation was not performed in this update;
+existing release gates remain in PLAN.md. Source remains local for the user's
+commit/push; the Windows installer has not been rebuilt in this update.
+
+## Previous update: supplied Arm logo and rebuilt Linux installer
+
+The sidebar, sign-in screen and desktop session-startup screen now use
+`src/img/ArmLogo.png` instead of the letter A. The shared brand styles display
+the complete image at its original aspect ratio without the old amber shield
+background or clipping, with accessible image text.
+
+Browser and packaged desktop builds PASS. All 21 adapter/calendar tests and
+the existing route/settings/login/startup/receipt renders PASS. The Arch Linux
+x86_64 release and package build PASS with locked offline Rust dependencies and
+`desktop,custom-protocol,packaged-auth`. Package checksum, archive contents,
+executable permissions, exact stripped release-binary match, embedded Arm-logo
+asset and dynamic-library resolution PASS. The bundled logo matches the supplied
+image byte for byte; browser demo login/data remain excluded from the package.
+
+Rebuilt `Client/dist-linux/armstrong-fitness-0.1.0-1-x86_64.pkg.tar.zst`:
+7,701,696 bytes, SHA-256
+`5a23bf2697ceff4bdea0c645844e2a7db22c4075a0c22f5f91e4038dea395150`.
+The adjacent `SHA256SUMS` matches. Install or reinstall this package to see the
+logo in the installed Linux app. Installation was not performed in this update;
+existing authentication/network/hardware release gates remain in PLAN.md.
+No native business/schema change is involved. Source remains local for the
+user's commit/push; the Windows installer has not been rebuilt in this update.
+
+## Previous update: remove Attendance and Reports implementation notices
 
 Removed both requested desktop notices from the shared screen-notice component.
 The Attendance subtitle now describes NFC/manual check-ins and check-outs rather

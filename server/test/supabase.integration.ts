@@ -49,7 +49,7 @@ test('LIVE Supabase PostgreSQL + Auth: isolated migrations and member API', { ti
     await step('real migration runner, repeatability and checksum-drift rejection', async () => {
       await applyMigrations(owner!);
       const first = (await owner!.query('SELECT version,sha256,applied_at FROM public.armstrong_migrations')).rows;
-      assert.equal(first.length, 4);
+      assert.equal(first.length, 5);
       await applyMigrations(owner!);
       assert.deepEqual((await owner!.query('SELECT version,sha256,applied_at FROM public.armstrong_migrations')).rows, first);
       await owner!.query("UPDATE public.armstrong_migrations SET sha256=repeat('0',64) WHERE version=1");
@@ -115,13 +115,15 @@ test('LIVE Supabase PostgreSQL + Auth: isolated migrations and member API', { ti
       assert.equal((await pull(0, { ...headers, 'x-device-secret': '0'.repeat(64) })).statusCode, 403);
     });
 
-    await step('real SQL constraints: one writer, roles, NFC normalization, revision, date and archive FK', async () => {
+    await step('real SQL constraints: multiple editing computers, roles, NFC normalization, revision, date and archive FK', async () => {
       const expectSql = async (sql: string, values: unknown[], code: string) => {
         await owner!.query('BEGIN');
         try { await assert.rejects(owner!.query(sql, values), (error: any) => error.code === code); }
         finally { await owner!.query('ROLLBACK'); }
       };
-      await expectSql('INSERT INTO armstrong.devices(gym_id,id,secret_sha256,can_write) VALUES($1,$2,$3,true)', [gym, randomUUID(), digest(secret)], '23505');
+      await owner!.query('BEGIN');
+      try { await owner!.query('INSERT INTO armstrong.devices(gym_id,id,secret_sha256,can_write) VALUES($1,$2,$3,true)', [gym, randomUUID(), digest(secret)]); }
+      finally { await owner!.query('ROLLBACK'); }
       await expectSql("INSERT INTO armstrong.staff(gym_id,user_id,display_name,role) VALUES($1,$2,'Test','Owner')", [gym, randomUUID()], '23514');
       const sql = "INSERT INTO armstrong.members(gym_id,id,name,phone,email,nfc_id,joined_on,revision,archived_at,archived_by_user_id) VALUES($1,$2,'Test','0000000000','',$3,$4,$5,$6,$7)";
       await expectSql(sql, [gym, randomUUID(), 'lowercase', '2026-10-04', 1, null, null], '23514');
@@ -178,11 +180,14 @@ test('LIVE Supabase PostgreSQL + Auth: isolated migrations and member API', { ti
       assert.equal((await enroll(otherHeaders, payload)).statusCode, 403);
     });
 
-    await step('read-only devices and Reception cannot gain write/archive permission', async () => {
+    await step('Administrator access follows the account and Reception retains its restrictions', async () => {
       const enrolled = await enroll(readerHeaders, { protocolVersion: 1, deviceId: reader, deviceSecret: readerSecret });
-      assert.equal(enrolled.statusCode, 200); assert.equal(enrolled.json().device.canWrite, false);
+      assert.equal(enrolled.statusCode, 200); assert.equal(enrolled.json().device.canWrite, true);
       assert.equal((await pull(0, readerHeaders)).statusCode, 200);
-      assert.equal((await push({ ...op, deviceId: reader }, readerHeaders)).statusCode, 403);
+      assert.equal((await push({ ...op, deviceId: reader }, readerHeaders)).statusCode, 409, 'Administrator passes device authorization; operation IDs remain bound to the original device');
+      const receptionReader = { ...readerHeaders, authorization: `Bearer ${reception.accessToken}` };
+      assert.equal((await enroll(receptionReader, { protocolVersion: 1, deviceId: reader, deviceSecret: readerSecret })).json().device.canWrite, false);
+      assert.equal((await push({ ...op, deviceId: reader }, receptionReader)).statusCode, 403);
       const archive = { ...op, operationId: randomUUID(), action: 'archive', expectedRevision: 2, member: null };
       assert.equal((await push(archive, receptionHeaders)).statusCode, 403);
       const archived = await push(archive);

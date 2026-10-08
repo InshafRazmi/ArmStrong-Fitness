@@ -1,18 +1,25 @@
 # Core release plan
 
-## Active release gates — 2026-10-05
+## Active release gates — 2026-10-08
 
 Windows installation remains mandatory; Arch is optional. Preserve the
 black/amber UI, transactional SQLite, stored identities/history and existing
-queues. One approved computer edits; additional computers download shared gym
-data until concurrent offline writers are explicitly authorized and designed.
+queues. The user now requires active Administrator accounts to read and write
+from any valid enrolled computer. Retain online identity verification, device
+possession/revocation, gym isolation, transaction locks, stale-write refusal and
+immutable history; complete real multi-computer offline/reconnect and conflict
+recovery acceptance before calling this a final release.
 
 Implemented and checked: packaged public settings, account/computer onboarding,
 seven-day OS-vault offline access, native renewal/logout fencing, bounded
 all-module HTTPS retries and atomic shared-data download. Real native envelopes
 pass the server contract; isolated Supabase Auth/PostgreSQL and Linux local
-webview/restart acceptance pass. Production migrations 1–4 and the approved
+webview/restart acceptance pass. Production migrations 1–5 and the approved
 Administrator/gym are provisioned; restricted-runtime TLS/catalog checks pass.
+Migration 5 grants editing access on online Administrator enrollment, including
+older read-only devices; credentials and existing data remain preserved. Real
+Auth/PostgreSQL tests cover writes from two devices, exact retries and stale
+conflicts. Full offline/reconnect acceptance remains a gate.
 
 1. Publish this reviewed all-module source. Earlier changes are on GitHub main
    `ef1faa0a729db3c74aa21c8c4dd5d6a498bbc9df`; current changes remain local.

@@ -38,8 +38,8 @@ export async function registerAdministrator(client: Client, verifiedUserId: stri
     if (staff.length > 1 || (staff.length === 1 && (staff[0].gym_id !== gymId || staff[0].user_id !== userId || staff[0].display_name !== adminName || staff[0].role !== 'Administrator' || staff[0].active !== true))) fail('Existing identity or Administrator permission differs; review registration explicitly');
     let devices: Record<string, unknown>[] = [];
     if (requested.device) {
-      devices = (await client.query('SELECT gym_id,id,secret_sha256,active,can_write FROM armstrong.devices WHERE id=$1 OR (gym_id=$2 AND active AND can_write)', [deviceId, gymId])).rows;
-      if (devices.length > 1 || (devices.length === 1 && (devices[0].gym_id !== gymId || devices[0].id !== deviceId || devices[0].secret_sha256 !== requested.device.secretSha256 || devices[0].active !== true || devices[0].can_write !== true))) fail('Existing device or writer approval differs; review registration explicitly');
+      devices = (await client.query('SELECT gym_id,id,secret_sha256,active,can_write FROM armstrong.devices WHERE id=$1', [deviceId])).rows;
+      if (devices.length > 1 || (devices.length === 1 && (devices[0].gym_id !== gymId || devices[0].id !== deviceId || devices[0].secret_sha256 !== requested.device.secretSha256 || devices[0].active !== true))) fail('Existing device approval differs; review registration explicitly');
     }
     const plan: RegistrationPlan = { gym: gyms.length ? 'existing' : 'create', administrator: staff.length ? 'existing' : 'create', device: requested.device ? (devices.length ? 'existing' : 'create') : 'not included' };
     if (apply) {

@@ -26,8 +26,11 @@ desktop session rather than replacing existing application credentials.
 First sign-in needs the approved Administrator account, internet and server-side
 account/gym registration. The app prepares its computer credential automatically.
 The new account-based computer approval endpoint must be deployed/enabled on the
-API; the old deployed endpoint still needs manual computer approval. One active
-computer can edit; additional account-authorized computers receive read access.
+API; the older endpoint still needs manual computer approval. An active
+Administrator can read and write from any valid enrolled computer. Migration 5
+upgrades older read-only enrollments on online sign-in without replacing device
+credentials. If an open session still reports read-only access, sign out and
+sign in online to obtain the current permission.
 All gym modules use the native HTTPS worker after online sign-in, with bounded
 automatic retries and a manual action in Settings. Shared download preserves
 atomic financial/stock groups and refuses conflicting local history. Deploy the
