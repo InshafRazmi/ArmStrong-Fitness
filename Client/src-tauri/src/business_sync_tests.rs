@@ -262,6 +262,496 @@ impl BusinessTransport for Mock {
         Ok(page)
     }
 }
+
+// Reproduce the affected Windows batch: two sign-in audits plus the frozen
+// installation profile, with no business operations or edited user identity.
+fn frozen_profile_fixture(
+    subject: &str,
+    gym: &str,
+) -> (Fixture, InitialProfileRecoveryInput, String) {
+    let mut f = Fixture::new(subject, gym, true);
+    f.store
+        .conn
+        .execute("DELETE FROM business_dirty WHERE table_name='users'", [])
+        .unwrap();
+    let device: String = f
+        .store
+        .conn
+        .query_row(
+            "SELECT value FROM metadata WHERE key='device_id'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    for _ in 0..2 {
+        f.store.conn.execute("INSERT INTO audit(id,actor,device_id,action,entity_id,before_json,after_json,created_at,entity,actor_user_id) VALUES(?1,'Administrator',?2,'Verified staff sign-in',?3,NULL,'{}',?4,'staff sign-in',?3)", params![id(), device, subject, Utc::now().to_rfc3339()]).unwrap();
+    }
+    let tx = f.store.conn.transaction().unwrap();
+    capture(&tx).unwrap();
+    tx.commit().unwrap();
+    let (batch, encoded): (String, String) = f
+        .store
+        .conn
+        .query_row(
+            "SELECT id,request_json FROM business_batches ORDER BY ordinal LIMIT 1",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&encoded).unwrap()["changes"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    record_failure(
+        &mut f.store,
+        RemoteFailure::BusinessConflict {
+            code: "business_revision_conflict".into(),
+        },
+        Some(&batch),
+        Utc::now(),
+    )
+    .unwrap();
+    let preview = f.store.preview_business_retry(&batch).unwrap();
+    assert_eq!(
+        preview["initialProfileRecovery"]["allowed"], true,
+        "{preview}"
+    );
+    let input = InitialProfileRecoveryInput {
+        request_id: id(),
+        batch_id: batch,
+        fingerprint: preview["fingerprint"].as_str().unwrap().into(),
+        confirmation: true,
+    };
+    (f, input, encoded)
+}
+fn newer_profile_cloud(store: &Store, subject: &str, gym: &str) -> Mock {
+    let mut source = Fixture::new(subject, gym, true);
+    let mut remote = Mock::for_store(&source.store, subject, gym);
+    for version in [1, 2] {
+        source
+            .store
+            .save_profile(ProfileInput {
+                version,
+                name: "Shared gym".into(),
+                location: format!("Server location {version}"),
+                phone: "0771234567".into(),
+                email: String::new(),
+            })
+            .unwrap();
+        assert!(matches!(
+            source
+                .store
+                .run_business_sync(&mut remote, Utc::now(), Limits::default())
+                .unwrap(),
+            Run::Complete { .. }
+        ));
+    }
+    remote.scope = Mock::for_store(store, subject, gym).scope;
+    remote
+}
+fn retained_batch(store: &Store, batch: &str) -> (String, String, Option<String>) {
+    store
+        .conn
+        .query_row(
+            "SELECT request_json,state,response_json FROM business_batches WHERE id=?1",
+            [batch],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap()
+}
+
+#[test]
+fn initial_profile_recovery_keeps_original_bytes_audits_backup_and_real_receipts() {
+    let subject = id();
+    let gym = id();
+    let (mut f, input, encoded) = frozen_profile_fixture(&subject, &gym);
+    // Repeated old Retry attempts add benign, immutable audit-only transactions.
+    for _ in 0..2 {
+        let preview = f.store.preview_business_retry(&input.batch_id).unwrap();
+        f.store
+            .retry_business_transaction(BusinessRetryInput {
+                request_id: id(),
+                batch_id: input.batch_id.clone(),
+                fingerprint: preview["fingerprint"].as_str().unwrap().into(),
+            })
+            .unwrap();
+        record_failure(
+            &mut f.store,
+            RemoteFailure::BusinessConflict {
+                code: "business_revision_conflict".into(),
+            },
+            Some(&input.batch_id),
+            Utc::now(),
+        )
+        .unwrap();
+    }
+    let mut remote = newer_profile_cloud(&f.store, &subject, &gym);
+    let original_audits: Vec<Value> = serde_json::from_str::<Value>(&encoded).unwrap()["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["table"] == "audit")
+        .cloned()
+        .collect();
+    let before = f.store.backup_envelope().unwrap();
+    let mut job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    job.run(&mut remote, || Ok(())).unwrap();
+    assert_eq!(
+        f.store.backup_envelope().unwrap().sha256,
+        before.sha256,
+        "network work must not modify the original"
+    );
+    let result = job.commit(&mut f.store).unwrap();
+    assert_eq!(result["superseded"], true);
+    assert_eq!(
+        retained_batch(&f.store, &input.batch_id),
+        (encoded.clone(), "conflict".into(), None)
+    );
+    assert_eq!(f.store.snapshot().unwrap()["profile"]["version"], 3);
+    assert_eq!(
+        f.store.snapshot().unwrap()["profile"]["location"],
+        "Server location 2"
+    );
+    for change in original_audits {
+        let table = tables()
+            .unwrap()
+            .into_iter()
+            .find(|t| t.name == "audit")
+            .unwrap();
+        assert_eq!(
+            row_on(&f.store.conn, &table, change["id"].as_str().unwrap()).unwrap(),
+            Some(change["after"].clone())
+        );
+    }
+    let original_backup: recovery::BackupEnvelope =
+        serde_json::from_slice(&std::fs::read(result["recoveryPath"].as_str().unwrap()).unwrap())
+            .unwrap();
+    assert_eq!(original_backup.sha256, before.sha256);
+    assert!(f
+        .store
+        .conn
+        .execute(
+            "DELETE FROM local_operations WHERE command='business_initial_profile_recovery'",
+            []
+        )
+        .is_err());
+    assert_eq!(
+        status(&f.store.conn).unwrap()["recoveredInitialProfiles"],
+        1
+    );
+    assert_eq!(status(&f.store.conn).unwrap()["conflicts"], json!([]));
+    assert!(f.store.preview_business_retry(&input.batch_id).is_err());
+    // Replacement and recovery audits each await their actual server receipt.
+    assert_eq!(status(&f.store.conn).unwrap()["pending"], 2);
+    let mut restarted = Store::open(&f.path).unwrap();
+    restarted.removal_session = Some(removal::Session {
+        user_id: subject.clone(),
+        expires_at: Utc::now() + chrono::Duration::hours(1),
+        can_write: true,
+        native_nonce: Some("nonce".into()),
+    });
+    let replay = restarted
+        .prepare_initial_profile_recovery(input)
+        .unwrap()
+        .commit(&mut restarted)
+        .unwrap();
+    assert_eq!(replay["duplicate"], true);
+    let count = remote.changes.len();
+    assert!(matches!(
+        restarted
+            .run_business_sync(&mut remote, Utc::now(), Limits::default())
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    assert_eq!(remote.changes.len(), count + 2);
+    assert_eq!(status(&restarted.conn).unwrap()["pending"], 0);
+    assert_eq!(
+        retained_batch(&restarted, replay["batchId"].as_str().unwrap()).1,
+        "conflict"
+    );
+    if let Ok(path) = std::env::var("ARMSTRONG_BUSINESS_FIXTURE_PATH") {
+        std::fs::write(format!("{path}.profile-recovery.json"), json!({"entries":remote.changes,"originalRequest":serde_json::from_str::<Value>(&encoded).unwrap(),"replacementBatchId":result["replacementBatchId"]}).to_string()).unwrap();
+    }
+}
+
+#[test]
+fn initial_profile_recovery_lost_reply_uses_the_same_replacement_on_retry() {
+    let subject = id();
+    let gym = id();
+    let (mut f, mut input, encoded) = frozen_profile_fixture(&subject, &gym);
+    let mut remote = newer_profile_cloud(&f.store, &subject, &gym);
+    let cloud_count = remote.changes.len();
+    remote.drop_reply = true;
+    let before = f.store.backup_envelope().unwrap().sha256;
+    let mut job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    assert!(job.run(&mut remote, || Ok(())).is_err());
+    assert!(job.commit(&mut f.store).is_err());
+    assert_eq!(f.store.backup_envelope().unwrap().sha256, before);
+    assert_eq!(remote.changes.len(), cloud_count + 1);
+    let accepted = remote.changes.last().unwrap()["request"].clone();
+    input.request_id = id();
+    let mut job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    job.run(&mut remote, || Ok(())).unwrap();
+    job.commit(&mut f.store).unwrap();
+    assert_eq!(remote.changes.len(), cloud_count + 1);
+    assert_eq!(remote.changes.last().unwrap()["request"], accepted);
+    assert_eq!(
+        retained_batch(&f.store, &input.batch_id),
+        (encoded, "conflict".into(), None)
+    );
+}
+
+#[test]
+fn initial_profile_recovery_obeys_original_receipt_before_a_stale_refusal() {
+    let subject = id();
+    let gym = id();
+    let (mut f, input, encoded) = frozen_profile_fixture(&subject, &gym);
+    let request: Value = serde_json::from_str(&encoded).unwrap();
+    let mut remote = Mock::for_store(&f.store, &subject, &gym);
+    remote.push_business(&request).unwrap();
+    let default = default_profile();
+    let mut updated = default.clone();
+    updated["version"] = json!(2);
+    updated["name"] = json!("Server changed after original acceptance");
+    remote.push_business(&json!({"protocolVersion":2,"operationId":id(),"deviceId":id(),"actorSubject":subject,"operationIds":[],"changes":[{"table":"gym_settings","id":"1","before":default,"after":updated}]})).unwrap();
+    let mut job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    job.run(&mut remote, || Ok(())).unwrap();
+    let result = job.commit(&mut f.store).unwrap();
+    assert_eq!(result["superseded"], false);
+    assert_eq!(
+        status(&f.store.conn).unwrap()["recoveredInitialProfiles"],
+        0
+    );
+    assert_eq!(retained_batch(&f.store, &input.batch_id).0, encoded);
+    assert_eq!(retained_batch(&f.store, &input.batch_id).1, "confirmed");
+    assert!(retained_batch(&f.store, &input.batch_id).2.is_some());
+    assert_eq!(f.store.snapshot().unwrap()["profile"]["version"], 2);
+    assert_eq!(remote.changes.len(), 2);
+}
+
+#[test]
+fn initial_profile_recovery_cancellation_bad_receipt_and_changed_database_keep_original() {
+    let subject = id();
+    let gym = id();
+    let (mut f, input, encoded) = frozen_profile_fixture(&subject, &gym);
+    let mut remote = newer_profile_cloud(&f.store, &subject, &gym);
+    let before = f.store.backup_envelope().unwrap().sha256;
+    let cancel = std::rc::Rc::new(std::cell::Cell::new(false));
+    let signal = cancel.clone();
+    remote.after_pull = Some(Box::new(move || signal.set(true)));
+    let mut job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    assert!(job
+        .run(&mut remote, || if cancel.get() {
+            Err("Session changed".into())
+        } else {
+            Ok(())
+        })
+        .is_err());
+    assert!(job.commit(&mut f.store).is_err());
+    assert_eq!(f.store.backup_envelope().unwrap().sha256, before);
+    remote.bad_receipt = true;
+    let mut job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    assert!(job.run(&mut remote, || Ok(())).is_err());
+    assert!(job.commit(&mut f.store).is_err());
+    assert_eq!(f.store.backup_envelope().unwrap().sha256, before);
+    remote.bad_receipt = false;
+    let mut job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    job.run(&mut remote, || Ok(())).unwrap();
+    f.store
+        .conn
+        .execute(
+            "INSERT INTO metadata VALUES('concurrent-change','retained')",
+            [],
+        )
+        .unwrap();
+    assert!(job.commit(&mut f.store).unwrap_err().contains("changed"));
+    assert_eq!(
+        retained_batch(&f.store, &input.batch_id),
+        (encoded, "conflict".into(), None)
+    );
+    assert_eq!(f.store.snapshot().unwrap()["profile"]["version"], 1);
+    assert_eq!(
+        status(&f.store.conn).unwrap()["recoveredInitialProfiles"],
+        0
+    );
+}
+
+#[test]
+fn initial_profile_recovery_refuses_edits_money_unchecked_confirmation_and_wrong_identity() {
+    let subject = id();
+    let gym = id();
+    let (mut f, input, _) = frozen_profile_fixture(&subject, &gym);
+    let mut unchecked = input.clone();
+    unchecked.confirmation = false;
+    assert!(f.store.prepare_initial_profile_recovery(unchecked).is_err());
+    let mut stale = input.clone();
+    stale.fingerprint = "old".into();
+    assert!(f.store.prepare_initial_profile_recovery(stale).is_err());
+    f.store.removal_session.as_mut().unwrap().can_write = false;
+    assert!(f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .is_err());
+    f.store.removal_session.as_mut().unwrap().can_write = true;
+    f.store
+        .conn
+        .execute(
+            "UPDATE metadata SET value='revoked' WHERE key='native_session_nonce'",
+            [],
+        )
+        .unwrap();
+    assert!(f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .is_err());
+    f.store
+        .conn
+        .execute(
+            "UPDATE metadata SET value='nonce' WHERE key='native_session_nonce'",
+            [],
+        )
+        .unwrap();
+    f.store
+        .save_profile(ProfileInput {
+            version: 1,
+            name: "Locally edited gym".into(),
+            location: "Matale".into(),
+            phone: String::new(),
+            email: String::new(),
+        })
+        .unwrap();
+    let review = f.store.preview_business_retry(&input.batch_id).unwrap();
+    assert_eq!(review["initialProfileRecovery"]["allowed"], false);
+    assert!(f.store.prepare_initial_profile_recovery(input).is_err());
+    let (mut f, input, encoded) = frozen_profile_fixture(&subject, &gym);
+    f.store
+        .record_expense(ExpenseInput {
+            request_id: id(),
+            title: "Retained rent".into(),
+            category: "Operations".into(),
+            amount_minor: 100_000,
+            method: "Cash".into(),
+        })
+        .unwrap();
+    assert_eq!(
+        f.store.preview_business_retry(&input.batch_id).unwrap()["initialProfileRecovery"]
+            ["allowed"],
+        false
+    );
+    assert!(f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .is_err());
+    assert_eq!(
+        f.store.snapshot().unwrap()["expenses"][0]["amountMinor"],
+        100_000
+    );
+    assert_eq!(retained_batch(&f.store, &input.batch_id).0, encoded);
+}
+
+#[test]
+fn initial_profile_recovery_cannot_commit_after_nonce_revocation_or_before_network_completion() {
+    let subject = id();
+    let gym = id();
+    let (mut f, input, encoded) = frozen_profile_fixture(&subject, &gym);
+    let job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    assert!(job.commit(&mut f.store).unwrap_err().contains("complete"));
+    let mut remote = newer_profile_cloud(&f.store, &subject, &gym);
+    let mut job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    job.run(&mut remote, || Ok(())).unwrap();
+    f.store
+        .conn
+        .execute(
+            "UPDATE metadata SET value='new-session' WHERE key='native_session_nonce'",
+            [],
+        )
+        .unwrap();
+    assert!(job.commit(&mut f.store).is_err());
+    assert_eq!(
+        retained_batch(&f.store, &input.batch_id),
+        (encoded, "conflict".into(), None)
+    );
+    assert_eq!(f.store.snapshot().unwrap()["profile"]["version"], 1);
+}
+
+#[test]
+fn initial_profile_recovery_wrong_server_or_account_never_sends_a_request() {
+    let subject = id();
+    let gym = id();
+    let (mut f, input, _) = frozen_profile_fixture(&subject, &gym);
+    for wrong_account in [false, true] {
+        let mut remote = Mock::for_store(&f.store, &subject, &gym);
+        if wrong_account {
+            remote.subject = id();
+        } else {
+            remote.scope.gym_id = id();
+        }
+        let mut job = f
+            .store
+            .prepare_initial_profile_recovery(input.clone())
+            .unwrap();
+        assert!(job.run(&mut remote, || Ok(())).is_err());
+        assert!(remote.changes.is_empty());
+        assert!(job.commit(&mut f.store).is_err());
+    }
+}
+
+#[test]
+fn initial_profile_recovery_requires_an_unedited_insert_not_an_update_or_mixed_transaction() {
+    let subject = id();
+    let gym = id();
+    let f = Fixture::new(&subject, &gym, true);
+    let request = json!({"protocolVersion":2,"operationId":id(),"deviceId":Mock::for_store(&f.store,&subject,&gym).scope.device_id,"actorSubject":subject,"operationIds":[],"changes":[{"table":"gym_settings","id":"1","before":null,"after":default_profile()},{"table":"audit","id":id(),"before":null,"after":{}}]});
+    let batch = request["operationId"].as_str().unwrap();
+    for variant in 0..5 {
+        let mut edited = request.clone();
+        match variant {
+            0 => edited["changes"][0]["before"] = default_profile(),
+            1 => edited["changes"][0]["after"]["phone"] = json!("0771234567"),
+            2 => edited["operationIds"] = json!([id()]),
+            3 => edited["changes"][1]["table"] = json!("payments"),
+            _ => edited["actorSubject"] = json!(id()),
+        }
+        assert!(crate::initial_profile_recovery::eligible(
+            &f.store.conn,
+            f.store.removal_session.as_ref(),
+            batch,
+            &edited,
+            "business_revision_conflict"
+        )
+        .is_err());
+    }
+}
 fn setup_operations(store: &mut Store) -> (String, String) {
     store
         .save_plan(PlanInput {

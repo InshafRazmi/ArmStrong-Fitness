@@ -36,6 +36,285 @@ pub(super) struct NativeRestore {
     complete: bool,
     verified_until: Option<DateTime<Utc>>,
 }
+pub(super) struct InitialProfileRecovery {
+    file: Option<TemporaryFile>,
+    original_state: String,
+    original_request: Value,
+    session: super::removal::Session,
+    input: super::InitialProfileRecoveryInput,
+    bound: Value,
+    result: Value,
+    complete: bool,
+    replayed: bool,
+}
+
+struct RecoveryTransport<'a, T> {
+    inner: &'a mut T,
+    cancelled: &'a dyn Fn() -> Result<()>,
+    deadline: std::time::Instant,
+}
+impl<T> RecoveryTransport<'_, T> {
+    fn check(&self) -> std::result::Result<(), super::member_worker::RemoteFailure> {
+        if std::time::Instant::now() >= self.deadline || (self.cancelled)().is_err() {
+            return Err(super::member_worker::RemoteFailure::Authorization);
+        }
+        Ok(())
+    }
+}
+impl<T: super::member_worker::BusinessTransport> super::member_worker::MemberTransport
+    for RecoveryTransport<'_, T>
+{
+    fn scope(&self) -> &super::member_worker::SyncScope {
+        self.inner.scope()
+    }
+    fn subject(&self) -> &str {
+        self.inner.subject()
+    }
+    fn push(
+        &mut self,
+        request: &Value,
+    ) -> std::result::Result<super::member_sync::Receipt, super::member_worker::RemoteFailure> {
+        self.check()?;
+        let result = self.inner.push(request);
+        self.check()?;
+        result
+    }
+    fn pull(
+        &mut self,
+        cursor: i64,
+    ) -> std::result::Result<super::member_sync::Page, super::member_worker::RemoteFailure> {
+        self.check()?;
+        let result = self.inner.pull(cursor);
+        self.check()?;
+        result
+    }
+}
+impl<T: super::member_worker::BusinessTransport> super::member_worker::BusinessTransport
+    for RecoveryTransport<'_, T>
+{
+    fn push_business(
+        &mut self,
+        request: &Value,
+    ) -> std::result::Result<Value, super::member_worker::RemoteFailure> {
+        self.check()?;
+        let result = self.inner.push_business(request);
+        self.check()?;
+        result
+    }
+    fn pull_business(
+        &mut self,
+        cursor: i64,
+    ) -> std::result::Result<Value, super::member_worker::RemoteFailure> {
+        self.check()?;
+        let result = self.inner.pull_business(cursor);
+        self.check()?;
+        result
+    }
+}
+
+impl InitialProfileRecovery {
+    pub(super) fn run(
+        &mut self,
+        transport: &mut impl super::member_worker::BusinessTransport,
+        cancelled: impl Fn() -> Result<()>,
+    ) -> Result<()> {
+        use super::member_worker::{authorized, BusinessTransport, Limits, RemoteFailure, Run};
+        cancelled()?;
+        if self.replayed {
+            return Ok(());
+        }
+        let mut isolated = Store::open(&self.file.as_ref().ok_or("Missing recovery snapshot")?.0)?;
+        isolated.removal_session = Some(self.session.clone());
+        let actor = super::removal::authorized(&isolated.conn, isolated.removal_session.as_ref())?;
+        isolated
+            .conn
+            .execute(
+                "INSERT INTO temp.native_actor VALUES(?1,?2)",
+                params![actor.user_id, actor.label],
+            )
+            .map_err(db_error)?;
+        authorized(&isolated, transport)?;
+        let mut fenced = RecoveryTransport {
+            inner: transport,
+            cancelled: &cancelled,
+            deadline: std::time::Instant::now() + std::time::Duration::from_secs(120),
+        };
+        // Recheck the exact original request first. A receipt wins over any old
+        // refusal; only a fresh revision refusal can supersede the seed.
+        match fenced.push_business(&self.original_request) {
+            Ok(receipt) => {
+                business_sync::validate_receipt(&receipt, &self.original_request, fenced.inner.scope(), Some(fenced.inner.subject()))?;
+                isolated.conn.execute("UPDATE business_batches SET state='confirmed',response_json=?2,last_error=NULL WHERE id=?1 AND state='conflict'", params![self.input.batch_id, receipt.to_string()]).map_err(db_error)?;
+            }
+            Err(RemoteFailure::BusinessConflict { code }) if code == "business_revision_conflict" => {
+                let replacement = super::initial_profile_recovery::replacement(&self.original_request, fenced.inner.subject())?;
+                self.result["superseded"] = json!(true);
+                self.result["replacementBatchId"] = replacement["operationId"].clone();
+                let tx = isolated.conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(db_error)?;
+                operations::receipt(&tx, super::initial_profile_recovery::COMMAND, &self.input.request_id, &self.bound, &self.result)?;
+                tx.execute("INSERT INTO business_batches(id,ordinal,request_json,state) SELECT ?1,COALESCE(MAX(ordinal),0)+1,?2,'pending' FROM business_batches", params![replacement["operationId"].as_str(), replacement.to_string()]).map_err(db_error)?;
+                tx.commit().map_err(db_error)?;
+            }
+            Err(_) => return Err("Profile recovery could not verify the original server refusal. The original database is unchanged; retry online.".into()),
+        }
+        isolated.conn.execute("DELETE FROM metadata WHERE key IN ('business_last_error','business_retry_on','business_failures')", []).map_err(db_error)?;
+        for _ in 0..25 {
+            cancelled()?;
+            match isolated.run_business_sync(&mut fenced, Utc::now(), Limits { pushes: 10, pages: 5 })? {
+                Run::Complete { .. } => {
+                    cancelled()?;
+                    if self.result["superseded"] != true {
+                        let tx = isolated.conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(db_error)?;
+                        operations::receipt(&tx, super::initial_profile_recovery::COMMAND, &self.input.request_id, &self.bound, &self.result)?;
+                        tx.commit().map_err(db_error)?;
+                    }
+                    isolated.conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)").map_err(db_error)?;
+                    integrity(&isolated.conn)?;
+                    self.complete = true;
+                    return Ok(());
+                }
+                Run::Yielded { .. } => continue,
+                _ => return Err("Profile recovery did not complete. The original records and transaction remain saved; retry online or review the other conflict.".into()),
+            }
+        }
+        Err("Profile recovery reached its bounded limit. The original database remains unchanged; retry online.".into())
+    }
+
+    pub(super) fn commit(self, store: &mut Store) -> Result<Value> {
+        if !self.complete {
+            return Err("Profile recovery has no complete verified server history".into());
+        }
+        if self.replayed {
+            let mut result = self.result;
+            result["duplicate"] = json!(true);
+            return Ok(result);
+        }
+        let check = || -> Result<()> {
+            if self.session.expires_at <= Utc::now() {
+                return Err("Recovery account session expired; no records were replaced".into());
+            }
+            super::removal::current_session(&store.conn, &self.session)
+        };
+        check()?;
+        let file = self.file.as_ref().ok_or("Missing recovery snapshot")?;
+        verify_file(&file.0, SCHEMA_VERSION)?;
+        let isolated = Store::open(&file.0)?;
+        let preview = store.preview_restore(isolated.backup_envelope()?)?;
+        drop(isolated);
+        let original_state = self.original_state;
+        let expiry = self.session.expires_at;
+        let saved_result = self.result.clone();
+        store.restore_checked_with(
+            preview["token"].as_str().ok_or("Missing recovery replacement token")?.into(),
+            |conn| {
+                if expiry <= Utc::now() || storage_fingerprint(conn)? != original_state {
+                    return Err("This computer changed during profile recovery; no records were replaced. Review and retry.".into());
+                }
+                Ok(())
+            },
+            |conn| {
+                conn.execute("DELETE FROM metadata WHERE key IN ('restore_requires_reconciliation','business_initial_download','business_initial_profile_received','business_last_error','business_retry_on','business_failures')", []).map_err(db_error)?;
+                conn.execute("INSERT INTO metadata VALUES('business_initial_download_complete','1') ON CONFLICT(key) DO UPDATE SET value='1'", []).map_err(db_error)?;
+                record(conn, "recover initial gym profile", &self.input.batch_id, None, Some(self.original_request.to_string()), saved_result)
+            },
+        )?;
+        Ok(self.result)
+    }
+    pub(super) fn replayed(&self) -> bool {
+        self.replayed
+    }
+}
+
+impl Store {
+    pub(super) fn prepare_initial_profile_recovery(
+        &mut self,
+        input: super::InitialProfileRecoveryInput,
+    ) -> Result<InitialProfileRecovery> {
+        let bound = super::initial_profile_recovery::bound(
+            &self.conn,
+            self.removal_session.as_ref(),
+            &input,
+        )?;
+        let session = self
+            .removal_session
+            .as_ref()
+            .ok_or("Verified Administrator sign-in is required")?
+            .clone();
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(db_error)?;
+        let replay = operations::replay(
+            &tx,
+            super::initial_profile_recovery::COMMAND,
+            &input.request_id,
+            &bound,
+        )?;
+        drop(tx);
+        if let Some(result) = replay {
+            return Ok(InitialProfileRecovery {
+                file: None,
+                original_state: String::new(),
+                original_request: Value::Null,
+                session,
+                input,
+                bound,
+                result,
+                complete: true,
+                replayed: true,
+            });
+        }
+        let envelope = self.backup_envelope()?;
+        let file = TemporaryFile(
+            self.files_dir()?
+                .join(format!("initial-profile-{}.sqlite3", id())),
+        );
+        write_new(&file.0, &envelope.data)?;
+        let isolated = Store::open(&file.0)?;
+        let preview =
+            super::business_review::preview_on(&isolated.conn, Some(&session), &input.batch_id)?;
+        if preview["fingerprint"] != input.fingerprint {
+            return Err("The blocked transaction changed. Review it again before recovery.".into());
+        }
+        if preview["initialProfileRecovery"]["allowed"] != true {
+            return Err(preview["initialProfileRecovery"]["reason"]
+                .as_str()
+                .unwrap_or("This transaction needs separate reconciliation")
+                .into());
+        }
+        let encoded: String = isolated
+            .conn
+            .query_row(
+                "SELECT request_json FROM business_batches WHERE id=?1",
+                [&input.batch_id],
+                |r| r.get(0),
+            )
+            .map_err(db_error)?;
+        let original_request: Value =
+            serde_json::from_str(&encoded).map_err(|_| "Invalid retained transaction")?;
+        let original_state = storage_fingerprint(&isolated.conn)?;
+        let backup = self.files_dir()?.join(format!(
+            "armstrong-profile-recovery-{}.armstrong-backup.json",
+            id()
+        ));
+        write_new(
+            &backup,
+            &serde_json::to_vec(&envelope).map_err(|e| e.to_string())?,
+        )?;
+        let result = json!({"batchId":input.batch_id,"recoveredInitialProfile":true,"superseded":false,"originalRequestSha256":business_sync::hash(&original_request)?,"recoveryPath":backup,"requiresLogin":true});
+        Ok(InitialProfileRecovery {
+            file: Some(file),
+            original_state,
+            original_request,
+            session,
+            input,
+            bound,
+            result,
+            complete: false,
+            replayed: false,
+        })
+    }
+}
 fn storage_fingerprint(conn: &Connection) -> Result<String> {
     let mut digest = Sha256::new();
     for (table, sql) in schema(conn)? {

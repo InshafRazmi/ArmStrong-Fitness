@@ -113,7 +113,7 @@ jobs:
           tauriScript: cargo tauri
           tagName: ${{ inputs.release_tag || github.ref_name }}
           releaseName: ArmStrong Fitness ${{ inputs.release_tag || github.ref_name }}
-          releaseBody: Signed Windows update. Includes initial shared-data download before a new computer's first upload and clearer sync/update errors. Existing saved records and frozen conflicts are retained.
+          releaseBody: Signed Windows update. Adds guarded recovery for an unchanged installation gym profile refused with business_revision_conflict. Recovery backs up the database, retains the original transaction and audit history, and downloads the current server profile. Edited profiles and other business changes require separate review.
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true

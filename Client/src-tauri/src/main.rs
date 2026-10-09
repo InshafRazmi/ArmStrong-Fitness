@@ -130,6 +130,25 @@ fn retry_business_transaction(
     store.retry_business_transaction(input)
 }
 #[tauri::command]
+async fn recover_initial_gym_profile(
+    db: State<'_, Database>,
+    input: armstrong_core::InitialProfileRecoveryInput,
+) -> Result<serde_json::Value, String> {
+    let job = {
+        let mut store = db.access(true)?;
+        db.1.prepare_initial_profile_recovery(&mut store, input)?
+    };
+    let auth = db.1.clone();
+    let outcome =
+        tauri::async_runtime::spawn_blocking(move || auth.run_initial_profile_recovery(job))
+            .await
+            .map_err(|_| {
+                "Native profile recovery unavailable; saved records remain retained".to_string()
+            })??;
+    let mut store = db.access(true)?;
+    db.1.finish_initial_profile_recovery(&mut store, outcome)
+}
+#[tauri::command]
 fn save_plan(db: State<Database>, input: PlanInput) -> Result<(), String> {
     db.access(true)?.save_plan(input)
 }
@@ -375,6 +394,7 @@ fn main() {
         synchronize_members,
         preview_business_retry,
         retry_business_transaction,
+        recover_initial_gym_profile,
         save_plan,
         save_member,
         save_trainer,
@@ -425,6 +445,7 @@ fn main() {
             synchronize_members,
             preview_business_retry,
             retry_business_transaction,
+            recover_initial_gym_profile,
             save_plan,
             save_member,
             save_trainer,

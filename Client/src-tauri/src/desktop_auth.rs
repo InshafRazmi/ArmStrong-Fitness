@@ -41,6 +41,14 @@ pub struct PendingMemberSync {
     session: super::removal::Session,
     epoch: u64,
 }
+pub struct PendingInitialProfileRecovery {
+    source: PendingMemberSync,
+    recovery: super::recovery::InitialProfileRecovery,
+}
+pub struct InitialProfileRecoveryOutcome {
+    epoch: u64,
+    recovery: super::recovery::InitialProfileRecovery,
+}
 pub struct PendingSessionRenewal {
     path: std::path::PathBuf,
     session: super::removal::Session,
@@ -533,7 +541,7 @@ impl DesktopAuth {
                 "blocked",
                 0,
                 0,
-                super::business_sync::status(&worker.conn)?["lastError"].as_str().map(|s|format!("{s} Open Settings → Server synchronization to review and retry the retained transaction.")).unwrap_or_else(||"A retained gym transaction needs review in Settings → Server synchronization.".into()),
+                super::business_sync::status(&worker.conn)?["lastError"].as_str().map(|s|format!("{s} Open Settings → Server synchronization to review the retained transaction and available recovery options.")).unwrap_or_else(||"A retained gym transaction needs review in Settings → Server synchronization.".into()),
             ),
         };
         let denied = worker.removal_session.is_none();
@@ -549,6 +557,66 @@ impl DesktopAuth {
             denied,
             epoch: job.epoch,
         })
+    }
+    pub fn prepare_initial_profile_recovery(
+        &self,
+        store: &mut Store,
+        input: InitialProfileRecoveryInput,
+    ) -> Result<PendingInitialProfileRecovery> {
+        store.native_identity(true)?;
+        let source = self.prepare_member_sync(store)?;
+        let recovery = store.prepare_initial_profile_recovery(input)?;
+        Ok(PendingInitialProfileRecovery { source, recovery })
+    }
+    pub fn run_initial_profile_recovery(
+        &self,
+        mut job: PendingInitialProfileRecovery,
+    ) -> Result<InitialProfileRecoveryOutcome> {
+        let source = rusqlite::Connection::open_with_flags(
+            &job.source.path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .map_err(db_error)?;
+        let check = || {
+            if job.source.epoch != self.epoch.load(Ordering::SeqCst)
+                || job.source.session.expires_at <= Utc::now()
+            {
+                return Err(
+                    "Profile recovery cancelled because the account session changed".into(),
+                );
+            }
+            super::removal::current_session(&source, &job.source.session)
+        };
+        check()?;
+        let mut slot = self
+            .transport
+            .try_lock()
+            .map_err(|_| "Synchronization is already running. Wait, then review recovery again.")?;
+        let transport = slot
+            .as_mut()
+            .ok_or("Sign in online before profile recovery")?;
+        job.recovery.run(transport, check)?;
+        check()?;
+        Ok(InitialProfileRecoveryOutcome {
+            epoch: job.source.epoch,
+            recovery: job.recovery,
+        })
+    }
+    pub fn finish_initial_profile_recovery(
+        &self,
+        store: &mut Store,
+        outcome: InitialProfileRecoveryOutcome,
+    ) -> Result<Value> {
+        if outcome.epoch != self.epoch.load(Ordering::SeqCst) {
+            return Err("Profile recovery cancelled because the account session changed".into());
+        }
+        store.native_identity(true)?;
+        let replayed = outcome.recovery.replayed();
+        let result = outcome.recovery.commit(store)?;
+        if !replayed {
+            self.lock(store)?;
+        }
+        Ok(result)
     }
     pub fn finish_member_sync(
         &self,

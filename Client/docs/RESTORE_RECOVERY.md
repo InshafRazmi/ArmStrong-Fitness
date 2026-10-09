@@ -41,3 +41,30 @@ Real temporary SQLite with native Auth/HTTP mocks verifies newer cloud payment
 and saved receipt recovery, exact lost-response retry, logout/cancellation,
 storage races, wrong scope, read-only approval and retained conflicts. Live
 Windows/OS-vault and production native HTTPS recovery acceptance remain open.
+
+## Retained installation profile recovery (0.1.6)
+
+An older Windows installation can retain `business_revision_conflict` for an Add
+of the original Armstrong Fitness gym profile and sign-in audits. Version 0.1.6
+adds a narrowly checked recovery for that unchanged installation profile.
+
+Sign in online as the original Administrator. Open **Settings → Server
+synchronization → Review retained transaction**. If the native review offers
+**Recover using server profile**, check the confirmation and select that action.
+The application saves a validated backup, rechecks the original request with the
+server, preserves its frozen bytes and audit records, and downloads complete
+verified shared history before replacing the local database. Keep the backup
+path displayed by the application. After recovery, sign in online again and let
+the remaining recovery audits receive their own server confirmations.
+
+Only a fresh revision refusal permits an audit-only replacement with a stable
+operation ID. A real receipt for the original request takes precedence. The
+superseded request remains refused without a fabricated receipt and is counted
+separately from confirmed transactions. Lost replies reuse the same replacement;
+failed or cancelled recovery leaves the original database intact.
+
+Edited profiles, members, payments, inventory, other saved business operations,
+changed identity or previously downloaded history cannot use this path. The
+review displays the reason; retain a backup for separate reconciliation.
+Recovery does not authorize general conflict clearing. Actual recovery on the
+affected Windows installation remains an acceptance step.

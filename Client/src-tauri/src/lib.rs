@@ -10,13 +10,15 @@ mod business_review;
 mod business_sync;
 mod desktop_auth;
 mod finance;
+mod initial_profile_recovery;
 mod staff_training;
 pub use attendance_profiles::StaffAttendanceInput;
 pub use business_review::BusinessRetryInput;
 pub use desktop_auth::{
-    DesktopAuth, DesktopAuthStatus, MemberSyncOutcome, PendingMemberSync, PendingSessionRenewal,
-    SessionRenewal,
+    DesktopAuth, DesktopAuthStatus, InitialProfileRecoveryOutcome, MemberSyncOutcome,
+    PendingInitialProfileRecovery, PendingMemberSync, PendingSessionRenewal, SessionRenewal,
 };
+pub use initial_profile_recovery::InitialProfileRecoveryInput;
 pub use staff_training::{
     CombinedPaymentInput, StaffMemberInput, StaffPayoutInput, StaffRegisterInput, TrainerInput,
     TrainingChargeInput,

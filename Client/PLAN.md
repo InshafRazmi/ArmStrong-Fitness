@@ -1,5 +1,15 @@
 # Core release plan
 
+## Retained default-profile repair — 2026-10-09
+
+Continue the Windows repair after the supplied three-record review identified an
+unchanged installation profile and two audits. Verify native eligibility, keep a
+validated backup and the immutable original transaction, upload the audits with
+stable retry identity, then apply complete verified shared history atomically.
+Never apply this path to edited profiles or business records. Deliver the repair
+through a new signed updater version 0.1.6; keep the published 0.1.5 tag/artifacts
+unchanged. Actual installed Windows recovery remains an acceptance step.
+
 ## Authorized release — 2026-10-09
 
 Publish the tested synchronization fixes as signed Windows version 0.1.5 through

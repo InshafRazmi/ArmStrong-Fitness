@@ -8,10 +8,14 @@ pub struct BusinessRetryInput {
     pub fingerprint: String,
 }
 
-fn preview_on(conn: &Connection, session: Option<&removal::Session>, batch: &str) -> Result<Value> {
+pub(super) fn preview_on(
+    conn: &Connection,
+    session: Option<&removal::Session>,
+    batch: &str,
+) -> Result<Value> {
     removal::authorized(conn, session)?;
     let (encoded, error): (String, String) = conn.query_row(
-        "SELECT request_json,COALESCE(last_error,'') FROM business_batches WHERE id=?1 AND state='conflict' AND ordinal=(SELECT MIN(ordinal) FROM business_batches WHERE state<>'confirmed')",
+        &format!("SELECT request_json,COALESCE(last_error,'') FROM business_batches WHERE id=?1 AND state='conflict' AND {} AND ordinal=(SELECT MIN(ordinal) FROM business_batches WHERE state<>'confirmed' AND {})", business_sync::ACTIVE_BATCH, business_sync::ACTIVE_BATCH),
         [batch], |r| Ok((r.get(0)?,r.get(1)?)),
     ).optional().map_err(db_error)?.ok_or("This transaction is no longer the first blocked transaction. Refresh synchronization.")?;
     let request: Value =
@@ -24,7 +28,17 @@ fn preview_on(conn: &Connection, session: Option<&removal::Session>, batch: &str
     let changes = request["changes"].as_array().ok_or("Invalid retained transaction")?.iter().map(|c| {
         json!({"table":c["table"],"id":c["id"],"action":if c["before"].is_null(){"Add"}else{"Update"},"name":c["after"]["name"].as_str().or(c["after"]["member_name"].as_str()).or(c["after"]["staff_name"].as_str())})
     }).collect::<Vec<_>>();
-    Ok(json!({"batchId":batch,"fingerprint":fingerprint,"reason":error,"changes":changes}))
+    let recovery = match super::initial_profile_recovery::eligible(
+        conn, session, batch, &request, &error,
+    ) {
+        Ok(()) => {
+            json!({"allowed":true,"reason":"This transaction contains the unchanged installation profile and audit entries. Recover using the server profile while retaining the original transaction and audit history."})
+        }
+        Err(reason) => json!({"allowed":false,"reason":reason}),
+    };
+    Ok(
+        json!({"batchId":batch,"fingerprint":fingerprint,"reason":error,"changes":changes,"initialProfileRecovery":recovery}),
+    )
 }
 
 impl Store {

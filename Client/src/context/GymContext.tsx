@@ -6,6 +6,7 @@ type WriteResult = void | Promise<void>
 export interface DesktopData {
   previewBusinessRetry: (batchId: string) => Promise<import('../desktop/api').BusinessRetryPreview>
   retryBusinessTransaction: (input: {requestId: string;batchId: string;fingerprint: string}) => Promise<void>
+  recoverInitialGymProfile: (input: import('../desktop/api').InitialProfileRecoveryInput) => Promise<void>
   recordStaffAttendance: (input: {requestId: string; staffOrCard: string; source: "NFC" | "Manual"}) => Promise<void>
   recordNfcAttendance: (input: {requestId: string; memberOrCard: string; source: "NFC"}) => Promise<{entity?: "Staff" | "Member"; duplicate?: boolean}>
   saveTrainer: (input: import('../desktop/api').TrainerInput) => Promise<void>

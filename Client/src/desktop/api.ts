@@ -6,7 +6,7 @@ export interface MemberConflictPreview { conflictId: string; memberId: string; f
 export interface MemberConflictInput { requestId: string; conflictId: string; fingerprint: string; choice: 'use_server' | 'keep_local'; reason: string }
 export interface MemberConflictResult { resolutionId: string; memberId: string; choice: MemberConflictInput['choice']; superseded: number; retryOperationId: string | null; serverConfirmed: false }
 export interface MemberSyncStatus { resolved?: number; superseded?: number; reviewAuthorization?: {allowed: boolean; reason: string}; available: boolean; reason: string; cursor: number; acknowledged: number; conflicts: MemberSyncConflict[]; retryOn?: string | null; lastError?: string | null; lastSuccessOn?: string | null }
-export interface BusinessSyncStatus { available: boolean; acknowledged: number; pending: number; conflicts: {id: string; reason: string}[]; lastError?: string | null; lastSuccessOn?: string | null }
+export interface BusinessSyncStatus { available: boolean; acknowledged: number; pending: number; conflicts: {id: string; reason: string}[]; recoveredInitialProfiles?: number; lastError?: string | null; lastSuccessOn?: string | null }
 export interface Period { id: string; memberId: string; planId: string; planName: string; priceMinor: number; startsOn: string; endsOn: string; status: 'Scheduled' | 'Active' | 'Expiring' | 'Expired' }
 export interface Profile { version: number; name: string; location: string; phone: string; email: string }
 export interface NativeAttendance { gender?: import("../types/domain").Gender | null; id: string; memberId: string; name: string; cardId: string | null; cardUid: string; type: 'Check-in' | 'Check-out'; source: 'NFC' | 'Manual'; businessOn: string; occurredAt: string; voidsId: string | null }
@@ -122,6 +122,8 @@ export const createTrainingCharge = (input: TrainingChargeInput) => invoke<Write
 export const receiveCombinedPayment = (input: CombinedPaymentInput) => invoke<WriteOutcome>('receive_combined_payment', { input })
 export const payStaff = (input: StaffPayoutInput) => invoke<WriteOutcome>('pay_staff', { input })
 
-export interface BusinessRetryPreview {batchId: string; fingerprint: string; reason: string; changes: {table: string;id: string;action: string;name?: string|null}[]}
+export interface BusinessRetryPreview {batchId: string; fingerprint: string; reason: string; changes: {table: string;id: string;action: string;name?: string|null}[]; initialProfileRecovery?: {allowed: boolean;reason?: string|null}}
 export const previewBusinessRetry = (batchId: string) => invoke<BusinessRetryPreview>('preview_business_retry',{batchId})
 export const retryBusinessTransaction = (input: {requestId: string;batchId: string;fingerprint: string}) => invoke<WriteOutcome>('retry_business_transaction',{input})
+export interface InitialProfileRecoveryInput {requestId: string;batchId: string;fingerprint: string;confirmation: boolean}
+export const recoverInitialGymProfile = (input: InitialProfileRecoveryInput) => invoke<{recoveryPath: string;requiresLogin: boolean;duplicate?: boolean}>('recover_initial_gym_profile',{input})

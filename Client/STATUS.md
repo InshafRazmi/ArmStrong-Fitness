@@ -1,6 +1,56 @@
 # Status — 2026-10-09
 
-## Current update: version 0.1.5 published
+## Current update: guarded retained default-profile recovery (0.1.6 candidate)
+
+The Windows review contains three Add actions: two audit entries and gym settings
+named Armstrong Fitness. This fits an already frozen installation default
+colliding with the newer shared profile. Version 0.1.5 prevents this on unused
+computers but retains existing conflicts, so its original-request Retry cannot
+resolve this case.
+
+Native recovery now requires an online writable Administrator, the original
+actor, current enrolled scope, current preview and explicit confirmation. It
+checks that the profile is the exact unchanged installation default, the two
+retained audits still match, the cursor is zero and there are no other business
+records or saved operations. Audit-only previous Retry attempts are preserved.
+Edited profiles, money, members, other business data and identity changes refuse
+this recovery and remain available for separate reconciliation.
+
+Before network work it writes a validated native backup. An isolated database
+rechecks the exact original request: an actual server receipt takes precedence;
+only a fresh revision refusal permits a stable audit-only replacement. The
+original request stays immutable, refused and without a fake receipt. A separate
+append-only recovery operation removes that seed from the active queue. All
+original audits remain; confirmation counts include only actual receipts.
+Lost replies retry the same replacement operation. Verified ordered server
+history must complete before an atomic replacement, with nonce, expiry, native
+session and full storage fingerprints rechecked. Cancellation or concurrent
+changes leave the original database intact. Successful recovery requires online
+sign-in again; replacement and recovery audits await their own real receipts.
+
+The interface offers Recover using server profile only when native checks allow
+it, requires a checkbox and displays refusal reasons for other cases. It reports
+recovered profiles separately from confirmed server transactions. Eight new
+SQLite/mock-transport recovery cases and the recovery dialog render pass. The
+full native library passes 214 tests (three existing environment probes ignored);
+strict native Clippy and formatting pass. Browser and packaged frontend builds,
+23 adapter tests, all interface renders and the desktop webview launch/restart
+checks pass. All 22 packaged-auth desktop tests pass. Server typecheck and 83 unit
+tests pass; the sandbox-skipped CLI
+probe passes separately with all 13 desktop-setup tests. Native business, staff
+and attendance contracts pass, including the audit-only replacement.
+
+Live isolated Supabase Auth/PostgreSQL acceptance passes the stale-profile
+refusal, absence of an original receipt, exact replacement retry, retained audits,
+version-3 server profile and complete ordered download. Synthetic records roll
+back. The production backend and affected Windows database were not changed.
+The Windows x64 native cross-build compiles; signed NSIS packaging and public
+release verification are in progress. Actual Windows recovery acceptance remains
+open. Version 0.1.6 is being prepared; the public 0.1.5 installer and tag remain
+unchanged. The user's unrelated attendance formatting remains preserved and
+outside this patch. See [recovery steps](docs/RESTORE_RECOVERY.md).
+
+## Previous update: version 0.1.5 published
 
 The user-authorized signed Windows [v0.1.5 release](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.5)
 is public, non-draft, non-prerelease and latest, published at 06:37:35 UTC.

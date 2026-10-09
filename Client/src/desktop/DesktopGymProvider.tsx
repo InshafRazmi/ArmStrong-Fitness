@@ -109,6 +109,15 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
       snapshot: native, error, refresh,
       previewBusinessRetry: api.previewBusinessRetry,
       retryBusinessTransaction: input => commit(() => api.retryBusinessTransaction(input), 'Original transaction queued for another server check.'),
+      recoverInitialGymProfile: async input => {
+        if (syncRunning.current || renewing.current) throw new Error('Account verification or synchronization is running. Wait, then try recovery again.')
+        syncRunning.current = true; setSyncing(true)
+        try {
+          const result = await api.recoverInitialGymProfile(input)
+          notify(`Server profile recovered. Sign in online again. Original transaction backup: ${result.recoveryPath}`, 'info')
+          await afterCommit()
+        } finally { syncRunning.current = false; setSyncing(false) }
+      },
       previewMemberConflict: api.previewMemberConflict,
       resolveMemberConflict: async input => {
         const result = await api.resolveMemberConflict(input)

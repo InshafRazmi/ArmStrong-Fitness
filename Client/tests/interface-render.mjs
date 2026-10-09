@@ -12,6 +12,7 @@ try {
   const { AppLayout } = await server.ssrLoadModule('/src/layout/AppLayout.tsx')
   const { DesktopScreenNotice } = await server.ssrLoadModule('/src/desktop/DesktopScreenNotice.tsx')
   const { DesktopSettingsPanel } = await server.ssrLoadModule('/src/desktop/DesktopSettingsPanel.tsx')
+  const { BusinessRetryDialog } = await server.ssrLoadModule('/src/desktop/BusinessRetryDialog.tsx')
   const { desktopData, desktopMembers } = await server.ssrLoadModule('/src/desktop/adapter.ts')
   const { DesktopGymProvider } = await server.ssrLoadModule('/src/desktop/DesktopGymProvider.tsx')
   const { default: App } = await server.ssrLoadModule('/src/App.tsx')
@@ -84,6 +85,13 @@ try {
   for (const text of ['payments and receipts','sales and stock','Confirmed transactions','Transactions to review','Local history is retained','Review retained transaction','Sync gym records now']) assert.ok(businessMarkup.includes(text),text)
   assert.ok(!businessMarkup.includes('Other modules are saved locally') && !businessMarkup.includes('Last server confirmation:'))
   console.log('PASS all-module sync status and retained conflict display')
+  const retainedPreview = {batchId:'retained',fingerprint:'native-fingerprint',reason:'business_revision_conflict',changes:[{table:'gym_settings',id:'1',action:'Add',name:'Armstrong Fitness'},{table:'audit',id:'audit-1',action:'Add'}]}
+  const recoveryDialog = renderToStaticMarkup(h(BusinessRetryDialog,{preview:{...retainedPreview,initialProfileRecovery:{allowed:true}},busy:false,error:'',onClose:unexpected,onRetry:unexpected,onRecover:unexpected}))
+  assert.ok(recoveryDialog.includes('retains the original transaction and audit entries') && recoveryDialog.includes('type="checkbox"'))
+  assert.ok(/<button class="primary" disabled="">Recover using server profile<\/button>/.test(recoveryDialog),'recovery requires explicit confirmation')
+  const deniedDialog = renderToStaticMarkup(h(BusinessRetryDialog,{preview:{...retainedPreview,initialProfileRecovery:{allowed:false,reason:'This computer has retained payment records; separate reconciliation is required.'}},busy:false,error:'',onClose:unexpected,onRetry:unexpected,onRecover:unexpected}))
+  assert.ok(deniedDialog.includes('retained payment records') && !deniedDialog.includes('Recover using server profile') && !deniedDialog.includes('type="checkbox"'),'financial changes cannot offer initial profile recovery')
+  console.log('PASS guarded retained-profile recovery and financial refusal dialog')
   const restoredMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,desktop:{...value.desktop,snapshot:{...native,restoreRequiresReconciliation:true}}}},h(DesktopSettingsPanel,{tab:'Server synchronization'})))
   assert.ok(/<button class="secondary" disabled="">Prepare this computer<\/button>/.test(restoredMarkup),'restored database cannot prepare a substitute credential')
   const conflictValue = { ...value, desktop: { ...value.desktop, snapshot: { ...native, memberSync: {available:false,reason:'Enrollment required',cursor:1,acknowledged:2,conflicts:[{id:'conflict-1',memberId:'sqlite-member',operationId:'op-1',reason:'Remote change overlaps pending local member edits',remote:{name:'Server & member',nfcId:'CARD-2',archivedAt:'2026-10-03T10:00:00Z'},createdAt:'2026-10-03T10:00:00Z'}]} } } }

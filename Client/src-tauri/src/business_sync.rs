@@ -5,6 +5,9 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 pub(crate) const REQUEST_LIMIT: usize = 1024 * 1024;
+// A reviewed initial-profile recovery retains its refused envelope. Its separate
+// immutable local operation records that it was superseded, never confirmed.
+pub(super) const ACTIVE_BATCH: &str = "NOT EXISTS(SELECT 1 FROM local_operations recovery WHERE recovery.command='business_initial_profile_recovery' AND json_extract(recovery.result_json,'$.superseded')=1 AND json_extract(recovery.result_json,'$.batchId')=business_batches.id)";
 #[derive(Clone, Deserialize)]
 pub(crate) struct Column {
     pub(crate) name: String,
@@ -112,7 +115,7 @@ pub(crate) fn capture(conn: &Connection) -> Result<()> {
         .map_err(db_error)?;
     Ok(())
 }
-fn validate_receipt(
+pub(super) fn validate_receipt(
     receipt: &Value,
     request: &Value,
     scope: &super::member_worker::SyncScope,
@@ -159,7 +162,7 @@ fn sql_value(value: &Value) -> Result<SqlValue> {
         _ => Err("Unsupported business row value".into()),
     }
 }
-fn row_on(conn: &Connection, table: &Table, key: &str) -> Result<Option<Value>> {
+pub(super) fn row_on(conn: &Connection, table: &Table, key: &str) -> Result<Option<Value>> {
     let fields = table
         .columns
         .iter()
@@ -177,7 +180,7 @@ fn row_on(conn: &Connection, table: &Table, key: &str) -> Result<Option<Value>> 
     row.map(|r| serde_json::from_str(&r).map_err(|_| "Invalid local business row".into()))
         .transpose()
 }
-fn default_profile() -> Value {
+pub(super) fn default_profile() -> Value {
     json!({"id":1,"name":"Armstrong Fitness","location":"Matale, Sri Lanka","phone":"","email":"","version":1})
 }
 // Only an unused computer can download before freezing its baseline. Existing
@@ -335,7 +338,7 @@ fn apply_page(store: &mut Store, transport: &impl BusinessTransport, page: Value
     }
     let pending: bool = tx
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM business_batches WHERE state<>'confirmed')",
+            &format!("SELECT EXISTS(SELECT 1 FROM business_batches WHERE state<>'confirmed' AND {ACTIVE_BATCH})"),
             [],
             |r| r.get(0),
         )
@@ -432,8 +435,9 @@ fn apply_page(store: &mut Store, transport: &impl BusinessTransport, page: Value
 #[path = "business_sync_tests.rs"]
 mod tests;
 pub(crate) fn status(conn: &Connection) -> Result<Value> {
-    let counts: (i64,i64)=conn.query_row("SELECT count(*) FILTER(WHERE state='confirmed'),count(*) FILTER(WHERE state<>'confirmed') FROM business_batches",[],|r|Ok((r.get(0)?,r.get(1)?))).map_err(db_error)?;
-    let conflicts=operations::rows(conn,"SELECT json_object('id',id,'reason',last_error) FROM business_batches WHERE state='conflict' ORDER BY ordinal")?;
+    let counts: (i64,i64)=conn.query_row(&format!("SELECT count(*) FILTER(WHERE state='confirmed'),count(*) FILTER(WHERE state<>'confirmed') FROM business_batches WHERE {ACTIVE_BATCH}"),[],|r|Ok((r.get(0)?,r.get(1)?))).map_err(db_error)?;
+    let conflicts=operations::rows(conn,&format!("SELECT json_object('id',id,'reason',last_error) FROM business_batches WHERE state='conflict' AND {ACTIVE_BATCH} ORDER BY ordinal"))?;
+    let recovered: i64 = conn.query_row("SELECT count(*) FROM local_operations WHERE command='business_initial_profile_recovery' AND json_extract(result_json,'$.superseded')=1", [], |r| r.get(0)).map_err(db_error)?;
     let success: Option<String> = conn
         .query_row(
             "SELECT value FROM metadata WHERE key='business_last_success'",
@@ -451,7 +455,7 @@ pub(crate) fn status(conn: &Connection) -> Result<Value> {
         .optional()
         .map_err(db_error)?;
     Ok(
-        json!({"acknowledged":counts.0,"pending":counts.1,"conflicts":conflicts,"lastSuccessOn":success,"lastError":error,"available":false}),
+        json!({"acknowledged":counts.0,"pending":counts.1,"conflicts":conflicts,"recoveredInitialProfiles":recovered,"lastSuccessOn":success,"lastError":error,"available":false}),
     )
 }
 fn record_failure(
@@ -650,7 +654,7 @@ impl Store {
         let mut pushed = 0;
         while pushed < limits.pushes {
             authorized(self, transport)?;
-            let queued:Option<(String,String,String)>=self.conn.query_row("SELECT id,request_json,state FROM business_batches WHERE state<>'confirmed' ORDER BY ordinal LIMIT 1",[],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional().map_err(db_error)?;
+            let queued:Option<(String,String,String)>=self.conn.query_row(&format!("SELECT id,request_json,state FROM business_batches WHERE state<>'confirmed' AND {ACTIVE_BATCH} ORDER BY ordinal LIMIT 1"),[],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional().map_err(db_error)?;
             let Some((id, encoded, state)) = queued else {
                 break;
             };
