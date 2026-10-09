@@ -8,6 +8,7 @@ import { prepareNativeDevice, type BackupEnvelope, type DeviceApproval, type Res
 import { MemberConflictDialog } from './MemberConflictDialog'
 import type { BusinessRetryPreview, MemberConflictPreview } from './api'
 import { errorText } from './DesktopGymProvider'
+import { updateCheckError } from './update-errors'
 
 function GymProfile() {
   const { desktop } = useGym()
@@ -188,7 +189,7 @@ export function DesktopSettingsPanel({ tab }: { tab: string }) {
     } catch (error) {
       setUpdate(null)
       setUpdateStatus('')
-      setUpdateError(errorText(error))
+      setUpdateError(updateCheckError(error))
     } finally {
       setCheckingUpdates(false)
     }

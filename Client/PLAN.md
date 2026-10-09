@@ -1,5 +1,13 @@
 # Core release plan
 
+## Authorized release — 2026-10-09
+
+Publish the tested synchronization fixes as signed Windows version 0.1.5 through
+the application updater. The user explicitly authorized commit/push, the release
+tag and publication for this milestone. Preserve saved Windows data and frozen
+requests. Confirm the public updater JSON, version, installer URL and signature
+after publication; actual Windows conflict reconciliation remains separate.
+
 ## Active release gates — 2026-10-08
 
 Permanent deletion for active/inactive staff, retained financial/attendance
@@ -53,11 +61,12 @@ conflicts. Full offline/reconnect acceptance remains a gate.
    backups and conflicting financial/master transactions remain blocked,
    retaining queues/history. Existing legacy cloud members must
    be reconciled explicitly; the approved production gym currently has none.
-4. A local Windows x64 NSIS acceptance installer is rebuilt in `Client/dist-windows/`
-   on 2026-10-08 with Staff, Administrator editing access and the latest interface
-   changes. It retains the HTTPS child's Windows system environment correction
-   and specific connection failures. Rebuild from current schema-10 source for
-   the subsequent staff deletion and larger NFC layout. Shared data requires
+4. The local Windows x64 NSIS installer is rebuilt in `Client/dist-windows/`
+   on 2026-10-08 from current schema-10 source with staff deletion, the larger NFC
+   layout, attendance counts and the signed updater. Its updater signature,
+   archive integrity and native/WebView2 payload checks pass. It retains the
+   HTTPS child's Windows system environment correction and specific connection
+   failures. Actual Windows installation/runtime acceptance remains open. Shared data requires
    migrations 6–8 (applied) and the updated API. Confirm sign-in on the reporting Windows PC;
    Linux login and browser API health do not establish Windows app Auth connectivity.
    Run the Windows Actions workflow and obtain a Windows-runner installer. Verify

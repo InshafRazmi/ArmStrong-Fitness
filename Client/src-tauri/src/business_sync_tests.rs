@@ -199,6 +199,30 @@ impl BusinessTransport for Mock {
             assert_eq!(prior["request"], *request);
             prior["receipt"].clone()
         } else {
+            let mut current = BTreeMap::new();
+            for entry in &self.changes {
+                for change in entry["request"]["changes"].as_array().unwrap() {
+                    current.insert(
+                        (
+                            change["table"].clone().to_string(),
+                            change["id"].clone().to_string(),
+                        ),
+                        change["after"].clone(),
+                    );
+                }
+            }
+            for change in request["changes"].as_array().unwrap() {
+                let row = current
+                    .get(&(change["table"].to_string(), change["id"].to_string()))
+                    .unwrap_or(&Value::Null);
+                if *row != change["before"]
+                    && !(change["before"].is_null() && *row == change["after"])
+                {
+                    return Err(RemoteFailure::BusinessConflict {
+                        code: "business_revision_conflict".into(),
+                    });
+                }
+            }
             let sequence = self.changes.len() + 1;
             let receipt = json!({"protocolVersion":2,"operationId":request["operationId"],"deviceId":request["deviceId"],"gymId":self.scope.gym_id,"actorSubject":self.subject,"sequence":sequence,"requestSha256":hash(request).unwrap()});
             self.changes
@@ -796,6 +820,198 @@ fn business_mismatched_receipt_and_logout_during_io_cannot_acknowledge() {
         .is_err());
     assert_eq!(f.store.snapshot().unwrap()["pending"], 1);
 }
+#[test]
+fn fresh_writer_downloads_newer_gym_profile_before_uploading_its_default() {
+    let subject = id();
+    let gym = id();
+    let mut original = Fixture::new(&subject, &gym, true);
+    original
+        .store
+        .save_profile(ProfileInput {
+            version: 1,
+            name: "Shared gym".into(),
+            location: "Matale".into(),
+            phone: "0771234567".into(),
+            email: String::new(),
+        })
+        .unwrap();
+    let mut cloud = Mock::for_store(&original.store, &subject, &gym);
+    assert!(matches!(
+        original
+            .store
+            .run_business_sync(&mut cloud, Utc::now(), Limits::default())
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    original
+        .store
+        .save_profile(ProfileInput {
+            version: 2,
+            name: "Shared gym".into(),
+            location: "Updated location".into(),
+            phone: "0771234567".into(),
+            email: String::new(),
+        })
+        .unwrap();
+    original
+        .store
+        .run_business_sync(&mut cloud, Utc::now(), Limits::default())
+        .unwrap();
+
+    let mut fresh = Fixture::new(&subject, &gym, true);
+    let mut remote = Mock::for_store(&fresh.store, &subject, &gym);
+    remote.changes = cloud.changes;
+    let before = remote.changes.len();
+    assert!(matches!(
+        fresh
+            .store
+            .run_business_sync(
+                &mut remote,
+                Utc::now(),
+                Limits {
+                    pushes: 10,
+                    pages: 1
+                }
+            )
+            .unwrap(),
+        Run::Yielded {
+            pushed: 0,
+            pages: 1
+        }
+    ));
+    assert_eq!(remote.changes.len(), before);
+    assert!(fresh
+        .store
+        .save_plan(PlanInput {
+            id: None,
+            version: None,
+            name: "While downloading".into(),
+            duration_months: 1,
+            price_minor: 100,
+            active: true
+        })
+        .unwrap_err()
+        .contains("downloading"));
+    assert_eq!(fresh.store.snapshot().unwrap()["plans"], json!([]));
+    let mut restarted = Store::open(&fresh.path).unwrap();
+    restarted.removal_session = fresh.store.removal_session.clone();
+    assert!(matches!(
+        restarted
+            .run_business_sync(
+                &mut remote,
+                Utc::now(),
+                Limits {
+                    pushes: 10,
+                    pages: 1
+                }
+            )
+            .unwrap(),
+        Run::Yielded {
+            pushed: 0,
+            pages: 1
+        }
+    ));
+    assert_eq!(restarted.snapshot().unwrap()["profile"]["version"], 3);
+    assert_eq!(
+        restarted.snapshot().unwrap()["profile"]["location"],
+        "Updated location"
+    );
+    assert!(matches!(
+        restarted
+            .run_business_sync(&mut remote, Utc::now(), Limits::default())
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    assert!(remote.changes[before]["request"]["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|c| c["table"] != "gym_settings"));
+    assert_eq!(status(&restarted.conn).unwrap()["pending"], 0);
+    assert_eq!(status(&restarted.conn).unwrap()["conflicts"], json!([]));
+}
+
+#[test]
+fn first_computer_keeps_its_default_when_cloud_is_empty() {
+    let subject = id();
+    let gym = id();
+    let mut f = Fixture::new(&subject, &gym, true);
+    let mut cloud = Mock::for_store(&f.store, &subject, &gym);
+    assert!(matches!(
+        f.store
+            .run_business_sync(&mut cloud, Utc::now(), Limits::default())
+            .unwrap(),
+        Run::Yielded {
+            pushed: 0,
+            pages: 1
+        }
+    ));
+    assert!(matches!(
+        f.store
+            .run_business_sync(&mut cloud, Utc::now(), Limits::default())
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    assert!(cloud.changes[0]["request"]["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|c| c["table"] == "gym_settings" && c["after"] == default_profile()));
+    assert_eq!(status(&f.store.conn).unwrap()["pending"], 0);
+}
+
+#[test]
+fn frozen_default_conflict_preserves_request_and_does_not_start_initial_download() {
+    let subject = id();
+    let gym = id();
+    let mut original = Fixture::new(&subject, &gym, true);
+    original
+        .store
+        .save_profile(ProfileInput {
+            version: 1,
+            name: "Existing gym".into(),
+            location: "Matale".into(),
+            phone: String::new(),
+            email: String::new(),
+        })
+        .unwrap();
+    let mut cloud = Mock::for_store(&original.store, &subject, &gym);
+    original
+        .store
+        .run_business_sync(&mut cloud, Utc::now(), Limits::default())
+        .unwrap();
+    let mut f = Fixture::new(&subject, &gym, true);
+    capture(&f.store.conn).unwrap();
+    let encoded: String = f
+        .store
+        .conn
+        .query_row("SELECT request_json FROM business_batches", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    let mut remote = Mock::for_store(&f.store, &subject, &gym);
+    remote.changes = cloud.changes;
+    assert_eq!(
+        f.store
+            .run_business_sync(&mut remote, Utc::now(), Limits::default())
+            .unwrap(),
+        Run::Blocked
+    );
+    assert_eq!(
+        f.store
+            .conn
+            .query_row("SELECT request_json FROM business_batches", [], |r| r
+                .get::<_, String>(0))
+            .unwrap(),
+        encoded
+    );
+    assert_eq!(f.store.snapshot().unwrap()["profile"]["version"], 1);
+    assert!(status(&f.store.conn).unwrap()["conflicts"][0]["reason"]
+        .as_str()
+        .unwrap()
+        .contains("retrying the same transaction cannot resolve"));
+}
+
 #[test]
 fn business_failure_before_capture_commit_rolls_back_records_audit_and_queue() {
     let subject = id();

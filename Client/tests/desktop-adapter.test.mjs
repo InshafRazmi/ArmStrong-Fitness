@@ -5,6 +5,13 @@ import { minorUnits, requireSnapshot } from '../src/desktop/api.ts'
 import { desktopData, desktopMembers, emptyDesktopData } from '../src/desktop/adapter.ts'
 import { colomboToday, membershipDaysRemaining, membershipEndDate } from '../src/utils/membership.ts'
 import { attendanceTotals } from '../src/utils/attendance.ts'
+import { updateCheckError } from '../src/desktop/update-errors.ts'
+
+test('unavailable release metadata explains recovery without hiding signature errors', () => {
+  const message = updateCheckError('Could not fetch a valid release JSON from the remote')
+  assert.ok(message.includes('published signed release') && message.includes('saved gym records are retained'))
+  assert.equal(updateCheckError(new Error('Signature verification failed')), 'Signature verification failed')
+})
 
 test('daily attendance counts people once and separates gender without counting checkouts or voided visits', () => {
   const entry=(id,personId,gender,type='Check-in',date='2026-10-08',voidsId=null)=>({id,personId,gender,type,date,voidsId})

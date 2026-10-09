@@ -67,7 +67,7 @@ try {
     } else if (tab === 'NFC reader') assert.ok(markup.includes('Unverified'))
     else if (tab === 'Users & roles') assert.ok(markup.includes('Authentication is not configured') && markup.includes('Use test records only'))
     else if (tab === 'Server synchronization') assert.ok(markup.includes('Prepare this computer') && markup.includes('Account sign-in prepares this computer automatically') && markup.includes('Sync unavailable'))
-    else if (tab === 'Application updates') assert.ok(markup.includes('Manual updates') && markup.includes('Gym records are stored separately') && !markup.includes('Check for updates'))
+    else if (tab === 'Application updates') assert.ok(markup.includes('signed Windows updates') && markup.includes('gym records stay in their separate local database') && markup.includes('Check for updates'))
     else assert.ok(markup.includes('Unverified') || markup.includes('No authenticated backend'), tab+' accurately reports its capability')
   }
   console.log('PASS all seven desktop settings panels')

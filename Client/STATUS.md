@@ -1,6 +1,83 @@
-# Status — 2026-10-08
+# Status — 2026-10-09
 
-## Current update: signed Windows application updater
+## Current update: version 0.1.5 release preparation
+
+The user authorized committing, pushing and publishing version 0.1.5 for the
+in-app Windows updater. Frontend, native package, Tauri and both lock files now
+agree on 0.1.5; the existing updater public key is retained. GitHub authentication
+passes, main matches the local base, the requested tag is unused and the
+repository already has `TAURI_SIGNING_PRIVATE_KEY` configured. Release builds
+include the tested unused-computer initial download and clearer refusal/update
+errors described below. Source publication and signed release verification are
+in progress; this preparation entry is not publication confirmation.
+
+Existing frozen Windows conflicts still need their actual request reviewed;
+the update preserves them rather than rewriting or acknowledging their history.
+The pre-existing attendance-page formatting remains uncommitted in the workspace.
+
+## Previous update: Windows revision conflict and missing updater feed
+
+The user reports Linux synchronization succeeds after retained-transaction review,
+while Windows reports `business_revision_conflict`. Live API health now reports
+businessSchemaVersion 10. Read-only production checks show the shared gym profile
+at version 3; every unused installation starts with the version-1 default. A
+strict two-computer SQLite regression reproduces that first-upload mismatch.
+The Windows retained request has not been supplied, so this remains a likely
+cause of that computer's specific refusal, not a confirmed repair of its queue.
+
+Source now downloads existing shared records before capturing an unused
+computer's installation baseline. Download progress survives bounded runs and
+restart; saves during download roll back. Only the unfrozen default profile
+journal entry is removed after a verified profile download. Identity/sign-in
+audit remain queued, and an empty cloud still receives the first computer's
+default. Existing frozen requests and financial conflicts remain guarded.
+Revision-conflict text explains why exact retry cannot reconcile changed data.
+
+The configured GitHub updater endpoint returns HTTP 404 and the repository's
+release collection is empty. Prepared `dist-windows/latest.json` plus
+`RELEASE-UPLOAD.md` for the existing signed 0.1.0 installer. Installer and signature
+bytes are unchanged; its checksum and Tauri minisign signature pass, and
+SHA256SUMS now also covers the manifest. Publishing the public v0.1.0 release
+and those exact assets is still required. This manifest describes the previous
+build and does not include the later synchronization source fix. Update checks
+now explain missing/invalid release metadata while retaining other errors.
+
+Checks: browser and packaged builds PASS; 23 adapter tests and all interface
+renders PASS; native library 206 PASS, 3 existing environment probes ignored.
+Strict native library/test Clippy and whitespace checks PASS.
+The regression covers a newer shared profile, bounded download/restart, rollback
+of a save during download, empty-cloud bootstrap and preservation of frozen
+refused bytes. No installed SQLite, queue, production record, source commit/push
+or public release was changed. Windows request inspection, its safe conflict
+reconciliation, a rebuilt installer and actual Windows acceptance remain open.
+
+## Previous update: Windows installer with verified updater signature
+
+Built Windows x64 version 0.1.0 from source commit
+`03a3bf47060c131251a5c802386c2c3051626e46`, including schema 10 staff deletion,
+the larger NFC panel, dashboard attendance counts, retained transaction review
+and the signed updater. The installer is
+`dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe` with its `.sig`, SHA256SUMS,
+BUILD-INFO.txt and VERIFICATION.json. Size: 223,170,297 bytes / 212.83 MiB.
+SHA-256: `1b53c4893540b199eb011303e143f33b48a627970dc229c8d0c5e8be297a485a`.
+
+Checks pass: packaged frontend/native bridge requirements, optimized Windows
+MSVC x64 cross-build, NSIS integrity and eight-file allowlist, current native
+payload (only the expected three-byte Tauri NSIS bundle marker differs from the
+unbundled executable), exact cached WebView2 payload, static C runtime, native
+staff/NFC/schema markers, embedded updater public key/feed, exclusion of smoke
+hooks/private signing key, and updater signature verification using the same
+minisign verifier as Tauri. The existing backed-up key was reused.
+An attendance-page formatting change during the build was preserved; rebuilding
+the current frontend produces byte-for-byte identical packaged assets.
+
+The package is cross-built on Linux and has an updater signature; no Windows
+Authenticode publisher certificate is configured. Actual Windows installation,
+login/offline/reconnect, data-preserving upgrade, NFC and printing remain open.
+No app installation, API deployment, retained-transaction retry, GitHub release,
+commit or push was performed. Gym data and queues were not changed.
+
+## Previous update: signed Windows application updater
 
 Windows builds now include Tauri's signed updater runtime and a Settings page
 that checks GitHub Releases when opened, shows the installed version and offers
@@ -20,8 +97,9 @@ before they can self-update. See [setup steps](docs/WINDOWS_INSTALLER.md).
 
 Validation: frontend production build passes; locked native Rust updater check
 passes; Tauri debug build passes with both Windows installer/updater configs
-merged and bundling disabled. A real Windows NSIS build and live signed update
-remain unverified until Windows Actions runs with the GitHub signing secret.
+merged and bundling disabled. The later local Windows NSIS cross-build and
+signature verification pass as recorded above. A Windows-runner build, actual
+Windows installation and live update remain unverified.
 
 ## Current update: retained staff transaction deployment diagnosis
 

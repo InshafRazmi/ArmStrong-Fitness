@@ -48,6 +48,16 @@ pub(crate) fn hash(value: &Value) -> Result<String> {
     ))
 }
 pub(crate) fn capture(conn: &Connection) -> Result<()> {
+    let downloading: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM metadata WHERE key='business_initial_download')",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(db_error)?;
+    if downloading {
+        return Err("This computer is downloading the existing gym records. Finish server synchronization before saving changes.".into());
+    }
     let dirty = operations::rows(conn,"SELECT json_object('table',table_name,'id',record_id,'before',json(before_json),'after',json(after_json)) FROM business_dirty ORDER BY table_name,record_id")?;
     if dirty.is_empty() {
         return Ok(());
@@ -167,6 +177,51 @@ fn row_on(conn: &Connection, table: &Table, key: &str) -> Result<Option<Value>> 
     row.map(|r| serde_json::from_str(&r).map_err(|_| "Invalid local business row".into()))
         .transpose()
 }
+fn default_profile() -> Value {
+    json!({"id":1,"name":"Armstrong Fitness","location":"Matale, Sri Lanka","phone":"","email":"","version":1})
+}
+// Only an unused computer can download before freezing its baseline. Existing
+// batches, including refused ones, must retain their original bytes and order.
+fn prepare_initial_download(conn: &Connection) -> Result<bool> {
+    let active: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM metadata WHERE key='business_initial_download')",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(db_error)?;
+    if active {
+        return Ok(true);
+    }
+    let used: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM metadata WHERE key='business_initial_download_complete') OR EXISTS(SELECT 1 FROM business_batches) OR EXISTS(SELECT 1 FROM outbox) OR EXISTS(SELECT 1 FROM local_operations) OR EXISTS(SELECT 1 FROM business_cursor WHERE sequence<>0) OR EXISTS(SELECT 1 FROM audit WHERE action<>'Verified staff sign-in')", [], |r| r.get(0)).map_err(db_error)?;
+    if used {
+        return Ok(false);
+    }
+    for table in tables()? {
+        if table.name == "gym_settings" {
+            if row_on(conn, &table, "1")? != Some(default_profile()) {
+                return Ok(false);
+            }
+        } else if !matches!(table.name.as_str(), "users" | "audit") {
+            let occupied: bool = conn
+                .query_row(
+                    &format!("SELECT EXISTS(SELECT 1 FROM {})", table.name),
+                    [],
+                    |r| r.get(0),
+                )
+                .map_err(db_error)?;
+            if occupied {
+                return Ok(false);
+            }
+        }
+    }
+    conn.execute(
+        "INSERT INTO metadata VALUES('business_initial_download','1')",
+        [],
+    )
+    .map_err(db_error)?;
+    Ok(true)
+}
 fn apply_row(conn: &Connection, table: &Table, change: &Value) -> Result<()> {
     let after = &change["after"];
     let obj = after.as_object().ok_or("Invalid business row")?;
@@ -208,10 +263,8 @@ fn apply_row(conn: &Connection, table: &Table, change: &Value) -> Result<()> {
         }
         return Ok(());
     }
-    let fresh_profile = table.name == "gym_settings"
-        && change["before"].is_null()
-        && current
-            == json!({"id":1,"name":"Armstrong Fitness","location":"Matale, Sri Lanka","phone":"","email":"","version":1});
+    let fresh_profile =
+        table.name == "gym_settings" && change["before"].is_null() && current == default_profile();
     if current != change["before"] && !fresh_profile {
         return Err(format!(
             "Cloud {} conflicts with retained local history; no page was applied",
@@ -357,6 +410,9 @@ fn apply_page(store: &mut Store, transport: &impl BusinessTransport, page: Value
                     .get(field(c, "table")?)
                     .ok_or("Unknown business table")?;
                 apply_row(&tx, t, c)?;
+                if t.name == "gym_settings" {
+                    tx.execute("INSERT INTO metadata(key,value) SELECT 'business_initial_profile_received','1' WHERE EXISTS(SELECT 1 FROM metadata WHERE key='business_initial_download') ON CONFLICT(key) DO NOTHING", []).map_err(db_error)?;
+                }
             }
             tx.execute("DELETE FROM metadata WHERE key='business_import'", [])
                 .map_err(db_error)?;
@@ -418,6 +474,7 @@ fn record_failure(
             true,
             match code.as_str() {
                 "invalid_business_data" | "unsupported_business_table" => format!("Server refused the transaction: {code}. Check that the deployed server supports the latest staff and attendance records, then review and retry this transaction in Settings. Local history is retained."),
+                "business_revision_conflict" => "Server refused the transaction: business_revision_conflict. The server record has changed since this computer's version. Review the affected records in Settings; retrying the same transaction cannot resolve a different version. Export a backup before reconciling the records. Local history is retained.".into(),
                 _ => format!("Server refused the transaction: {code}. Local history is retained."),
             },
         ),
@@ -501,6 +558,86 @@ impl Store {
             if now < retry_on {
                 return Ok(Run::Deferred { retry_on });
             }
+        }
+        let initial = {
+            let tx = self
+                .conn
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(db_error)?;
+            super::member_worker::subject_on(&tx, self.removal_session.as_ref())?;
+            let initial = prepare_initial_download(&tx)?;
+            tx.commit().map_err(db_error)?;
+            initial
+        };
+        if initial {
+            for pages in 1..=limits.pages {
+                authorized(self, transport)?;
+                let cursor: i64 = self
+                    .conn
+                    .query_row("SELECT sequence FROM business_cursor WHERE id=1", [], |r| {
+                        r.get(0)
+                    })
+                    .map_err(db_error)?;
+                let page = match transport.pull_business(cursor) {
+                    Ok(page) => page,
+                    Err(failure) => {
+                        authorized(self, transport)?;
+                        return record_failure(self, failure, None, now);
+                    }
+                };
+                authorized(self, transport)?;
+                let more = page["hasMore"].as_bool().ok_or("Invalid business page")?;
+                if apply_page(self, transport, page).is_err() {
+                    return record_failure(
+                        self,
+                        RemoteFailure::BusinessConflict {
+                            code: "download_conflicts_with_local_history".into(),
+                        },
+                        None,
+                        now,
+                    );
+                }
+                if !more {
+                    let tx = self
+                        .conn
+                        .transaction_with_behavior(TransactionBehavior::Immediate)
+                        .map_err(db_error)?;
+                    super::member_worker::subject_on(&tx, self.removal_session.as_ref())?;
+                    let received: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM metadata WHERE key='business_initial_profile_received')", [], |r| r.get(0)).map_err(db_error)?;
+                    if received {
+                        // Discard only the unfrozen installation default; signup
+                        // audit and identity rows remain queued for confirmation.
+                        let seed: Option<(Option<String>, String)> = tx.query_row("SELECT before_json,after_json FROM business_dirty WHERE table_name='gym_settings' AND record_id='1'", [], |r| Ok((r.get(0)?, r.get(1)?))).optional().map_err(db_error)?;
+                        if let Some((before, after)) = seed {
+                            if before.is_some()
+                                || serde_json::from_str::<Value>(&after)
+                                    .map_err(|_| "Invalid initial gym profile")?
+                                    != default_profile()
+                            {
+                                return Err("Initial gym profile changed during download; local history was retained".into());
+                            }
+                            tx.execute("DELETE FROM business_dirty WHERE table_name='gym_settings' AND record_id='1'", []).map_err(db_error)?;
+                        }
+                    }
+                    tx.execute("DELETE FROM metadata WHERE key IN ('business_initial_download','business_initial_profile_received','business_last_error','business_retry_on','business_failures')", []).map_err(db_error)?;
+                    tx.execute("INSERT INTO metadata VALUES('business_initial_download_complete','1') ON CONFLICT(key) DO NOTHING", []).map_err(db_error)?;
+                    let read_only = !self.removal_session.as_ref().is_some_and(|s| s.can_write);
+                    if read_only {
+                        tx.execute("INSERT INTO metadata VALUES('business_last_success',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [now.to_rfc3339()]).map_err(db_error)?;
+                    }
+                    tx.commit().map_err(db_error)?;
+                    return Ok(if read_only {
+                        Run::Complete { pushed: 0, pages }
+                    } else {
+                        Run::Yielded { pushed: 0, pages }
+                    });
+                }
+            }
+            // Continue on the next bounded run, including after a process restart.
+            return Ok(Run::Yielded {
+                pushed: 0,
+                pages: limits.pages,
+            });
         }
         if self.removal_session.as_ref().is_some_and(|s| s.can_write) {
             let tx = self

@@ -8,6 +8,13 @@ local changes for real synchronization after reconnect.
 
 ## Current packaging milestone
 
+Version 0.1.5 is being prepared for the signed application updater at the user's
+request. It includes initial shared-data download before an unused computer's
+first upload and clearer revision-conflict/update errors. Existing frozen
+conflicts remain retained and require inspection. The 0.1.0 package below is
+the previous build; it is not the new update. Release completion is recorded in
+STATUS.md and the public v0.1.5 GitHub Release when published.
+
 `npm run desktop:windows:check` validates the three public connection fields in
 `desktop-auth.production.json`. It refuses SQL credentials, secret/service keys,
 unknown or duplicate fields and noncanonical/non-HTTPS origins. The installer
@@ -40,20 +47,13 @@ The repository is
 [InshafRazmi/ArmStrong-Fitness](https://github.com/InshafRazmi/ArmStrong-Fitness).
 The `Windows installer` Actions workflow uses a Windows runner, Node 24, Rust
 1.98.0, the locked frontend/Rust dependencies and Tauri CLI 2.12.1. It runs native
-business/authorization and interface checks, then uploads only the setup
-executable as `ArmStrong-Fitness-Windows-x64` for seven days. It requests only
-repository read permission, uses pinned action commits, and does not publish a
-release or deploy the API. Pull requests run it; once merged, it also supports
-manual **Run workflow**. The first actual Windows run and artifact are required
-before claiming Windows build acceptance.
-
-The connected GitHub integration currently rejects content writes with
-`403 Resource not accessible by integration`; no branch/PR/run has been created.
-Use `armstrong-desktop-changes.zip` from a writable checkout, or give that
-connection contents/workflow write access. The bundle's patch preserves the
-latest inspected main at `ef1faa0a729db3c74aa21c8c4dd5d6a498bbc9df` and contains
-no server env file or old secret values. Earlier packaging/onboarding changes
-and removal of tracked `server/.env` are already committed on that baseline.
+business/authorization and interface checks. Pull requests and manual runs upload
+the setup executable as `ArmStrong-Fitness-Windows-x64` for seven days. Pushing
+a `v*` tag builds and publishes the signed updater installer and `latest.json`
+to GitHub Releases using the configured signing secret. The workflow requests
+repository contents write permission for publishing and uses pinned action
+commits. It does not deploy the API. Windows installation/runtime acceptance
+remains required after the build.
 
 On a Windows x64 developer machine with Rust/MSVC and Node installed:
 
@@ -71,27 +71,21 @@ are already configured for the selected Render/Supabase endpoints. Ordinary
 
 The current local source has also produced
 `Client/dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe`, rebuilt on
-2026-10-08 (222,072,198 bytes / 211.78 MiB), with `SHA256SUMS` and
-`BUILD-INFO.txt`. Its SHA-256 is
-`3aee104fdcf710c0895dde57736709fc38920b3f66fe046ae8d8c1fb654b4e19`.
-This unsigned Linux cross-build includes Staff/monthly training, combined
-collection, salary payouts, Administrator editing access, the Arm logo, compact
-login/dashboard, staff NFC/manual attendance, male/female member counts, permanent
-operational removal and retained-transaction review/retry, plus the earlier membership,
-sign-in, Windows HTTPS and startup fixes. Its x64 native app, static runtime
-imports, installer integrity, exact embedded app/WebView2 payloads, Staff
-migration 9, recovery IPC and exclusion of UI smoke hooks are verified. Shared Staff data
-requires server migrations 6–7 and the matching updated API; this build does not
-deploy them. The Windows Actions workflow also runs a credential-free
-native HTTPS probe against the public Auth and gym API health endpoints before
-packaging. This check depends on those services being reachable from the runner;
-it does not authenticate an account or enroll a device. Windows installation and
-runtime acceptance remain open.
-
-The current source has since added native schema 10, permanent staff deletion
-from active/inactive lists and a larger NFC card panel. The existing Windows
-installer above does not include those subsequent changes. Rebuild from the
-current source and deploy the API supporting migrations 6–8 before shared use.
+2026-10-08 (223,170,297 bytes / 212.83 MiB), with its updater `.sig`,
+`SHA256SUMS`, `BUILD-INFO.txt` and `VERIFICATION.json`. Its SHA-256 is
+`1b53c4893540b199eb011303e143f33b48a627970dc229c8d0c5e8be297a485a`.
+Source commit: `03a3bf47060c131251a5c802386c2c3051626e46`.
+This Linux cross-build includes schema 10 staff deletion/history, the larger NFC
+panel, male/female attendance counts, retained transaction review/retry and the
+signed Windows updater, plus the existing membership/finance/sign-in features.
+The updater signature is verified with Tauri's minisign verifier. NSIS integrity,
+the eight-file payload allowlist, the current app after the expected three-byte
+NSIS bundle marker patch, exact cached WebView2 payload, x64 PE/static runtime,
+native feature markers and exclusion of smoke hooks/private signing key pass.
+No Windows Authenticode publisher certificate is configured. Windows installation
+and runtime acceptance remain open. Shared staff data requires server migrations
+6–8 and the matching deployed API reporting businessSchemaVersion 10; this build
+does not deploy the backend or retry retained transactions.
 
 ### Linux cross-build fallback
 
@@ -151,6 +145,28 @@ checks the latest GitHub Release; updates are signature-verified, and staff
 choose when to install and restart. The updater replaces application files only;
 gym records remain in the separate app-data SQLite database.
 
+On 2026-10-09 the configured update endpoint returns HTTP 404 and the repository
+has no GitHub Releases. This explains `Could not fetch a valid release JSON from
+the remote`. A local signed installer or an Actions artifact does not create that
+feed. `dist-windows/latest.json` and `RELEASE-UPLOAD.md` are prepared for the
+already signed 0.1.0 installer. Publish a public, non-draft, non-prerelease
+`v0.1.0` release and upload the exact installer, its `.sig`, `latest.json` and
+`SHA256SUMS` together. The manifest embeds the verified signature and refers to
+that exact installer. It does not contain the later synchronization source fix.
+After publication, the configured feed must return HTTP 200 and valid JSON;
+version 0.1.0 installations should then report they are up to date. Later updates
+need a higher application version and a newly built, signed package.
+See [Tauri's static update manifest](https://v2.tauri.app/plugin/updater/#static-json-file).
+
+For `business_revision_conflict`, export a Windows backup and inspect
+**Settings → Server synchronization → Review retained transaction**. Preserve
+the record list and original request; a different server revision cannot be
+reconciled by repeating an identical stale edit. Source now downloads shared
+data before the first upload on an unused computer, with saves guarded until
+download finishes. This fix is not yet in the delivered 0.1.0 installer and does
+not rewrite an existing frozen conflict. The reported Windows request still
+needs inspection before choosing a recovery; do not clear or replace its queue.
+
 The signing keypair is backed up outside the repository at
 `/home/prinzz/.tauri/armstrong-fitness/updater.key` and `updater.key.pub`.
 The backup directory has mode 700 and both files have mode 600. The saved files
@@ -169,10 +185,10 @@ To enable releases:
 2. Commit and push the prepared source changes. Before each release, select an
    unused semantic version and keep `Client/package.json`,
    `Client/src-tauri/Cargo.toml` and `Client/src-tauri/tauri.conf.json` consistent;
-   refresh their lock files. The current version is `0.1.0`.
+   refresh their lock files. The current version is `0.1.5`.
 3. Push the matching `v<version>` tag. For a first release at the current version,
-   if `v0.1.0` is unused, run `git tag v0.1.0` and then
-   `git push origin v0.1.0` after committing the source.
+   if `v0.1.5` is unused, run `git tag v0.1.5` and then
+   `git push origin v0.1.5` after committing the source.
 4. Wait for **Actions → Windows installer** to pass. Download the setup `.exe`
    from the resulting [GitHub Release](https://github.com/InshafRazmi/ArmStrong-Fitness/releases)
    and install it once on each Windows computer. Future releases with higher
