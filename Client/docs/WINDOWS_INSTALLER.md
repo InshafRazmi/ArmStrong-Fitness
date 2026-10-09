@@ -8,12 +8,12 @@ local changes for real synchronization after reconnect.
 
 ## Current packaging milestone
 
-Version 0.1.5 is being prepared for the signed application updater at the user's
-request. It includes initial shared-data download before an unused computer's
-first upload and clearer revision-conflict/update errors. Existing frozen
-conflicts remain retained and require inspection. The 0.1.0 package below is
-the previous build; it is not the new update. Release completion is recorded in
-STATUS.md and the public v0.1.5 GitHub Release when published.
+Signed Windows version [0.1.5](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.5)
+is published for the application updater. It includes initial shared-data
+download before an unused computer's first upload and clearer revision-conflict
+and update errors. Existing frozen conflicts remain retained and require
+inspection. The 0.1.0 package described below is the previous build. Current
+artifact checks and Windows acceptance limits are recorded in STATUS.md.
 
 `npm run desktop:windows:check` validates the three public connection fields in
 `desktop-auth.production.json`. It refuses SQL credentials, secret/service keys,
@@ -145,17 +145,14 @@ checks the latest GitHub Release; updates are signature-verified, and staff
 choose when to install and restart. The updater replaces application files only;
 gym records remain in the separate app-data SQLite database.
 
-On 2026-10-09 the configured update endpoint returns HTTP 404 and the repository
-has no GitHub Releases. This explains `Could not fetch a valid release JSON from
-the remote`. A local signed installer or an Actions artifact does not create that
-feed. `dist-windows/latest.json` and `RELEASE-UPLOAD.md` are prepared for the
-already signed 0.1.0 installer. Publish a public, non-draft, non-prerelease
-`v0.1.0` release and upload the exact installer, its `.sig`, `latest.json` and
-`SHA256SUMS` together. The manifest embeds the verified signature and refers to
-that exact installer. It does not contain the later synchronization source fix.
-After publication, the configured feed must return HTTP 200 and valid JSON;
-version 0.1.0 installations should then report they are up to date. Later updates
-need a higher application version and a newly built, signed package.
+The missing public release previously caused `Could not fetch a valid release
+JSON from the remote`. On 2026-10-09, public version 0.1.5 was published with the
+matching signed installer, `.sig`, `latest.json`, `SHA256SUMS` and verification
+records. The configured endpoint returns HTTP 200 and valid version-0.1.5 JSON.
+Updater-enabled version-0.1.0 installations can open **Settings → Application
+updates → Check for updates → Install 0.1.5 and restart**. The feed embeds the
+signature for that exact installer and uses the existing application public key.
+Later updates need a higher version and a newly built, signed package.
 See [Tauri's static update manifest](https://v2.tauri.app/plugin/updater/#static-json-file).
 
 For `business_revision_conflict`, export a Windows backup and inspect
@@ -163,8 +160,8 @@ For `business_revision_conflict`, export a Windows backup and inspect
 the record list and original request; a different server revision cannot be
 reconciled by repeating an identical stale edit. Source now downloads shared
 data before the first upload on an unused computer, with saves guarded until
-download finishes. This fix is not yet in the delivered 0.1.0 installer and does
-not rewrite an existing frozen conflict. The reported Windows request still
+download finishes. This fix is included in 0.1.5 and does not rewrite an existing
+frozen conflict. The reported Windows request still
 needs inspection before choosing a recovery; do not clear or replace its queue.
 
 The signing keypair is backed up outside the repository at
@@ -175,7 +172,8 @@ This persistent backup survives clearing `/tmp`; do not commit or share the
 private key. Keep this key for future releases. It has no password, so
 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` can remain unset.
 
-To enable releases:
+For future releases (the signing secret is already configured and `v0.1.5` is
+already published):
 
 1. Open [repository Actions secrets](https://github.com/InshafRazmi/ArmStrong-Fitness/settings/secrets/actions)
    and select **New repository secret**. Name it `TAURI_SIGNING_PRIVATE_KEY`,
@@ -186,9 +184,10 @@ To enable releases:
    unused semantic version and keep `Client/package.json`,
    `Client/src-tauri/Cargo.toml` and `Client/src-tauri/tauri.conf.json` consistent;
    refresh their lock files. The current version is `0.1.5`.
-3. Push the matching `v<version>` tag. For a first release at the current version,
-   if `v0.1.5` is unused, run `git tag v0.1.5` and then
-   `git push origin v0.1.5` after committing the source.
+3. Push the matching unused `v<version>` tag after committing the source. Keep
+   existing release tags unchanged. The Windows workflow also accepts an
+   existing `release_tag` for rebuilding with a corrected workflow; its tests
+   still come from that selected source tag.
 4. Wait for **Actions → Windows installer** to pass. Download the setup `.exe`
    from the resulting [GitHub Release](https://github.com/InshafRazmi/ArmStrong-Fitness/releases)
    and install it once on each Windows computer. Future releases with higher

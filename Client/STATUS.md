@@ -1,40 +1,45 @@
 # Status — 2026-10-09
 
-## Current update: version 0.1.5 release preparation
+## Current update: version 0.1.5 published
 
+The user-authorized signed Windows [v0.1.5 release](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.5)
+is public, non-draft, non-prerelease and latest, published at 06:37:35 UTC.
 Source commit `f825dab4836670290f7c4352185ab064f057d759` and its `v0.1.5`
-tag are pushed. The first Windows workflow passes 200 native tests (one ignored)
-and the real public Auth/API HTTPS probe, then stops on vendored declaration
-provenance: Windows CRLF conversion exactly reproduces the unexpected checksum.
-The source validator and upstream checksums remain unchanged. `.gitattributes`
-now preserves vendored bytes; the workflow disables checkout newline conversion
-and supports publishing an existing version tag from a corrected workflow.
-Manual release builds validate that the selected tag and application version
-match, then check out that exact tag. The original release tag is retained.
-The tagged rebuild passes the Windows native/HTTPS checks and declaration
-provenance, then fails a server test fixture that incorrectly JSON-escapes
-Windows paths in dotenv content. Test fixtures now write literal quoted values;
-a synthetic Windows-path regression passes without weakening the runtime's
-exact-environment check. Server typecheck and 83 unit tests pass (one local CLI
-probe skipped by the sandbox); all 13 desktop-setup tests, including actual CLI
-subprocesses, subsequently pass outside the sandbox.
+tag are pushed; the original tag is unchanged. Frontend, native package, Tauri
+and both lock files agree on 0.1.5. It includes the unused-computer initial
+download and clearer refusal/update errors described below.
 
-The exact tagged source has a signed Windows x64 cross-build in `dist-windows/`:
+The signed Windows x64 installer in `dist-windows/` and the public release is
 `ArmStrong-Fitness_0.1.5_x64-setup.exe`, 224,916,656 bytes, SHA-256
 `9ae54e475caf99efd6afaa0338c3e20f239ba474f8ada4c1c97a34f8d97f73d2`.
-Tauri minisign verification, NSIS integrity/allowlist, exact native/WebView2
-payloads, initial-download feature markers and matching updater manifest pass.
-The matching package/feed are being uploaded to a GitHub draft release;
-public publication and anonymous download verification remain in progress.
+All six uploaded release assets match local sizes and SHA-256 hashes. The
+application's exact configured public endpoint returns HTTP 200 and valid
+0.1.5 JSON. Anonymous download of the manifest's installer matches the entire
+local package and its signature verifies with the existing embedded updater
+public key using Tauri's minisign verifier. NSIS integrity/allowlist, exact
+native/WebView2 payloads and initial-download feature markers also pass.
+Updater-enabled 0.1.0 installations can use Settings → Application updates →
+Check for updates → Install 0.1.5 and restart.
 
-The user authorized committing, pushing and publishing version 0.1.5 for the
-in-app Windows updater. Frontend, native package, Tauri and both lock files now
-agree on 0.1.5; the existing updater public key is retained. GitHub authentication
-passes, main matches the local base, the requested tag is unused and the
-repository already has `TAURI_SIGNING_PRIVATE_KEY` configured. Release builds
-include the tested unused-computer initial download and clearer refusal/update
-errors described below. Source publication and signed release verification are
-in progress; this preparation entry is not publication confirmation.
+Windows runs pass 200 native tests (one ignored) and the real public Auth/API
+HTTPS probe. The corrected [acceptance workflow](https://github.com/InshafRazmi/ArmStrong-Fitness/actions/runs/37894112756)
+also passes server/native business, staff and attendance contracts, bundled
+login settings and interface checks; its separate Windows installer build is
+still running. The published installer is the verified Linux cross-build of
+the exact tag. Actual Windows installation and in-app upgrade acceptance remain
+open; a successful public download is not runtime installation evidence.
+
+Two earlier tag runs stopped on verification fixtures: Windows CRLF conversion
+changed vendored source checksums, and JSON-escaped dotenv values changed
+Windows paths. Main now preserves the vendored bytes and uses literal quoted
+test values, with a synthetic Windows-path regression. Neither the upstream
+checksums nor the runtime's exact-environment guard were weakened. The workflow
+supports a tagged rebuild using its corrected checkout logic, while tests still
+come from the selected tag. Server typecheck and 83 unit tests pass on Linux
+(one sandbox-blocked CLI probe); all 13 desktop-setup tests subsequently pass
+outside the sandbox, including actual CLI subprocesses. The original tagged
+server fixture remains historical source; it was not changed to publish this
+cross-build.
 
 Existing frozen Windows conflicts still need their actual request reviewed;
 the update preserves them rather than rewriting or acknowledging their history.
@@ -58,13 +63,15 @@ audit remain queued, and an empty cloud still receives the first computer's
 default. Existing frozen requests and financial conflicts remain guarded.
 Revision-conflict text explains why exact retry cannot reconcile changed data.
 
-The configured GitHub updater endpoint returns HTTP 404 and the repository's
-release collection is empty. Prepared `dist-windows/latest.json` plus
+Before the v0.1.5 publication above, the configured GitHub updater endpoint
+returned HTTP 404 and the repository's release collection was empty. Prepared
+`dist-windows/latest.json` plus
 `RELEASE-UPLOAD.md` for the existing signed 0.1.0 installer. Installer and signature
 bytes are unchanged; its checksum and Tauri minisign signature pass, and
 SHA256SUMS now also covers the manifest. Publishing the public v0.1.0 release
-and those exact assets is still required. This manifest describes the previous
-build and does not include the later synchronization source fix. Update checks
+and those exact assets was the previous proposed remedy, superseded by the
+published v0.1.5 release. That manifest described the previous build and did not
+include the later synchronization source fix. Update checks
 now explain missing/invalid release metadata while retaining other errors.
 
 Checks: browser and packaged builds PASS; 23 adapter tests and all interface

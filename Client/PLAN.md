@@ -8,6 +8,13 @@ tag and publication for this milestone. Preserve saved Windows data and frozen
 requests. Confirm the public updater JSON, version, installer URL and signature
 after publication; actual Windows conflict reconciliation remains separate.
 
+Completed: v0.1.5 is public and latest; the exact configured updater endpoint
+returns HTTP 200, and an anonymous installer download matches its recorded
+SHA-256 and verifies with the existing application signing public key. Windows
+native, HTTPS, server contracts, bundled login and interface checks pass. The
+published package is the verified cross-build of the unchanged version tag.
+Real Windows upgrade and existing conflict reconciliation remain open.
+
 ## Active release gates — 2026-10-08
 
 Permanent deletion for active/inactive staff, retained financial/attendance
