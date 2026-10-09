@@ -11,8 +11,21 @@ now preserves vendored bytes; the workflow disables checkout newline conversion
 and supports publishing an existing version tag from a corrected workflow.
 Manual release builds validate that the selected tag and application version
 match, then check out that exact tag. The original release tag is retained.
-Signed cross-build packaging and the corrected Windows workflow are in progress;
-the public updater release is not yet confirmed.
+The tagged rebuild passes the Windows native/HTTPS checks and declaration
+provenance, then fails a server test fixture that incorrectly JSON-escapes
+Windows paths in dotenv content. Test fixtures now write literal quoted values;
+a synthetic Windows-path regression passes without weakening the runtime's
+exact-environment check. Server typecheck and 83 unit tests pass (one local CLI
+probe skipped by the sandbox); all 13 desktop-setup tests, including actual CLI
+subprocesses, subsequently pass outside the sandbox.
+
+The exact tagged source has a signed Windows x64 cross-build in `dist-windows/`:
+`ArmStrong-Fitness_0.1.5_x64-setup.exe`, 224,916,656 bytes, SHA-256
+`9ae54e475caf99efd6afaa0338c3e20f239ba474f8ada4c1c97a34f8d97f73d2`.
+Tauri minisign verification, NSIS integrity/allowlist, exact native/WebView2
+payloads, initial-download feature markers and matching updater manifest pass.
+The matching package/feed are being uploaded to a GitHub draft release;
+public publication and anonymous download verification remain in progress.
 
 The user authorized committing, pushing and publishing version 0.1.5 for the
 in-app Windows updater. Frontend, native package, Tauri and both lock files now

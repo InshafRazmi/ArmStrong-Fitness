@@ -26,6 +26,11 @@ function fixture(run: (f: { dir: string; path: string; target: string; database:
 function redacted(run: () => unknown, hidden: string[]) {
   assert.throws(run, error => { for (const value of hidden) assert.ok(!String(error).includes(value)); return true; });
 }
+function writeFixtureEnvironment(path: string, env: Record<string, string>) {
+  // dotenv quotes preserve literal backslashes; JSON escaping changes Windows paths.
+  for (const value of Object.values(env)) assert.ok(!/["\r\n]/.test(value));
+  writeFileSync(path, Object.entries(env).map(([key, value]) => `${key}="${value}"`).join('\n'));
+}
 
 test('desktop setup / config: exports exactly public fields and rejects privileged/malformed keys', () => {
   const env = { ...publicSettings(), DATABASE_URL: 'private-database-password', AUTH_CHECK_PASSWORD: 'private-login-password', REGISTRATION_DEVICE_SECRET_SHA256: 'a'.repeat(64), DEVICE_SECRET: 'private-device-secret' };
@@ -132,7 +137,7 @@ test('desktop setup / real files: missing SQLite never creates a database or des
 test('desktop setup / local env: refuses inherited target overrides and never reads test env as fallback', () => {
   fixture(f => {
     const path = join(f.dir, '.env');
-    writeFileSync(path, Object.entries(f.env).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join('\n'));
+    writeFixtureEnvironment(path, f.env);
     assert.deepEqual({ ...localSetupEnvironment(f.env, path) }, f.env);
     for (const key of ['PUBLIC_API_ORIGIN', 'DATABASE_URL', 'REGISTRATION_GYM_ID', 'REGISTRATION_SQLITE_PATH', 'AUTH_CHECK_PASSWORD']) {
       redacted(() => localSetupEnvironment({ ...f.env, [key]: 'private-override-value' }, path), ['private-override-value', path]);
@@ -141,6 +146,16 @@ test('desktop setup / local env: refuses inherited target overrides and never re
     writeFileSync(join(f.dir, '.env.test'), 'DATABASE_URL=private-test-password');
     rmSync(path);
     redacted(() => localSetupEnvironment(f.env, path), [path, 'private-test-password']);
+  });
+});
+
+test('desktop setup / local env: quoted Windows paths retain their exact backslashes', () => {
+  fixture(f => {
+    const path = join(f.dir, '.env');
+    const env = { ...f.env, REGISTRATION_SQLITE_PATH: String.raw`C:\Users\Example User\AppData\Local\ArmStrong\fixture.sqlite3` };
+    writeFixtureEnvironment(path, env);
+    assert.deepEqual({ ...localSetupEnvironment(env, path) }, env);
+    redacted(() => localSetupEnvironment({ ...env, REGISTRATION_SQLITE_PATH: env.REGISTRATION_SQLITE_PATH.replaceAll('\\', '/') }, path), [env.REGISTRATION_SQLITE_PATH, path]);
   });
 });
 
@@ -176,7 +191,7 @@ test('desktop setup / actual local CLI: review/write use only runtime settings a
   fixture(f => {
     const envPath = join(f.dir, '.env');
     const settings: Record<string, string> = { ...f.env, DATABASE_URL: 'private-synthetic-database-password', AUTH_CHECK_PASSWORD: 'private-synthetic-login-password' };
-    writeFileSync(envPath, Object.entries(settings).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join('\n'));
+    writeFixtureEnvironment(envPath, settings);
     const script = resolve('scripts/provision-desktop-config.ts');
     const run = (mode: string) => spawnSync(process.execPath, ['--env-file=.env', script, mode], { cwd: f.dir, env: {}, encoding: 'utf8', timeout: 10000 });
     for (const [mode, state] of [['check', 'missing'], ['write', 'created'], ['write', 'existing']]) {
