@@ -30,7 +30,7 @@ pub(super) fn eligible(
     request: &Value,
     error: &str,
 ) -> Result<()> {
-    removal::authorized(conn, session)?;
+    let actor = removal::authorized(conn, session)?;
     let identity = member_worker::review_scope(conn, session)?;
     if !error.contains("business_revision_conflict") {
         return Err("Initial profile recovery applies only to a refused default profile.".into());
@@ -56,10 +56,29 @@ pub(super) fn eligible(
         || profiles[0]["after"] != business_sync::default_profile()
         || changes.len() < 2
         || changes.iter().any(|c| {
-            !c["before"].is_null() || (c["table"] != "gym_settings" && c["table"] != "audit")
+            !c["before"].is_null()
+                || !matches!(
+                    c["table"].as_str(),
+                    Some("gym_settings" | "audit" | "users")
+                )
         })
     {
         return Err("This transaction contains an edited profile or other business changes; separate review is required.".into());
+    }
+    // Native first sign-in journals an inactive identity reference alongside the
+    // seed profile and audit. Only that same verified actor's unchanged insert
+    // is eligible; this reference carries no activation or role authority.
+    let users: Vec<_> = changes.iter().filter(|c| c["table"] == "users").collect();
+    if users.len() > 1
+        || users.iter().any(|c| {
+            c["id"] != actor.user_id
+                || c["after"]["id"] != actor.user_id
+                || c["after"]["subject"] != identity["subject"]
+                || c["after"]["active"] != 0
+                || c["after"]["version"] != 1
+        })
+    {
+        return Err("The retained identity is not the unchanged signed-in account; separate review is required.".into());
     }
     let cursor: i64 = conn
         .query_row("SELECT sequence FROM business_cursor WHERE id=1", [], |r| {
@@ -94,7 +113,9 @@ pub(super) fn eligible(
             let key = change["id"]
                 .as_str()
                 .ok_or("Invalid retained record identity")?;
-            if business_sync::row_on(conn, &table, key)? != Some(change["after"].clone()) {
+            let local = business_sync::row_on(conn, &table, key)?
+                .map(|row| business_sync::normalized(&table.name, row));
+            if local != Some(change["after"].clone()) {
                 return Err(
                     "The retained record differs from local history; separate review is required."
                         .into(),
@@ -162,7 +183,7 @@ pub(super) fn replacement(request: &Value, subject: &str) -> Result<Value> {
         .as_array()
         .ok_or("Invalid retained transaction")?
         .iter()
-        .filter(|c| c["table"] == "audit")
+        .filter(|c| c["table"] == "audit" || c["table"] == "users")
         .cloned()
         .collect();
     Ok(

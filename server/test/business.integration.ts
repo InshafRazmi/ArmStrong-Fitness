@@ -134,57 +134,59 @@ test(`${liveAuth ? 'LIVE Supabase PostgreSQL + Auth' : 'REAL PostgreSQL / MOCK A
     await db.query('UPDATE armstrong.devices SET active=false WHERE gym_id=$1 AND id=$2', [gym, device]);
     phase = 'revoked exact retry';
     assert.equal((await push(entries[0].request)).statusCode, 403, 'exact retries must still recheck revocation');
-    phase = 'retained initial-profile recovery';
-    const recovery = JSON.parse(await readFile(`${process.env.ARMSTRONG_BUSINESS_FIXTURE_PATH}.profile-recovery.json`, 'utf8'));
-    const recovered = JSON.parse(JSON.stringify(recovery).replaceAll(recovery.originalRequest.actorSubject, user));
-    const recoveryGym = randomUUID();
-    await db.query("INSERT INTO armstrong.gyms(id,name) VALUES($1,'Synthetic profile recovery')", [recoveryGym]);
-    await db.query("INSERT INTO armstrong.staff(gym_id,user_id,display_name,role) VALUES($1,$2,'Synthetic Administrator','Administrator')", [recoveryGym, user]);
-    for (const recoveryDevice of new Set<string>(recovered.entries.map((entry: any) => entry.request.deviceId))) {
-      await db.query('INSERT INTO armstrong.devices(gym_id,id,secret_sha256,can_write) VALUES($1,$2,$3,true)', [recoveryGym, recoveryDevice, createHash('sha256').update(secret).digest('hex')]);
-    }
-    const recoveryHeaders = { ...headers, 'x-gym-id': recoveryGym, 'x-device-id': recovered.originalRequest.deviceId };
-    let checkedRefusal = false;
-    for (const entry of recovered.entries) {
-      if (!checkedRefusal && entry.request.deviceId === recovered.originalRequest.deviceId) {
-        const refused = await push(recovered.originalRequest, recoveryHeaders);
-        assert.equal(refused.statusCode, 409);
-        assert.equal(refused.json().error, 'business_revision_conflict');
-        checkedRefusal = true;
+    for (const suffix of ['profile-recovery', 'profile-recovery-user']) {
+      phase = `retained initial-profile recovery (${suffix})`;
+      const recovery = JSON.parse(await readFile(`${process.env.ARMSTRONG_BUSINESS_FIXTURE_PATH}.${suffix}.json`, 'utf8'));
+      const recovered = JSON.parse(JSON.stringify(recovery).replaceAll(recovery.originalRequest.actorSubject, user));
+      const recoveryGym = randomUUID();
+      await db.query("INSERT INTO armstrong.gyms(id,name) VALUES($1,'Synthetic profile recovery')", [recoveryGym]);
+      await db.query("INSERT INTO armstrong.staff(gym_id,user_id,display_name,role) VALUES($1,$2,'Synthetic Administrator','Administrator')", [recoveryGym, user]);
+      for (const recoveryDevice of new Set<string>(recovered.entries.map((entry: any) => entry.request.deviceId))) {
+        await db.query('INSERT INTO armstrong.devices(gym_id,id,secret_sha256,can_write) VALUES($1,$2,$3,true)', [recoveryGym, recoveryDevice, createHash('sha256').update(secret).digest('hex')]);
       }
-      const reply = await push(entry.request, { ...recoveryHeaders, 'x-device-id': entry.request.deviceId });
-      assert.equal(reply.statusCode, 200, reply.body);
-      assert.equal(reply.json().requestSha256, digest(parseBatch(entry.request)));
-      if (entry.request.operationId === recovered.replacementBatchId) {
-        assert.deepEqual(entry.request.changes, recovered.originalRequest.changes.filter((change: any) => change.table === 'audit'));
-        assert.deepEqual((await push(entry.request, recoveryHeaders)).json(), reply.json(), 'lost replacement reply returns the same actual receipt');
+      const recoveryHeaders = { ...headers, 'x-gym-id': recoveryGym, 'x-device-id': recovered.originalRequest.deviceId };
+      let checkedRefusal = false;
+      for (const entry of recovered.entries) {
+        if (!checkedRefusal && entry.request.deviceId === recovered.originalRequest.deviceId) {
+          const refused = await push(recovered.originalRequest, recoveryHeaders);
+          assert.equal(refused.statusCode, 409);
+          assert.equal(refused.json().error, 'business_revision_conflict');
+          checkedRefusal = true;
+        }
+        const reply = await push(entry.request, { ...recoveryHeaders, 'x-device-id': entry.request.deviceId });
+        assert.equal(reply.statusCode, 200, reply.body);
+        assert.equal(reply.json().requestSha256, digest(parseBatch(entry.request)));
+        if (entry.request.operationId === recovered.replacementBatchId) {
+          assert.deepEqual(entry.request.changes, recovered.originalRequest.changes.filter((change: any) => ['audit', 'users'].includes(change.table)));
+          assert.deepEqual((await push(entry.request, recoveryHeaders)).json(), reply.json(), 'lost replacement reply returns the same actual receipt');
+        }
       }
-    }
-    assert.ok(checkedRefusal);
-    assert.equal((await db.query('SELECT count(*)::int AS n FROM armstrong.business_operations WHERE gym_id=$1 AND id=$2', [recoveryGym, recovered.originalRequest.operationId])).rows[0].n, 0, 'refused original never acquires a fabricated receipt');
-    const recoveredProfile = (await db.query("SELECT data FROM armstrong.business_records WHERE gym_id=$1 AND table_name='gym_settings' AND record_id='1'", [recoveryGym])).rows[0].data;
-    assert.equal(recoveredProfile.version, 3);
-    assert.equal(recoveredProfile.location, 'Server location 2');
-    const recoveredHistory = stateFrom([]);
-    cursor = 0;
-    let recoveredCount = 0;
-    for (;;) {
-      const page: LightMyRequestResponse = await app.inject({ url: `/v2/business/changes?after=${cursor}`, headers: recoveryHeaders });
-      assert.equal(page.statusCode, 200);
-      const body = page.json();
-      for (const entry of body.changes) {
-        assert.notEqual(entry.request.operationId, recovered.originalRequest.operationId);
-        assert.equal(entry.receipt.requestSha256, digest(parseBatch(entry.request)));
-        applyChanges(recoveredHistory, entry.request.changes);
-        recoveredCount++;
+      assert.ok(checkedRefusal);
+      assert.equal((await db.query('SELECT count(*)::int AS n FROM armstrong.business_operations WHERE gym_id=$1 AND id=$2', [recoveryGym, recovered.originalRequest.operationId])).rows[0].n, 0, 'refused original never acquires a fabricated receipt');
+      const recoveredProfile: Record<string, unknown> = (await db.query("SELECT data FROM armstrong.business_records WHERE gym_id=$1 AND table_name='gym_settings' AND record_id='1'", [recoveryGym])).rows[0].data;
+      assert.equal(recoveredProfile.version, 3);
+      assert.equal(recoveredProfile.location, 'Server location 2');
+      const recoveredHistory = stateFrom([]);
+      cursor = 0;
+      let recoveredCount = 0;
+      for (;;) {
+        const page: LightMyRequestResponse = await app.inject({ url: `/v2/business/changes?after=${cursor}`, headers: recoveryHeaders });
+        assert.equal(page.statusCode, 200);
+        const body = page.json();
+        for (const entry of body.changes) {
+          assert.notEqual(entry.request.operationId, recovered.originalRequest.operationId);
+          assert.equal(entry.receipt.requestSha256, digest(parseBatch(entry.request)));
+          applyChanges(recoveredHistory, entry.request.changes);
+          recoveredCount++;
+        }
+        cursor = body.nextCursor;
+        if (!body.hasMore) break;
       }
-      cursor = body.nextCursor;
-      if (!body.hasMore) break;
-    }
-    assert.equal(recoveredCount, recovered.entries.length);
-    assert.deepEqual(recoveredHistory.get('gym_settings')!.get('1'), recoveredProfile);
-    for (const audit of recovered.originalRequest.changes.filter((change: any) => change.table === 'audit')) {
-      assert.deepEqual(recoveredHistory.get('audit')!.get(audit.id), audit.after, 'original sign-in audit survives recovery');
+      assert.equal(recoveredCount, recovered.entries.length);
+      assert.deepEqual(recoveredHistory.get('gym_settings')!.get('1'), recoveredProfile);
+      for (const reference of recovered.originalRequest.changes.filter((change: any) => ['audit', 'users'].includes(change.table))) {
+        assert.deepEqual(recoveredHistory.get(reference.table)!.get(reference.id), reference.after, 'original sign-in reference survives recovery');
+      }
     }
   } catch (error) { throw safeFailure(error, `Business PostgreSQL integration (${phase})`); }
   finally { if (app) await app.close(); if (db) { await db.query('ROLLBACK'); db.release(); } await pool.end(); }

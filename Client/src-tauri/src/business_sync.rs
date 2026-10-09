@@ -31,7 +31,7 @@ pub(crate) fn tables() -> Result<Vec<Table>> {
         .map(|c| c.tables)
         .map_err(|_| "Invalid bundled business row contract".into())
 }
-fn normalized(table: &str, mut row: Value) -> Value {
+pub(super) fn normalized(table: &str, mut row: Value) -> Value {
     if table == "users" {
         row["active"] = json!(0);
         row["version"] = json!(1);

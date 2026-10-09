@@ -42,23 +42,30 @@ and saved receipt recovery, exact lost-response retry, logout/cancellation,
 storage races, wrong scope, read-only approval and retained conflicts. Live
 Windows/OS-vault and production native HTTPS recovery acceptance remain open.
 
-## Retained installation profile recovery (0.1.6)
+## Retained installation profile recovery (0.1.7)
 
 An older Windows installation can retain `business_revision_conflict` for an Add
-of the original Armstrong Fitness gym profile and sign-in audits. Version 0.1.6
-adds a narrowly checked recovery for that unchanged installation profile.
+of the original Armstrong Fitness gym profile and sign-in audits. Version 0.1.7
+also handles the normal first-sign-in batch shown as **Add audit**, **Add gym
+settings**, **Add users**. Version 0.1.6 incorrectly excluded that user reference
+and consequently displayed no recovery checkbox for this case.
 
 Sign in online as the original Administrator. Open **Settings → Server
 synchronization → Review retained transaction**. If the native review offers
-**Recover using server profile**, check the confirmation and select that action.
+**Recover using server profile**, check **I confirm recovery using the server
+gym profile.** and select that action.
 The application saves a validated backup, rechecks the original request with the
 server, preserves its frozen bytes and audit records, and downloads complete
 verified shared history before replacing the local database. Keep the backup
 path displayed by the application. After recovery, sign in online again and let
 the remaining recovery audits receive their own server confirmations.
 
-Only a fresh revision refusal permits an audit-only replacement with a stable
-operation ID. A real receipt for the original request takes precedence. The
+Only a fresh revision refusal permits a replacement of the retained audits and,
+when present, the unchanged signed-in account's initial identity reference, with
+a stable operation ID. The reference is inactive/version 1 and cannot grant
+roles or sign-in authority. The server also refuses a different existing identity;
+recovery then leaves the original database intact. A real receipt for the
+original request takes precedence. The
 superseded request remains refused without a fabricated receipt and is counted
 separately from confirmed transactions. Lost replies reuse the same replacement;
 failed or cancelled recovery leaves the original database intact.

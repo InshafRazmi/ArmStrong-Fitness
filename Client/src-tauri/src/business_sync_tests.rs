@@ -263,17 +263,26 @@ impl BusinessTransport for Mock {
     }
 }
 
-// Reproduce the affected Windows batch: two sign-in audits plus the frozen
-// installation profile, with no business operations or edited user identity.
+// Preserve coverage for older audit-only seeds and the first-sign-in seed
+// reported by Windows: one audit, the default profile and a user reference.
 fn frozen_profile_fixture(
     subject: &str,
     gym: &str,
 ) -> (Fixture, InitialProfileRecoveryInput, String) {
+    frozen_installation_fixture(subject, gym, false)
+}
+fn frozen_installation_fixture(
+    subject: &str,
+    gym: &str,
+    with_user: bool,
+) -> (Fixture, InitialProfileRecoveryInput, String) {
     let mut f = Fixture::new(subject, gym, true);
-    f.store
-        .conn
-        .execute("DELETE FROM business_dirty WHERE table_name='users'", [])
-        .unwrap();
+    if !with_user {
+        f.store
+            .conn
+            .execute("DELETE FROM business_dirty WHERE table_name='users'", [])
+            .unwrap();
+    }
     let device: String = f
         .store
         .conn
@@ -283,7 +292,7 @@ fn frozen_profile_fixture(
             |r| r.get(0),
         )
         .unwrap();
-    for _ in 0..2 {
+    for _ in 0..if with_user { 1 } else { 2 } {
         f.store.conn.execute("INSERT INTO audit(id,actor,device_id,action,entity_id,before_json,after_json,created_at,entity,actor_user_id) VALUES(?1,'Administrator',?2,'Verified staff sign-in',?3,NULL,'{}',?4,'staff sign-in',?3)", params![id(), device, subject, Utc::now().to_rfc3339()]).unwrap();
     }
     let tx = f.store.conn.transaction().unwrap();
@@ -481,10 +490,178 @@ fn initial_profile_recovery_keeps_original_bytes_audits_backup_and_real_receipts
 }
 
 #[test]
+fn initial_profile_recovery_keeps_first_sign_in_identity_and_audit_without_authority_changes() {
+    let subject = id();
+    let gym = id();
+    let (mut f, input, encoded) = frozen_installation_fixture(&subject, &gym, true);
+    let original: Value = serde_json::from_str(&encoded).unwrap();
+    assert_eq!(original["changes"][2]["table"], "users");
+    assert_eq!(original["changes"][2]["after"]["active"], 0);
+    // Subsequent enrollment's local version increment is not an identity edit.
+    f.store
+        .conn
+        .execute("UPDATE users SET version=2 WHERE id=?1", [&subject])
+        .unwrap();
+    assert_eq!(
+        f.store.preview_business_retry(&input.batch_id).unwrap()["initialProfileRecovery"]
+            ["allowed"],
+        true
+    );
+    let before = f.store.backup_envelope().unwrap();
+    let mut remote = newer_profile_cloud(&f.store, &subject, &gym);
+    let mut job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    job.run(&mut remote, || Ok(())).unwrap();
+    assert_eq!(f.store.backup_envelope().unwrap().sha256, before.sha256);
+    let result = job.commit(&mut f.store).unwrap();
+    assert_eq!(result["superseded"], true);
+    assert_eq!(
+        retained_batch(&f.store, &input.batch_id),
+        (encoded.clone(), "conflict".into(), None)
+    );
+    let backup: recovery::BackupEnvelope =
+        serde_json::from_slice(&std::fs::read(result["recoveryPath"].as_str().unwrap()).unwrap())
+            .unwrap();
+    assert_eq!(backup.sha256, before.sha256);
+    let replacement = remote
+        .changes
+        .iter()
+        .find(|entry| entry["request"]["operationId"] == result["replacementBatchId"])
+        .unwrap();
+    let preserved: Vec<_> = original["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["table"] != "gym_settings")
+        .cloned()
+        .collect();
+    assert_eq!(replacement["request"]["changes"], json!(preserved));
+    let user_table = tables()
+        .unwrap()
+        .into_iter()
+        .find(|t| t.name == "users")
+        .unwrap();
+    let local_user = row_on(&f.store.conn, &user_table, &subject)
+        .unwrap()
+        .unwrap();
+    assert_eq!(local_user["active"], 1);
+    assert_eq!(local_user["version"], 2);
+    assert_eq!(f.store.conn.query_row("SELECT r.name FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=?1", [&subject], |r| r.get::<_, String>(0)).unwrap(), "Administrator");
+    assert_eq!(f.store.snapshot().unwrap()["profile"]["version"], 3);
+    let mut restarted = Store::open(&f.path).unwrap();
+    restarted.removal_session = Some(removal::Session {
+        user_id: subject.clone(),
+        expires_at: Utc::now() + chrono::Duration::hours(1),
+        can_write: true,
+        native_nonce: Some("nonce".into()),
+    });
+    assert!(matches!(
+        restarted
+            .run_business_sync(&mut remote, Utc::now(), Limits::default())
+            .unwrap(),
+        Run::Complete { .. }
+    ));
+    assert_eq!(status(&restarted.conn).unwrap()["pending"], 0);
+    assert_eq!(
+        retained_batch(&restarted, &input.batch_id),
+        (encoded, "conflict".into(), None)
+    );
+    if let Ok(path) = std::env::var("ARMSTRONG_BUSINESS_FIXTURE_PATH") {
+        std::fs::write(format!("{path}.profile-recovery-user.json"), json!({"entries":remote.changes,"originalRequest":original,"replacementBatchId":result["replacementBatchId"]}).to_string()).unwrap();
+    }
+}
+
+#[test]
+fn initial_profile_recovery_does_not_overwrite_a_different_server_identity() {
+    let subject = id();
+    let gym = id();
+    let (mut f, input, encoded) = frozen_installation_fixture(&subject, &gym, true);
+    let mut remote = newer_profile_cloud(&f.store, &subject, &gym);
+    for entry in &mut remote.changes {
+        for change in entry["request"]["changes"].as_array_mut().unwrap() {
+            if change["table"] == "users" {
+                change["after"]["email"] = json!("different@example.invalid");
+            }
+        }
+    }
+    let server_history = remote.changes.clone();
+    let before = f.store.backup_envelope().unwrap();
+    let mut job = f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .unwrap();
+    assert!(job.run(&mut remote, || Ok(())).is_err());
+    assert!(job.commit(&mut f.store).is_err());
+    assert_eq!(remote.changes, server_history);
+    assert_eq!(f.store.backup_envelope().unwrap().sha256, before.sha256);
+    assert_eq!(
+        retained_batch(&f.store, &input.batch_id),
+        (encoded, "conflict".into(), None)
+    );
+}
+
+#[test]
+fn initial_profile_recovery_refuses_other_or_edited_identity_references() {
+    let subject = id();
+    let gym = id();
+    let (mut f, input, encoded) = frozen_installation_fixture(&subject, &gym, true);
+    let request: Value = serde_json::from_str(&encoded).unwrap();
+    for variant in 0..8 {
+        let mut edited = request.clone();
+        match variant {
+            0 => edited["changes"][2]["after"]["subject"] = json!(id()),
+            1 => edited["changes"][2]["id"] = json!(id()),
+            2 => edited["changes"][2]["after"]["display_name"] = json!("Changed identity"),
+            3 => edited["changes"][2]["after"]["email"] = json!("changed@example.invalid"),
+            4 => edited["changes"][2]["after"]["active"] = json!(1),
+            5 => edited["changes"][2]["after"]["version"] = json!(2),
+            6 => edited["changes"][2]["before"] = edited["changes"][2]["after"].clone(),
+            _ => {
+                let extra = edited["changes"][2].clone();
+                edited["changes"].as_array_mut().unwrap().push(extra);
+            }
+        }
+        assert!(
+            crate::initial_profile_recovery::eligible(
+                &f.store.conn,
+                f.store.removal_session.as_ref(),
+                &input.batch_id,
+                &edited,
+                "business_revision_conflict"
+            )
+            .is_err(),
+            "variant {variant}"
+        );
+    }
+    f.store
+        .conn
+        .execute(
+            "UPDATE users SET display_name='Edited locally',version=version+1 WHERE id=?1",
+            [&subject],
+        )
+        .unwrap();
+    assert_eq!(
+        f.store.preview_business_retry(&input.batch_id).unwrap()["initialProfileRecovery"]
+            ["allowed"],
+        false
+    );
+    assert!(f
+        .store
+        .prepare_initial_profile_recovery(input.clone())
+        .is_err());
+    assert_eq!(
+        retained_batch(&f.store, &input.batch_id),
+        (encoded, "conflict".into(), None)
+    );
+}
+
+#[test]
 fn initial_profile_recovery_lost_reply_uses_the_same_replacement_on_retry() {
     let subject = id();
     let gym = id();
-    let (mut f, mut input, encoded) = frozen_profile_fixture(&subject, &gym);
+    let (mut f, mut input, encoded) = frozen_installation_fixture(&subject, &gym, true);
     let mut remote = newer_profile_cloud(&f.store, &subject, &gym);
     let cloud_count = remote.changes.len();
     remote.drop_reply = true;

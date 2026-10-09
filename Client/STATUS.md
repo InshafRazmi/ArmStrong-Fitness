@@ -1,6 +1,33 @@
 # Status — 2026-10-09
 
-## Current update: version 0.1.6 recovery update published
+## Current update: first-sign-in retained profile recovery (0.1.7 candidate)
+
+The new Windows screenshot shows Add audit, Add gym settings and Add users.
+Version 0.1.6's fixture omitted the normal first-sign-in user reference, so native
+eligibility refused this case and the recovery checkbox did not appear.
+Version 0.1.7 permits at most one initial inactive/version-1 identity reference,
+only for the current verified Administrator's unchanged local ID and Auth
+subject. Local activation/version changes normalize exactly as ordinary sync;
+name, email, subject, identity updates and additional identities remain refused.
+The replacement preserves that exact reference and sign-in audit while omitting
+only the installation default profile. Server identity conflicts still refuse
+without replacing the original database. Backup, original bytes, real receipts,
+stable lost-reply retry, complete download and native commit fences remain.
+
+The native regression now reproduces the screenshot's three-record batch.
+It checks backup and original-request preservation, roles/activation retention,
+restart and lost-reply behavior, and refusal of edited or mismatched identities.
+The full native library passes 216 tests (three existing probes ignored); the
+additional server-identity refusal regression also passes. Strict Clippy/fmt,
+22 packaged-auth tests, browser/packaged builds, 23 adapters, interface renders
+and native desktop launch/restart pass. Server typecheck, 83 unit tests and
+three business/one staff/one attendance native contracts pass. Both seed shapes
+are included in live isolated Auth/PostgreSQL acceptance, which is in progress.
+Signed Windows packaging is in progress; v0.1.5/v0.1.6 tags/assets remain unchanged.
+The user's unrelated attendance formatting remains outside this change.
+Actual recovery on the affected Windows computer remains an acceptance step.
+
+## Previous update: version 0.1.6 recovery update published
 
 The signed Windows [v0.1.6 release](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.6)
 is public, non-draft, non-prerelease and latest, published at 08:32:33 UTC.

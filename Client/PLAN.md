@@ -1,5 +1,15 @@
 # Core release plan
 
+## First-sign-in retained profile repair — 2026-10-09
+
+The current screenshot includes the initial verified sign-in user reference,
+which 0.1.6 incorrectly excluded. Extend the narrow recovery to preserve that
+unchanged inactive identity reference and its audit. Verify the native, server
+and real isolated backend contracts for both seed shapes and keep edited
+identities/business records refused. Deliver signed 0.1.7 with the existing key;
+preserve both published versions and the user's unrelated attendance formatting.
+Actual Windows confirmation and recovery follow installation of this update.
+
 ## Retained default-profile repair — 2026-10-09
 
 Continue the Windows repair after the supplied three-record review identified an
