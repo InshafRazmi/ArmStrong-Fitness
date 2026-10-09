@@ -2,6 +2,12 @@ name: Windows installer
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing version tag to build and publish; leave empty for acceptance only
+        type: string
+        required: false
+        default: ''
   pull_request:
     paths:
       - 'Client/**'
@@ -24,7 +30,28 @@ jobs:
         working-directory: Client
         shell: pwsh
     steps:
+      - name: Preserve exact source bytes on Windows
+        working-directory: ${{ github.workspace }}
+        env:
+          ARMSTRONG_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if ($env:ARMSTRONG_RELEASE_TAG -and $env:ARMSTRONG_RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw 'Use an existing vMAJOR.MINOR.PATCH release tag.'
+          }
+          git config --global core.autocrlf false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      - name: Verify the selected release version
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag
+        env:
+          ARMSTRONG_RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ($env:ARMSTRONG_RELEASE_TAG -ne "v$packageVersion" -or $tauriVersion -ne $packageVersion) {
+            throw 'The selected release tag and application versions must match.'
+          }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
@@ -75,7 +102,7 @@ jobs:
       - name: Build the Windows installer with embedded public settings
         run: npm run desktop:windows:build
       - name: Publish signed Windows installer and updater feed
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -84,15 +111,15 @@ jobs:
         with:
           projectPath: Client
           tauriScript: cargo tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: ArmStrong Fitness ${{ github.ref_name }}
-          releaseBody: Signed Windows installer and automatic update package.
+          tagName: ${{ inputs.release_tag || github.ref_name }}
+          releaseName: ArmStrong Fitness ${{ inputs.release_tag || github.ref_name }}
+          releaseBody: Signed Windows update. Includes initial shared-data download before a new computer's first upload and clearer sync/update errors. Existing saved records and frozen conflicts are retained.
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true
           args: --config src-tauri/tauri.windows.conf.json --config src-tauri/tauri.windows-updater.conf.json --target x86_64-pc-windows-msvc --features desktop,custom-protocol,packaged-auth,windows-updater --bundles nsis --ci
       - name: Upload the installer for desktop acceptance
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') && !inputs.release_tag }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ArmStrong-Fitness-Windows-x64

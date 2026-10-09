@@ -2,6 +2,18 @@
 
 ## Current update: version 0.1.5 release preparation
 
+Source commit `f825dab4836670290f7c4352185ab064f057d759` and its `v0.1.5`
+tag are pushed. The first Windows workflow passes 200 native tests (one ignored)
+and the real public Auth/API HTTPS probe, then stops on vendored declaration
+provenance: Windows CRLF conversion exactly reproduces the unexpected checksum.
+The source validator and upstream checksums remain unchanged. `.gitattributes`
+now preserves vendored bytes; the workflow disables checkout newline conversion
+and supports publishing an existing version tag from a corrected workflow.
+Manual release builds validate that the selected tag and application version
+match, then check out that exact tag. The original release tag is retained.
+Signed cross-build packaging and the corrected Windows workflow are in progress;
+the public updater release is not yet confirmed.
+
 The user authorized committing, pushing and publishing version 0.1.5 for the
 in-app Windows updater. Frontend, native package, Tauri and both lock files now
 agree on 0.1.5; the existing updater public key is retained. GitHub authentication

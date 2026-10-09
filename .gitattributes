@@ -1,0 +1,2 @@
+# Preserve the exact upstream bytes checked by SOURCE.json on every platform.
+server/vendor/types-pg/** -text
