@@ -1,6 +1,41 @@
 # Status — 2026-10-09
 
-## Current update: guarded retained default-profile recovery (0.1.6 candidate)
+## Current update: version 0.1.6 recovery update published
+
+The signed Windows [v0.1.6 release](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.6)
+is public, non-draft, non-prerelease and latest, published at 08:32:33 UTC.
+Its unchanged source tag points to `f9a119a984c3dc54b43085a1b8b411c081e0b1c0`.
+The existing v0.1.5 tag and all six public assets retain their recorded hashes.
+Frontend, Tauri/native package and both lock files agree on version 0.1.6.
+
+The verified Linux cross-build is saved in `dist-windows/v0.1.6/`:
+`ArmStrong-Fitness_0.1.6_x64-setup.exe`, 224,952,155 bytes, SHA-256
+`236e433eebc33f26bc093b92d25c55b8ad91e6359ba2ba31d9814c3af88d158d`.
+All six uploaded assets match local sizes and hashes. The exact configured public
+updater endpoint returns HTTP 200 with version 0.1.6 and the matching signature.
+An anonymous full installer download matches that hash and verifies with the
+existing embedded key using Tauri's minisign verifier. NSIS integrity/eight-file
+allowlist, exact current native/WebView2 payloads, static C runtime, recovery
+markers and exclusion of smoke hooks/private signing key pass. A fresh build of
+the committed source reproduces identical frontend assets despite the user's
+unstaged attendance formatting, which remains preserved.
+
+The [tagged Windows checks](https://github.com/InshafRazmi/ArmStrong-Fitness/actions/runs/37905019831)
+passed native business/authorization, real public HTTPS, server/native contracts,
+packaged login and interface steps. Its remaining installer/publication work was
+cancelled to prevent a second publisher replacing the already verified manifest
+and invalidating its checksum record. A separate acceptance-only Windows build
+is being started from main; it cannot publish or replace the release assets.
+The published installer is the verified cross-build, not that pending CI package.
+
+Install 0.1.6 from **Settings → Application updates**. Sign in online, open
+**Server synchronization → Review retained transaction**, confirm **Recover
+using server profile** if native eligibility permits it, keep the displayed
+backup and sign in online again afterward. See [recovery instructions](docs/RESTORE_RECOVERY.md).
+No affected Windows database or production business record was changed remotely.
+Actual Windows installation, upgrade and recovery acceptance remain open.
+
+## Previous update: guarded retained default-profile recovery (0.1.6 candidate)
 
 The Windows review contains three Add actions: two audit entries and gym settings
 named Armstrong Fitness. This fits an already frozen installation default

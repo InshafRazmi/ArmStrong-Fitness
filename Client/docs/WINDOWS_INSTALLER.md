@@ -70,12 +70,13 @@ are already configured for the selected Render/Supabase endpoints. Ordinary
 `desktop:run` is still the explicit local development/test workflow.
 
 The current local source has also produced
-`Client/dist-windows/ArmStrong-Fitness_0.1.0_x64-setup.exe`, rebuilt on
-2026-10-08 (223,170,297 bytes / 212.83 MiB), with its updater `.sig`,
+`Client/dist-windows/v0.1.6/ArmStrong-Fitness_0.1.6_x64-setup.exe`, built on
+2026-10-09 (224,952,155 bytes / 214.53 MiB), with its updater `.sig`,
 `SHA256SUMS`, `BUILD-INFO.txt` and `VERIFICATION.json`. Its SHA-256 is
-`1b53c4893540b199eb011303e143f33b48a627970dc229c8d0c5e8be297a485a`.
-Source commit: `03a3bf47060c131251a5c802386c2c3051626e46`.
-This Linux cross-build includes schema 10 staff deletion/history, the larger NFC
+`236e433eebc33f26bc093b92d25c55b8ad91e6359ba2ba31d9814c3af88d158d`.
+Source commit: `f9a119a984c3dc54b43085a1b8b411c081e0b1c0`.
+This Linux cross-build adds guarded recovery for an unchanged retained
+installation profile. It also includes schema 10 staff deletion/history, the larger NFC
 panel, male/female attendance counts, retained transaction review/retry and the
 signed Windows updater, plus the existing membership/finance/sign-in features.
 The updater signature is verified with Tauri's minisign verifier. NSIS integrity,
@@ -146,23 +147,25 @@ choose when to install and restart. The updater replaces application files only;
 gym records remain in the separate app-data SQLite database.
 
 The missing public release previously caused `Could not fetch a valid release
-JSON from the remote`. On 2026-10-09, public version 0.1.5 was published with the
+JSON from the remote`. On 2026-10-09, public version 0.1.6 was published with the
 matching signed installer, `.sig`, `latest.json`, `SHA256SUMS` and verification
-records. The configured endpoint returns HTTP 200 and valid version-0.1.5 JSON.
-Updater-enabled version-0.1.0 installations can open **Settings → Application
-updates → Check for updates → Install 0.1.5 and restart**. The feed embeds the
+records. The configured endpoint returns HTTP 200 and valid version-0.1.6 JSON.
+Updater-enabled older installations can open **Settings → Application
+updates → Check for updates → Install 0.1.6 and restart**. The feed embeds the
 signature for that exact installer and uses the existing application public key.
 Later updates need a higher version and a newly built, signed package.
 See [Tauri's static update manifest](https://v2.tauri.app/plugin/updater/#static-json-file).
 
-For `business_revision_conflict`, export a Windows backup and inspect
-**Settings → Server synchronization → Review retained transaction**. Preserve
-the record list and original request; a different server revision cannot be
-reconciled by repeating an identical stale edit. Source now downloads shared
-data before the first upload on an unused computer, with saves guarded until
-download finishes. This fix is included in 0.1.5 and does not rewrite an existing
-frozen conflict. The reported Windows request still
-needs inspection before choosing a recovery; do not clear or replace its queue.
+For `business_revision_conflict`, sign in online as the original Administrator
+and open **Settings → Server synchronization → Review retained transaction**.
+If the native review offers **Recover using server profile**, check the
+confirmation and select it. This path creates a validated backup, retains the
+original refused transaction and audits, and downloads complete verified shared
+history. Keep the displayed backup path and sign in online again after recovery.
+Edited profiles or other business data remain guarded for separate review.
+See [the recovery limits and steps](RESTORE_RECOVERY.md#retained-installation-profile-recovery-016).
+Version 0.1.5's unused-computer download fix remains included, and its published
+tag and assets are unchanged.
 
 The signing keypair is backed up outside the repository at
 `/home/prinzz/.tauri/armstrong-fitness/updater.key` and `updater.key.pub`.
@@ -172,7 +175,7 @@ This persistent backup survives clearing `/tmp`; do not commit or share the
 private key. Keep this key for future releases. It has no password, so
 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` can remain unset.
 
-For future releases (the signing secret is already configured and `v0.1.5` is
+For future releases (the signing secret is already configured and `v0.1.6` is
 already published):
 
 1. Open [repository Actions secrets](https://github.com/InshafRazmi/ArmStrong-Fitness/settings/secrets/actions)
@@ -183,7 +186,7 @@ already published):
 2. Commit and push the prepared source changes. Before each release, select an
    unused semantic version and keep `Client/package.json`,
    `Client/src-tauri/Cargo.toml` and `Client/src-tauri/tauri.conf.json` consistent;
-   refresh their lock files. The current version is `0.1.5`.
+   refresh their lock files. The current version is `0.1.6`.
 3. Push the matching unused `v<version>` tag after committing the source. Keep
    existing release tags unchanged. The Windows workflow also accepts an
    existing `release_tag` for rebuilding with a corrected workflow; its tests

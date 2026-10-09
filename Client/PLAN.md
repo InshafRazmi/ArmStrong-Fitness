@@ -10,6 +10,12 @@ Never apply this path to edited profiles or business records. Deliver the repair
 through a new signed updater version 0.1.6; keep the published 0.1.5 tag/artifacts
 unchanged. Actual installed Windows recovery remains an acceptance step.
 
+Completed: signed v0.1.6 is public/latest. The configured updater feed and a full
+anonymous installer download match the verified cross-build and embedded signing
+key; v0.1.5 remains unchanged. Native, packaged desktop, live isolated backend
+and Windows verification steps pass. A separate Windows acceptance-only installer
+build is pending; installation and recovery on the affected computer remain open.
+
 ## Authorized release — 2026-10-09
 
 Publish the tested synchronization fixes as signed Windows version 0.1.5 through
