@@ -50,7 +50,7 @@ pub use operations::{
 pub use recovery::BackupEnvelope;
 pub use reports::ReportRange;
 
-const SCHEMA_VERSION: i64 = 10;
+const SCHEMA_VERSION: i64 = 11;
 type Result<T> = std::result::Result<T, String>;
 const ACTOR: &str = "local-test-operator (unauthenticated)";
 fn id() -> String {
@@ -204,6 +204,10 @@ impl Store {
         }
         if version <= 9 {
             tx.execute_batch(include_str!("../migrations/010_staff_removal.sql"))
+                .map_err(db_error)?;
+        }
+        if version <= 10 {
+            tx.execute_batch(include_str!("../migrations/011_admission.sql"))
                 .map_err(db_error)?;
         }
         integrity(&tx)?;

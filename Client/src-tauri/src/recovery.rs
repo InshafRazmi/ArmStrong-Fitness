@@ -527,6 +527,11 @@ fn verify_file(path: &Path, version: i64) -> Result<()> {
             .execute_batch(include_str!("../migrations/010_staff_removal.sql"))
             .map_err(db_error)?;
     }
+    if version >= 11 {
+        expected
+            .execute_batch(include_str!("../migrations/011_admission.sql"))
+            .map_err(db_error)?;
+    }
     if schema(&conn)? != schema(&expected)? {
         return Err("Backup contains an unrecognized schema, index or trigger".into());
     }
@@ -832,6 +837,7 @@ impl Store {
                 "metadata",
                 "plans",
                 "gym_settings",
+                "admission_settings",
                 "roles",
                 "users",
                 "user_roles",

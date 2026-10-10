@@ -256,31 +256,6 @@ impl Store {
             input.trainer_version,
             None,
         )?;
-        if let Some(period) = result["membershipPeriodId"]
-            .as_str()
-            .filter(|_| input.trainer_id.is_some())
-        {
-            let (name, price): (String, i64) = tx
-                .query_row(
-                    "SELECT plan_name,price_minor FROM membership_periods WHERE id=?1",
-                    [period],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .map_err(db_error)?;
-            if price > 0 {
-                let invoice = finance::insert_invoice(
-                    &tx,
-                    &InvoiceInput {
-                        request_id: input.member.request_id.clone(),
-                        member_id: member.clone(),
-                        membership_period_id: Some(period.to_owned()),
-                        description: format!("Membership: {name}"),
-                        amount_minor: price,
-                    },
-                )?;
-                result["invoiceId"] = invoice["id"].clone();
-            }
-        }
         if let Some(selected) = &input.trainer_id {
             let version = input.trainer_version.ok_or("Select the staff again")?;
             if trainer(&tx, selected, version, true)?.2 > 0 {

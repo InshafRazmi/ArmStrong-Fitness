@@ -10,6 +10,7 @@ import { BusinessRetryDialog } from './BusinessRetryDialog'
 import type { BusinessRetryPreview, MemberConflictPreview } from './api'
 import { errorText } from './DesktopGymProvider'
 import { updateCheckError } from './update-errors'
+import { minorUnits } from './api'
 
 function GymProfile() {
   const { desktop } = useGym()
@@ -21,8 +22,8 @@ function GymProfile() {
     if (busy) return
     setBusy(true); setError('')
     try {
-      await desktop!.saveProfile(form)
-      setForm({ ...form, version: form.version + 1 })
+      await desktop!.saveProfile({ ...form, admissionMinor: form.admissionMinor ?? 0 })
+      setForm({ ...form, version: form.version + 1, admissionVersion: (form.admissionVersion ?? 0) + 1 })
     } catch (error) { setError(errorText(error)) }
     finally { setBusy(false) }
   }
@@ -31,6 +32,7 @@ function GymProfile() {
     <label><span>Location</span><input required maxLength={254} value={form.location} onChange={event => setForm({ ...form, location: event.target.value })}/></label>
     <label><span>Phone</span><input maxLength={40} value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })}/></label>
     <label><span>Email</span><input type="email" maxLength={254} value={form.email} onChange={event => setForm({ ...form, email: event.target.value })}/></label>
+    <label><span>Admission fee (LKR)</span><input required type="number" min="0" max="1000000000" step="0.01" value={(form.admissionMinor ?? 0) / 100} onChange={event => setForm({ ...form, admissionMinor: minorUnits(Number(event.target.value)) })}/><small>Charged once to new members. Existing charges keep their saved amount.</small></label>
   </div>{error && <div role="alert" className="login-error">{error}</div>}<div className="settings-actions"><button className="primary">{busy ? 'Saving…' : 'Save changes'}</button><button type="button" className="secondary" onClick={() => { setForm({ ...desktop!.snapshot!.profile }); setError('') }}>Reload values</button></div></fieldset></form></>
 }
 function BackupActions() {

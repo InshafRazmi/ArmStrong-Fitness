@@ -49,7 +49,7 @@ export interface GymContextValue {
   online: boolean
   syncing: boolean
   toasts: ToastMessage[]
-  addMember: (value: NewMember) => WriteResult
+  addMember: (value: NewMember) => void | Promise<string | void>
   updateMember: (value: Member) => WriteResult
   updatePlan: (value: MembershipPlan) => WriteResult
   recordAttendance: (memberId: string, source: 'NFC' | 'Manual', requestId?: string) => WriteResult

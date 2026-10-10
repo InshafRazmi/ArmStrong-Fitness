@@ -1,4 +1,86 @@
-# Status — 2026-10-09
+# Status — 2026-10-11
+
+## Current update: version 0.1.8 rollout in progress (2026-10-11)
+
+User requested finishing the backend/API and Windows rollout. Application,
+Tauri and both lockfiles now agree on 0.1.8. Production migration 9 is already
+applied; the disposable test project now includes the same admission journal
+contract. Packaged builds, interface checks, 84 server unit tests and 22
+packaged-auth checks pass. The prior complete native suite passes 218 tests.
+Live isolated financial acceptance and signed Windows packaging are in progress.
+The actual API still reports businessSchemaVersion 10 and needs deployment of
+this source; Render is configured for manual deploy and connection is requested.
+The user's unrelated AttendancePage formatting is preserved outside the release.
+
+## Current update: production admission migration applied (2026-10-11)
+
+User-authorized server migration 9 is applied to the ArmStrong production
+Supabase project. All prior migration 1–8 checksums matched source before
+application; the version-9 application ledger records SHA-256
+`336ecfd41446e504bf0f67e47e6bfcdec0f1b277db08ef9d716f79a47cf1c9cf`.
+The Supabase migration tool also records the admission_settings change.
+
+Application used an atomic guarded block with the existing migration advisory
+lock, a five-second lock timeout, exact ledger/history-function baseline checks,
+and an exclusive journal lock. It checked business content and table/function
+security fingerprints inside the transaction before recording success.
+Post-application read-only verification confirms all 129 business rows retain
+fingerprint `62b574c23859e9f45cf1533c0a9bbbc1`. The validated table allowlist
+includes admission_settings and RLS remains enabled. No gym/member/payment data
+was inserted, edited or deleted.
+
+A temporary-table probe invokes the actual production history trigger: admission
+version 1→2 succeeds; stale versions, identity edits and deletion refuse; invoice
+amount edits remain refused. Temporary probe rows are discarded at commit.
+Security advisors show no new findings. Existing informational private-table
+RLS/no-policy findings and pre-existing rls_auto_enable/Auth-password warnings
+are unchanged and were not expanded into this migration's scope.
+
+The database migration is complete. Matching API deployment (health schema 11),
+Windows update packaging/publishing and desktop acceptance remain pending.
+Existing published installers and the old source ZIP are unchanged.
+
+## Current update: admission charges and payment shortcuts (2026-10-11 candidate)
+
+Settings → Gym profile includes Admission fee (LKR), defaulting to zero until
+configured. An independently versioned, synchronized singleton keeps existing
+profile rows and frozen sync/recovery envelopes unchanged. SQLite migration 11
+preserves existing members, dues, receipts and queues. Server migration 9 adds
+the new journal type within existing private gym scope and history/version
+guards; API readiness requires it and health reports businessSchemaVersion 11.
+
+Registration now invoices the selected membership for every new member,
+including members without a trainer, and invoices admission separately once.
+Each charge, its audit and outbox commit with the member. Exact retries retain
+original charges; later setting changes affect future registrations only.
+A stale reviewed fee refuses before creating records. Existing registrations are
+not backfilled because their historical joining/payment intent is unknown.
+Training charges retain the existing monthly workflow.
+
+Members show Due to pay and a per-member Receive payment shortcut. Registration
+offers Save as unpaid or Save and receive payment. The latter opens the existing
+combined payment dialog after registration; canceling leaves durable dues.
+Partial payments leave the remaining invoice balance due. If refresh fails,
+payment waits for the saved member to load. Staff rows expose Pay salary through
+the existing duplicate-protected salary/training-payout workflow.
+
+Checks pass: browser and packaged frontend builds; packaged demo exclusion;
+23 adapter tests and interface renders including admission/dues/salary controls;
+218 native library tests (three existing environment probes ignored); nine
+registration regressions; strict native Clippy and formatting; server typecheck
+and 84 unit tests (one existing environment probe skipped); three real-native
+SQLite/server protocol contracts. The all-module contract now includes an
+admission setting, joining charge, audit and second-device download. Tests cover
+partial-payment retries, restart persistence, stale settings/fees, unchanged
+historical balances, migration and validated backup/restore.
+
+This is local source work, not a published installer or deployed backend.
+Production records were not modified. Live PostgreSQL migration 9, API rollout,
+Windows interaction and installer publication remain separate acceptance steps.
+Apply migration 9 and deploy the matching API before updating editing desktops
+together; older desktop versions cannot import the new admission setting type.
+The existing source ZIP and published releases do not contain this candidate.
+The user's unrelated AttendancePage formatting remains preserved.
 
 ## Current update: first-sign-in retained profile recovery (0.1.7 candidate)
 

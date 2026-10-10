@@ -1522,6 +1522,32 @@
           "key": "id"
         }
       ]
+    },
+    {
+      "name": "admission_settings",
+      "key": "id",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "amount_minor",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        }
+      ],
+      "mutable": [
+        "amount_minor",
+        "version"
+      ],
+      "references": []
     }
   ]
 }

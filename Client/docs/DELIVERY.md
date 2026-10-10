@@ -140,3 +140,23 @@ before unlocking. See [recovery and limits](RESTORE_RECOVERY.md).
 Complete live native HTTPS/outage/reconnect/restore, general conflict recovery, Windows
 install/upgrade, NFC/physical printing and exposed-credential rotation before
 calling this a final release.
+
+## Admission-fee candidate (2026-10-11)
+
+Source now supports a once-only configured admission charge at registration,
+automatic membership invoices without a trainer, member dues/payment shortcuts
+and the staff Pay salary shortcut. Existing registrations and invoices are not
+backfilled or repriced. Zero remains the admission default until configured.
+
+Before rolling out this candidate, apply server migration 9, deploy the matching
+API (health reports businessSchemaVersion 11), and package/update editing
+desktops with SQLite schema 11. Keep older recovery transaction bytes intact.
+The existing source ZIP and published installers do not contain this candidate.
+Live PostgreSQL migration, deployment, Windows interaction and publishing are
+separate acceptance steps; local financial, restore and protocol checks do not
+claim those steps.
+
+Production admission migration 9 was applied and verified on 2026-10-11. The
+129 existing business records retained their exact pre-migration fingerprint;
+RLS, grants and history protections were preserved. The remaining rollout steps
+are deploying API schema 11 and packaging/updating the editing desktops.

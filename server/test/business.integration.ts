@@ -70,14 +70,14 @@ test(`${liveAuth ? 'LIVE Supabase PostgreSQL + Auth' : 'REAL PostgreSQL / MOCK A
     for (const r of persisted) assert.deepEqual(r.data, expected.get(r.table_name)!.get(r.record_id));
     assert.equal((await db.query('SELECT count(*)::int AS n FROM armstrong.business_operations WHERE gym_id=$1', [gym])).rows[0].n, entries.length);
     phase = 'operation ID reuse';
-    const changed = structuredClone(entries[0].request); changed.changes.find((c: any) => c.table === 'plans').after.name += ' changed';
+    const changed = structuredClone(entries.find(e => e.request.changes.some((c: any) => c.table === 'plans')).request); changed.changes.find((c: any) => c.table === 'plans').after.name += ' changed';
     assert.equal((await push(changed)).statusCode, 409);
     phase = 'gym isolation and read-only permissions';
     const foreignGym = randomUUID(); await db.query("INSERT INTO armstrong.gyms(id,name) VALUES($1,'Unrelated fixture')", [foreignGym]);
     assert.equal((await push(entries[0].request, { ...headers, 'x-gym-id': foreignGym })).statusCode, 403);
     assert.equal((await push(entries[0].request, { ...headers, 'x-device-secret': '0'.repeat(64) })).statusCode, 403);
     const readerHeaders = { ...headers, 'x-device-id': reader };
-    const readerAttempt = structuredClone(entries[0].request);
+    const readerAttempt = structuredClone(entries.find(e => e.request.changes.some((c: any) => c.table === 'plans')).request);
     readerAttempt.operationId = randomUUID(); readerAttempt.deviceId = reader;
     readerAttempt.changes.find((c: any) => c.table === 'plans').after.name += ' stale second-device baseline';
     const permittedReader = await push(readerAttempt, readerHeaders);

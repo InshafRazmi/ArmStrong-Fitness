@@ -23,6 +23,7 @@ impl Fixture {
     fn input(&self) -> RegisterMemberInput {
         let plan = &self.store.snapshot().unwrap()["plans"][0];
         RegisterMemberInput {
+            expected_admission_minor: None,
             request_id: id(),
             name: "New member".into(),
             phone: "0771234567".into(),
@@ -88,9 +89,9 @@ fn registration_saves_package_dates_card_history_audit_and_one_sync_batch_togeth
     assert_eq!(snapshot["periods"][0]["endsOn"], "2026-02-28");
     assert_eq!(snapshot["periods"][0]["planName"], "Monthly");
     assert_eq!(snapshot["periods"][0]["priceMinor"], 600050);
-    assert_eq!(snapshot["pending"], 3);
-    assert_eq!(snapshot["auditCount"], 3);
-    assert!(snapshot["invoices"].as_array().unwrap().is_empty());
+    assert_eq!(snapshot["pending"], 4);
+    assert_eq!(snapshot["auditCount"], 4);
+    assert_eq!(snapshot["invoices"].as_array().unwrap().len(), 1);
     assert!(snapshot["payments"].as_array().unwrap().is_empty());
     let encoded: String = f
         .store
@@ -102,7 +103,7 @@ fn registration_saves_package_dates_card_history_audit_and_one_sync_batch_togeth
         )
         .unwrap();
     let batch: Value = serde_json::from_str(&encoded).unwrap();
-    assert_eq!(batch["operationIds"].as_array().unwrap().len(), 2);
+    assert_eq!(batch["operationIds"].as_array().unwrap().len(), 3);
     let changes = batch["changes"].as_array().unwrap();
     for table in ["members", "nfc_cards", "membership_periods"] {
         assert_eq!(
@@ -118,7 +119,7 @@ fn registration_saves_package_dates_card_history_audit_and_one_sync_batch_togeth
             .iter()
             .filter(|change| change["table"] == "audit")
             .count(),
-        2
+        3
     );
 }
 
@@ -271,4 +272,79 @@ fn registration_ipc_refuses_caller_supplied_expiry_and_duration() {
         value[field] = json!("caller supplied");
         assert!(serde_json::from_value::<RegisterMemberInput>(value).is_err());
     }
+}
+
+#[test]
+fn joining_dues_are_durable_partial_payments_reduce_balance_and_fee_changes_are_future_only() {
+    let mut f = Fixture::new();
+    let profile = |version, amount, admission_version| ProfileInput {
+        version,
+        name: "Armstrong Fitness".into(),
+        location: "Matale".into(),
+        phone: "".into(),
+        email: "".into(),
+        admission_minor: Some(amount),
+        admission_version,
+    };
+    f.store.save_profile(profile(1, 150000, None)).unwrap();
+    let input = f.input();
+    let result = f.store.register_member(input.clone()).unwrap();
+    let member = result["id"].as_str().unwrap().to_owned();
+    let snapshot = f.store.snapshot().unwrap();
+    assert_eq!(snapshot["financialAccounts"][0]["outstandingMinor"], 750050);
+    assert_eq!(snapshot["invoices"].as_array().unwrap().len(), 2);
+    assert_eq!(f.store.register_member(input).unwrap(), result);
+    let invoices = snapshot["invoices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["id"].as_str().unwrap().to_owned())
+        .collect();
+    let payment = CombinedPaymentInput {
+        payment: ReceivePaymentInput {
+            request_id: id(),
+            member_id: member.clone(),
+            amount_minor: 200000,
+            method: "Cash".into(),
+            invoice_id: None,
+        },
+        invoice_ids: invoices,
+    };
+    f.store.receive_combined_payment(payment.clone()).unwrap();
+    f.store.receive_combined_payment(payment).unwrap();
+    assert_eq!(
+        f.store.snapshot().unwrap()["financialAccounts"][0]["outstandingMinor"],
+        550050
+    );
+    f.store.save_profile(profile(2, 250000, Some(1))).unwrap();
+    assert_eq!(
+        f.store.snapshot().unwrap()["financialAccounts"][0]["outstandingMinor"],
+        550050
+    );
+    let mut next = f.input();
+    next.expected_admission_minor = Some(150000);
+    let before = f.store.snapshot().unwrap();
+    assert!(f
+        .store
+        .register_member(next.clone())
+        .unwrap_err()
+        .contains("Admission fee changed"));
+    assert_eq!(f.store.snapshot().unwrap(), before);
+    next.expected_admission_minor = Some(250000);
+    next.nfc_id = "CARD-2".into();
+    let second = f.store.register_member(next).unwrap();
+    let reopened = Store::open(&f.path).unwrap().snapshot().unwrap();
+    assert_eq!(reopened["profile"]["admissionMinor"], 250000);
+    let accounts = reopened["financialAccounts"].as_array().unwrap();
+    assert_eq!(
+        accounts
+            .iter()
+            .find(|a| a["memberId"] == second["id"])
+            .unwrap()["outstandingMinor"],
+        850050
+    );
+    assert_eq!(reopened["payments"].as_array().unwrap().len(), 1);
+    assert!(f.store.save_profile(profile(3, -1, Some(2))).is_err());
+    assert!(f.store.save_profile(profile(3, 1, Some(1))).is_err());
+    f.store.export_backup().unwrap();
 }

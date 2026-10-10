@@ -59,7 +59,7 @@ export function validateRow(table: Table, value: unknown): Row {
   if (table.name === 'training_charges') text(r.trainer_name,120);
   if (table.name === 'plans') { text(r.name, 80); int(r.duration_months, 1, 60); }
   if ('email' in r) { text(r.email, 254, table.name === 'users'); if (r.email && (!String(r.email).includes('@') || /\s/.test(String(r.email)))) fail(); }
-  if (table.name === 'gym_settings' && r.id !== 1) fail();
+  if (['gym_settings','admission_settings'].includes(table.name) && r.id !== 1) fail();
   if (table.name === 'users' && (r.active !== 0 || r.version !== 1)) fail('identity_reference_only');
   if (table.name === 'members' && (r.nfc_id !== null && !/^[!-~]{1,128}$/.test(String(r.nfc_id)))) fail();
   if (table.name === 'members' && ((r.archived_at === null) !== (r.archived_by_user_id === null))) fail();

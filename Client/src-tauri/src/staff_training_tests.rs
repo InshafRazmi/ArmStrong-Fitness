@@ -52,6 +52,7 @@ impl Fixture {
     fn registration(&self) -> StaffRegisterInput {
         StaffRegisterInput {
             member: RegisterMemberInput {
+                expected_admission_minor: None,
                 request_id: id(),
                 name: "Synthetic training member".into(),
                 phone: "0771234567".into(),

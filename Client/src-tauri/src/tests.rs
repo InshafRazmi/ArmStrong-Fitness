@@ -265,6 +265,8 @@ fn expense() -> ExpenseInput {
 }
 fn profile() -> ProfileInput {
     ProfileInput {
+        admission_minor: None,
+        admission_version: None,
         version: 1,
         name: "Armstrong Fitness".into(),
         location: "Matale".into(),
@@ -350,7 +352,7 @@ fn all_profile_fields_persist_after_restart_and_stale_settings_are_rejected() {
     let s = reopened.snapshot().unwrap();
     assert_eq!(
         s["profile"],
-        json!({"version":2,"name":"Armstrong Fitness","location":"Matale","phone":"0661234567","email":"gym@example.lk"})
+        json!({"version":2,"name":"Armstrong Fitness","location":"Matale","phone":"0661234567","email":"gym@example.lk","admissionMinor":0,"admissionVersion":null})
     );
     assert_eq!(s["auditCount"], 1);
     assert_eq!(s["pending"], 1);

@@ -26,6 +26,9 @@ export async function verifyBusinessReadiness(client: { query(sql: string, value
     EXISTS(SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid='armstrong.business_records'::regclass
       AND conname='business_records_table_name_check' AND convalidated
       AND pg_catalog.pg_get_constraintdef(oid) LIKE '%staff_deletions%') AS staff_removal_contract,
+    EXISTS(SELECT 1 FROM pg_catalog.pg_constraint WHERE conrelid='armstrong.business_records'::regclass
+      AND conname='business_records_table_name_check' AND convalidated
+      AND pg_catalog.pg_get_constraintdef(oid) LIKE '%admission_settings%') AS admission_contract,
     (SELECT count(*)=2 FROM pg_catalog.pg_indexes WHERE schemaname='armstrong'
       AND indexname IN ('active_attendance_card_per_gym','active_staff_card_per_gym')) AS attendance_card_guards,
     EXISTS(SELECT 1 FROM pg_catalog.pg_indexes WHERE schemaname='armstrong'

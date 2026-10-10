@@ -4,6 +4,8 @@ use chrono::{Datelike, Months};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RegisterMemberInput {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_admission_minor: Option<i64>,
     pub request_id: String,
     pub name: String,
     pub phone: String,
@@ -58,6 +60,21 @@ pub(super) fn register_member_on(
     tx: &rusqlite::Transaction<'_>,
     input: &RegisterMemberInput,
 ) -> Result<Value> {
+    let admission: i64 = tx
+        .query_row(
+            "SELECT COALESCE((SELECT amount_minor FROM admission_settings WHERE id=1),0)",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(db_error)?;
+    if input
+        .expected_admission_minor
+        .is_some_and(|expected| expected != admission)
+    {
+        return Err(
+            "Admission fee changed. Refresh and review the joining charges before saving.".into(),
+        );
+    }
     // Capture the reviewed package version, duration, price and name together.
     let package = if let Some(plan_id) = &input.plan_id {
         let version = input
@@ -109,7 +126,47 @@ pub(super) fn register_member_on(
             None,
             json!({"id":period,"memberId":member_id,"planId":plan_id,"planName":name,"priceMinor":price,"startsOn":starts_on,"endsOn":ends_on,"createdAt":now}),
         )?;
+        if price > 0 {
+            let invoice = finance::insert_invoice(
+                tx,
+                &InvoiceInput {
+                    request_id: input.request_id.clone(),
+                    member_id: member_id.clone(),
+                    membership_period_id: Some(period.clone()),
+                    description: format!("Membership: {name}"),
+                    amount_minor: price,
+                },
+            )?;
+            record_uncaptured(
+                tx,
+                "invoice",
+                invoice["id"].as_str().ok_or("Missing invoice ID")?,
+                None,
+                None,
+                invoice.clone(),
+            )?;
+        }
         period_id = Some(period);
+    }
+    if admission > 0 {
+        let invoice = finance::insert_invoice(
+            tx,
+            &InvoiceInput {
+                request_id: input.request_id.clone(),
+                member_id: member_id.clone(),
+                membership_period_id: None,
+                description: "Admission fee".into(),
+                amount_minor: admission,
+            },
+        )?;
+        record_uncaptured(
+            tx,
+            "invoice",
+            invoice["id"].as_str().ok_or("Missing invoice ID")?,
+            None,
+            None,
+            invoice.clone(),
+        )?;
     }
     Ok(json!({"id":member_id,"membershipPeriodId":period_id}))
 }

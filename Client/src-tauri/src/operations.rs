@@ -56,6 +56,10 @@ pub struct SaleInput {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProfileInput {
+    #[serde(default)]
+    pub admission_minor: Option<i64>,
+    #[serde(default)]
+    pub admission_version: Option<i64>,
     pub version: i64,
     pub name: String,
     pub location: String,
@@ -135,7 +139,7 @@ pub(super) fn rows(conn: &Connection, sql: &str) -> Result<Vec<Value>> {
         .collect()
 }
 pub(super) fn append_snapshot(conn: &Connection, result: &mut Value) -> Result<()> {
-    result["profile"] = rows(conn, "SELECT json_object('version',version,'name',name,'location',location,'phone',phone,'email',email) FROM gym_settings WHERE id=1")?.into_iter().next().ok_or("Gym profile is missing; preserve the database for recovery")?;
+    result["profile"] = rows(conn, "SELECT json_object('version',version,'name',name,'location',location,'phone',phone,'email',email,'admissionMinor',COALESCE((SELECT amount_minor FROM admission_settings WHERE id=1),0),'admissionVersion',(SELECT version FROM admission_settings WHERE id=1)) FROM gym_settings WHERE id=1")?.into_iter().next().ok_or("Gym profile is missing; preserve the database for recovery")?;
     result["attendance"] = json!(rows(conn,"SELECT json_object('id',id,'memberId',member_id,'name',member_name,'cardId',card_id,'cardUid',card_uid,'type',kind,'source',source,'businessOn',business_on,'occurredAt',occurred_at,'voidsId',voids_id) FROM attendance ORDER BY occurred_at DESC,rowid DESC")?);
     result["payments"] = json!(rows(conn,"SELECT json_object('id',id,'memberId',member_id,'memberName',member_name,'amountMinor',amount_minor,'method',method,'businessOn',business_on,'createdAt',created_at,'actor',actor,'reversesId',reverses_id) FROM payments ORDER BY created_at DESC,rowid DESC")?);
     result["expenses"] = json!(rows(conn,"SELECT json_object('id',id,'title',title,'category',category,'amountMinor',amount_minor,'method',method,'businessOn',business_on,'createdAt',created_at,'actor',actor,'reversesId',reverses_id) FROM expenses ORDER BY created_at DESC,rowid DESC")?);
@@ -194,6 +198,9 @@ fn movement(
 }
 impl Store {
     pub fn save_profile(&mut self, input: ProfileInput) -> Result<Value> {
+        if let Some(amount) = input.admission_minor {
+            money(amount, false)?;
+        }
         let name = required(&input.name, "Gym name", 120)?;
         let location = required(&input.location, "Location", 254)?;
         let phone = input.phone.trim();
@@ -209,6 +216,29 @@ impl Store {
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(db_error)?;
+        if let Some(amount) = input.admission_minor {
+            let admission_before = rows(&tx, "SELECT json_object('id',id,'amountMinor',amount_minor,'version',version) FROM admission_settings WHERE id=1")?.into_iter().next().map(|value| value.to_string());
+            let current: Option<i64> = tx
+                .query_row(
+                    "SELECT version FROM admission_settings WHERE id=1",
+                    [],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(db_error)?;
+            if current != input.admission_version {
+                return Err("Admission fee changed. Reload the gym profile before saving.".into());
+            }
+            tx.execute("INSERT INTO admission_settings VALUES(1,?1,1) ON CONFLICT(id) DO UPDATE SET amount_minor=excluded.amount_minor,version=admission_settings.version+1", [amount]).map_err(db_error)?;
+            record_uncaptured(
+                &tx,
+                "admission_settings",
+                "1",
+                current,
+                admission_before,
+                json!({"id":1,"amountMinor":amount,"version":current.unwrap_or(0)+1}),
+            )?;
+        }
         let before = rows(&tx,"SELECT json_object('name',name,'location',location,'phone',phone,'email',email,'version',version) FROM gym_settings")?[0].to_string();
         if tx.execute("UPDATE gym_settings SET name=?1,location=?2,phone=?3,email=?4,version=version+1 WHERE id=1 AND version=?5", params![name,location,phone,email,input.version]).map_err(db_error)?!=1 { return Err("Gym profile changed. Refresh before saving.".into()); }
         record(

@@ -157,7 +157,12 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
         return result
       },
     },
-    addMember: member => commit(() => api.registerMemberWithTrainer({gender: member.gender ?? null, trainerId: member.trainerId ?? null, trainerVersion: member.trainerVersion ?? null, member: { requestId: member.requestId, name: member.name, phone: member.phone, email: member.email, nfcId: member.nfcId, planId: member.planId, planVersion: member.planVersion, startsOn: member.startsOn } }), 'Member, trainer and invoices saved.'),
+    addMember: async member => {
+      const result = await api.registerMemberWithTrainer({gender: member.gender ?? null, trainerId: member.trainerId ?? null, trainerVersion: member.trainerVersion ?? null, member: { expectedAdmissionMinor: member.expectedAdmissionMinor, requestId: member.requestId, name: member.name, phone: member.phone, email: member.email, nfcId: member.nfcId, planId: member.planId, planVersion: member.planVersion, startsOn: member.startsOn } })
+      notify('Member and joining charges saved. Unpaid amounts are due to pay.')
+      await afterCommit()
+      return result.id
+    },
     updateMember: member => commit(() => api.saveMemberWithTrainer({gender: member.gender ?? null, genderVersion: member.genderVersion ?? null, trainerId: member.trainerId ?? null, trainerVersion: member.trainerVersion ?? null, assignmentVersion: member.assignmentVersion ?? null, member: { id: member.id, version: member.version, name: member.name, phone: member.phone, email: member.email, nfcId: member.nfcId } })),
     updatePlan: plan => commit(() => api.savePlan({ id: plan.id, version: plan.version, name: plan.name, durationMonths: plan.durationMonths, priceMinor: api.minorUnits(plan.price), active: plan.status === 'Active' })),
     recordAttendance: (memberOrCard, source, operationId) => commit(() => api.recordAttendance({ requestId: request(operationId), memberOrCard, source })),

@@ -48,7 +48,7 @@ try {
       assert.ok(!markup.includes('Auto-sync on reconnection') && markup.includes('last 28 days') && markup.includes('Payments + retail sales'))
       assert.ok(markup.includes('524.45'), 'today received amounts include native payments and sales')
     }
-    if (page.name === 'Members') assert.ok(markup.includes('SQLite member') && markup.includes('Historical plan') && markup.includes('Membership dates') && markup.includes('Archive / Deactivate') && markup.includes('Show archived members') && markup.includes('authenticated Administrator') && markup.includes('Remaining days') && markup.includes('<b>29 days</b>'))
+    if (page.name === 'Members') assert.ok(markup.includes('SQLite member') && markup.includes('Historical plan') && markup.includes('Membership dates') && markup.includes('Archive / Deactivate') && markup.includes('Show archived members') && markup.includes('authenticated Administrator') && markup.includes('Receive payment') && markup.includes('Due to pay') && markup.includes('Remaining days') && markup.includes('<b>29 days</b>'))
     if (page.name === 'Payments') assert.ok(markup.includes('Recorded') && markup.includes('123.45') && markup.includes('Stored membership invoice') && markup.includes('New invoice') && markup.includes('Renew membership') && markup.includes('Reverse') && markup.includes('Receipt') && markup.includes('876.55'))
     if (page.name === 'Expenses') assert.ok(markup.includes('Stored electricity') && markup.includes('23.45') && markup.includes('Void / Reverse') && markup.includes('Effective expenses'))
     if (page.name === 'Sales & Inventory') assert.ok(markup.includes('Stored bottle') && markup.includes('Add product'))
@@ -61,7 +61,7 @@ try {
     const markup = renderToStaticMarkup(h(GymContext.Provider, { value }, h(DesktopSettingsPanel, { tab })))
     assert.ok(!markup.includes('>Ready<') && !markup.includes('>Active<'), tab+' no fake capability labels')
     if (tab === 'Gym profile') {
-      for (const field of ['Gym name','Location','Phone','Email','Stored gym','gym@example.test']) assert.ok(markup.includes(field), field+' from native profile')
+      for (const field of ['Gym name','Location','Phone','Email','Admission fee (LKR)','Charged once to new members','Stored gym','gym@example.test']) assert.ok(markup.includes(field), field+' from native profile')
       assert.ok(markup.includes('Save changes') && !markup.includes('disabled=""'))
     } else if (tab === 'Backup & restore') {
       assert.ok(markup.includes('type="file"') && markup.includes('.armstrong-backup.json') && !markup.includes('disabled=""'))
@@ -72,6 +72,11 @@ try {
     else assert.ok(markup.includes('Unverified') || markup.includes('No authenticated backend'), tab+' accurately reports its capability')
   }
   console.log('PASS all seven desktop settings panels')
+  const staffSnapshot = {...native, trainers: [{id:'staff-1',version:1,name:'Salary recipient',phone:'0771234567',nic:'123456789V',salaryMinor:5000000,trainingFeeMinor:150000,active:true,assignedMembers:0,unpaidTrainingMinor:0}]}
+  const staffMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,desktop:{...value.desktop,snapshot:staffSnapshot}}},h(PageContent,{page:'Staff',navigate:unexpected})))
+  assert.ok(staffMarkup.includes('Salary recipient') && staffMarkup.includes('Pay salary'))
+  console.log('PASS staff salary shortcut')
+
   const memberCases = {...native, members: [0,1,2,3].map(index=>({...native.members[0],id:`member-${index}`})), periods: [
     {...native.periods[0], memberId:'member-0', startsOn:'2026-10-01', endsOn:native.today, status:'Expiring'},
     {...native.periods[0], memberId:'member-1', startsOn:'2026-09-01', endsOn:'2026-09-30', status:'Expired'},

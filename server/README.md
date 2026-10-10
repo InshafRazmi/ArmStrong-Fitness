@@ -97,7 +97,11 @@ Authenticated business requests require bearer, gym/device IDs and the native
 device secret in headers; caller IDs alone cannot grant access.
 `GET /health` retains the protocol-1 compatibility response.
 `GET /v2/health` identifies the all-module deployment with protocol version 2 and
-`businessSchemaVersion: 10` for current staff, attendance and removal support.
+`businessSchemaVersion: 11` for staff, attendance, removal and admission settings.
+Apply migration 9 (`20261010211757_admission_settings.sql`) before deploying this
+API version. It adds the admission-settings journal type and preserves gym scope,
+restricted grants and version/history guards. Update editing desktops together;
+older desktop builds cannot import the new settings row type.
 
 Legacy member-only routes remain for older clients. After protocol-2 history
 exists, new protocol-1 writes are refused. Existing legacy cloud members require

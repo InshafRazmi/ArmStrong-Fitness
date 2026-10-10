@@ -343,6 +343,8 @@ fn newer_profile_cloud(store: &Store, subject: &str, gym: &str) -> Mock {
         source
             .store
             .save_profile(ProfileInput {
+                admission_minor: None,
+                admission_version: None,
                 version,
                 name: "Shared gym".into(),
                 location: format!("Server location {version}"),
@@ -814,6 +816,8 @@ fn initial_profile_recovery_refuses_edits_money_unchecked_confirmation_and_wrong
         .unwrap();
     f.store
         .save_profile(ProfileInput {
+            admission_minor: None,
+            admission_version: None,
             version: 1,
             name: "Locally edited gym".into(),
             location: "Matale".into(),
@@ -946,6 +950,7 @@ fn setup_operations(store: &mut Store) -> (String, String) {
         .to_owned();
     let registration = store
         .register_member(RegisterMemberInput {
+            expected_admission_minor: None,
             request_id: id(),
             name: "Member".into(),
             phone: "0771234567".into(),
@@ -1040,6 +1045,18 @@ fn business_all_modules_download_exact_receipts_ledgers_and_audit_without_granti
     let gym = id();
     let mut writer = Fixture::new(&subject, &gym, true);
     let mut cloud = Mock::for_store(&writer.store, &subject, &gym);
+    writer
+        .store
+        .save_profile(ProfileInput {
+            admission_minor: Some(150000),
+            admission_version: None,
+            version: 1,
+            name: "Armstrong Fitness".into(),
+            location: "Matale".into(),
+            phone: "".into(),
+            email: "".into(),
+        })
+        .unwrap();
     let (member, payment) = setup_operations(&mut writer.store);
     assert!(matches!(
         writer
@@ -1082,6 +1099,7 @@ fn business_all_modules_download_exact_receipts_ledgers_and_audit_without_granti
         .iter()
         .any(|period| period["startsOn"] == "2026-09-05" && period["endsOn"] == "2026-10-04"));
     for key in [
+        "profile",
         "members",
         "plans",
         "periods",
@@ -1101,6 +1119,12 @@ fn business_all_modules_download_exact_receipts_ledgers_and_audit_without_granti
         writer.store.payment_receipt(payment.clone()).unwrap(),
         reader.store.payment_receipt(payment).unwrap()
     );
+    assert_eq!(b["profile"]["admissionMinor"], 150000);
+    assert!(b["invoices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|i| i["description"] == "Admission fee" && i["amountMinor"] == 150000));
     assert_eq!(b["products"][0]["stock"], 1);
     assert_eq!(b["members"][0]["id"], member);
     assert_eq!(b["users"][0]["active"], 1); // Existing real enrollment, not cloud activation.
@@ -1218,6 +1242,7 @@ fn business_staff_download_preserves_rates_receipts_payouts_and_refund_guards() 
         .store
         .register_member_with_trainer(StaffRegisterInput {
             member: RegisterMemberInput {
+                expected_admission_minor: None,
                 request_id: id(),
                 name: "Synthetic training member".into(),
                 phone: "0771234567".into(),
@@ -1495,6 +1520,8 @@ fn fresh_writer_downloads_newer_gym_profile_before_uploading_its_default() {
     original
         .store
         .save_profile(ProfileInput {
+            admission_minor: None,
+            admission_version: None,
             version: 1,
             name: "Shared gym".into(),
             location: "Matale".into(),
@@ -1513,6 +1540,8 @@ fn fresh_writer_downloads_newer_gym_profile_before_uploading_its_default() {
     original
         .store
         .save_profile(ProfileInput {
+            admission_minor: None,
+            admission_version: None,
             version: 2,
             name: "Shared gym".into(),
             location: "Updated location".into(),
@@ -1635,6 +1664,8 @@ fn frozen_default_conflict_preserves_request_and_does_not_start_initial_download
     original
         .store
         .save_profile(ProfileInput {
+            admission_minor: None,
+            admission_version: None,
             version: 1,
             name: "Existing gym".into(),
             location: "Matale".into(),

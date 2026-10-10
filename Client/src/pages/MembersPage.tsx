@@ -6,6 +6,7 @@ import type { Member } from "../types/domain";
 import { desktopMembers } from '../desktop/adapter';
 import { MemberRemovalDialog } from '../desktop/MemberRemovalDialog';
 import { MembershipDatesModal } from '../desktop/MembershipDatesModal';
+import { DesktopPaymentsPage } from "../desktop/DesktopPaymentsPage";
 import { displayDate, money } from "../utils/format";
 import { colomboToday, membershipDaysRemaining, membershipEndDate } from '../utils/membership';
 
@@ -36,6 +37,8 @@ function RemainingDays({ member, today }: { member: Member; today: string }) {
 }
 
 export function MembersPage() {
+       const [receiveFor, setReceiveFor] = useState<string | null>(null);
+       const [receiveNow, setReceiveNow] = useState(false);
        const { data, addMember, updateMember, notify, desktop } = useGym();
        const [browserToday, setBrowserToday] = useState(colomboToday);
        const today = desktop?.snapshot?.today ?? browserToday;
@@ -60,7 +63,7 @@ export function MembersPage() {
        const openAdd = () => {
               const plan = plans[0];
               requestId.current = crypto.randomUUID();
-              setError(''); setEditing(null); setScanning(false); setScanComplete(false);
+              setError(''); setReceiveNow(false); setEditing(null); setScanning(false); setScanComplete(false);
               setForm({ ...blank, planId: plan?.id ?? '', planVersion: plan?.version ?? null,
                      plan: plan?.name ?? 'No membership', durationMonths: plan?.durationMonths ?? 0, startsOn: today });
               setAdding(true);
@@ -112,8 +115,10 @@ export function MembersPage() {
               setBusy(true); setError("");
               try {
                      if (editing) await updateMember({ ...editing, ...clean });
-                     else await addMember({ ...clean, requestId: requestId.current, planId: form.planId || null,
+                     else { const memberId = await addMember({ ...clean, expectedAdmissionMinor: desktop?.snapshot?.profile.admissionMinor ?? 0, requestId: requestId.current, planId: form.planId || null,
                             planVersion: form.planId ? form.planVersion : null, startsOn: form.planId ? form.startsOn : null });
+                            if (desktop && receiveNow && memberId) setReceiveFor(memberId);
+                     }
                      setAdding(false); setEditing(null); setForm(blank); setScanning(false); setScanComplete(false);
               } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
               finally { setBusy(false); }
@@ -156,6 +161,7 @@ export function MembersPage() {
 
        return (
               <>
+                     {desktop && receiveFor && <DesktopPaymentsPage receiveFor={receiveFor} onClose={() => setReceiveFor(null)}/>}
                      <PageHeader
                             title="Members"
                             subtitle="Register, search and manage member records"
@@ -186,6 +192,7 @@ export function MembersPage() {
                                                  <th>Expiry</th>
                                                  <th>Remaining days</th>
                                                  <th>Status</th>
+                                                 {desktop && <th>Due to pay</th>}
                                                  <th></th>
                                           </tr>
                                    </thead>
@@ -238,7 +245,9 @@ export function MembersPage() {
                                                                       {m.status}
                                                                </span>
                                                         </td>
+                                                        {desktop && <td><span className={(desktop.snapshot!.financialAccounts.find(a => a.memberId === m.id)?.outstandingMinor ?? 0) > 0 ? 'tag amber' : 'tag green'}>{money((desktop.snapshot!.financialAccounts.find(a => a.memberId === m.id)?.outstandingMinor ?? 0) / 100)}</span></td>}
                                                         <td>
+                                                               {desktop && m.active !== false && <button className="primary compact" onClick={() => setReceiveFor(m.id)}>Receive payment</button>}
                                                                <button
                                                                       className="secondary compact"
                                                                       disabled={m.active === false}
@@ -421,7 +430,8 @@ export function MembersPage() {
                                                  </small>
                                           </label>
                                           {editing && !desktop && <label><span>Plan</span><select value={form.plan} onChange={event => setForm({ ...form, plan: event.target.value })}>{plans.map(plan => <option key={plan.id}>{plan.name}</option>)}</select></label>}
-                                          {desktop && <p className="form-note">{editing ? 'Changing the trainer applies to future training invoices. Existing invoices and membership dates are kept.' : form.trainerId ? 'Saving creates membership and first-month training invoices. Collect both together in Payments.' : 'The member and selected membership are saved together. Record invoices and payments in Payments.'}</p>}
+                                          {desktop && !editing && <><p className="form-note">Membership: {money((plans.find(p => p.id === form.planId)?.price ?? 0))} · Admission: {money((desktop.snapshot!.profile.admissionMinor ?? 0) / 100)}. Joining charges are saved as due until payment is received.</p><label><span>Payment after registration</span><select value={receiveNow ? 'receive' : 'unpaid'} onChange={event => setReceiveNow(event.target.value === 'receive')}><option value="unpaid">Save as unpaid</option><option value="receive">Save and receive payment</option></select></label></>}
+                                          {desktop && <p className="form-note">{editing ? 'Changing the trainer applies to future training invoices. Existing invoices and membership dates are kept.' : form.trainerId ? 'Saving creates membership and first-month training invoices. Collect both together in Payments.' : 'The member, membership and admission charges are saved together. Receive payment now or later.'}</p>}
                                           {error && <div className="login-error" role="alert">{error}</div>}
                                           <button
                                                  className="primary"

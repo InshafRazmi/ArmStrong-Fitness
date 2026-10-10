@@ -30,6 +30,7 @@ impl Fixture {
         let member = store
             .register_member_with_trainer(StaffRegisterInput {
                 member: RegisterMemberInput {
+                    expected_admission_minor: None,
                     request_id: id(),
                     name: "Synthetic female member".into(),
                     phone: "0771234567".into(),

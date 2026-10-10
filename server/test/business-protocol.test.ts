@@ -47,3 +47,15 @@ test('business state requires sale items and exactly matching stock, preserves i
   assert.throws(() => applyChanges(stateFrom([]), parseBatch(batch(entries.slice(0, -1))).changes), /sale_stock_conflict/);
   assert.throws(() => applyChanges(stateFrom([]), parseBatch(batch(entries.filter(c => c.after.id !== opening.id))).changes), /stock_insufficient/);
 });
+
+test('admission settings accept bounded fees, advance versions and refuse stale changes', () => {
+  const state = stateFrom([]);
+  const original = { id: 1, amount_minor: 150000, version: 1 };
+  applyChanges(state, parseBatch(batch([change('admission_settings', original)])).changes);
+  const updated = { ...original, amount_minor: 250000, version: 2 };
+  applyChanges(state, parseBatch(batch([change('admission_settings', updated, original)])).changes);
+  assert.throws(() => applyChanges(state, parseBatch(batch([change('admission_settings', updated, original)])).changes), /business_revision_conflict/);
+  for (const row of [{ ...original, id: 2 }, { ...original, amount_minor: -1 }, { ...original, amount_minor: 1.5 }, { ...original, amount_minor: 100000000001 }]) {
+    assert.throws(() => parseBatch(batch([change('admission_settings', row)])));
+  }
+});

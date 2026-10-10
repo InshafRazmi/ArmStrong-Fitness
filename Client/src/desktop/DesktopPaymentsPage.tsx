@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Modal, PageHeader } from '../components/ui/Modal'
 import { useGym } from '../context/GymContext'
@@ -24,7 +24,7 @@ function nextTrainingStart(snapshot: Snapshot, memberId: string) {
   const periods = snapshot.periods.filter(p=>p.memberId===memberId).sort((a,b)=>a.startsOn.localeCompare(b.startsOn))
   return periods.find(p=>p.startsOn<=snapshot.today && p.endsOn>=snapshot.today)?.startsOn ?? periods.find(p=>p.startsOn>snapshot.today)?.startsOn ?? snapshot.today
 }
-export function DesktopPaymentsPage() {
+export function DesktopPaymentsPage({ receiveFor, onClose }: { receiveFor?: string; onClose?: () => void } = {}) {
   const { desktop } = useGym()
   const native = desktop!.snapshot!
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
@@ -46,6 +46,7 @@ export function DesktopPaymentsPage() {
     setInvoiceIds(selected)
     setForm({ requestId: crypto.randomUUID(), memberId, periodId: '', invoiceId, paymentId: paymentId || available?.id || '', planId: native.plans.find(plan => plan.active && plan.priceMinor > 0)?.id ?? '', amount: selected.length ? amountText(due.filter(i=>selected.includes(i.id)).reduce((sum,i)=>sum+i.outstandingMinor,0)) : '', method: 'Cash', description: '', startsOn: kind === 'training' ? nextTrainingStart(native, memberId) : '', endsOn: '', reason: '' })
   }
+  useEffect(() => { if (receiveFor && !workflow && native.members.some(member => member.id === receiveFor)) open('receive', receiveFor) }, [receiveFor, native])
   async function showReceipt(paymentId: string) {
     setReceipt(null); setReceiptError(''); setReceiptOpen(true); setReceiptBusy(true)
     try { setReceipt(await desktop!.paymentReceipt(paymentId)) }
@@ -79,6 +80,7 @@ export function DesktopPaymentsPage() {
       }
       if (workflow === 'reverse') await desktop!.reversePayment({ requestId: form.requestId, paymentId: form.paymentId, reason: form.reason })
       setWorkflow(null)
+      onClose?.()
     } catch (error) { setError(errorText(error)) }
     finally { setBusy(false) }
   }
@@ -92,7 +94,8 @@ export function DesktopPaymentsPage() {
   const invoice = invoices.find(invoice => invoice.id === form.invoiceId)
   const assignedTrainer = capture.trainers.find(t=>t.id===capture.memberTrainers.find(a=>a.memberId===form.memberId)?.trainerId)
   const credit = payments.find(payment => payment.id === form.paymentId)?.unallocatedMinor ?? 0
-  return <><PageHeader title="Payments" subtitle="Invoices, received payments, credit and saved receipts · SQLite" action="Receive payment" disabled={!native.members.some(member => member.active)} onAction={() => open('receive')}/>
+  if (receiveFor && !native.members.some(member => member.id === receiveFor)) return <Modal title="Refresh joining charges" onClose={() => onClose?.()}><p>The member was saved. Refresh the saved records before receiving payment.</p><button className="primary" onClick={() => void desktop!.refresh().catch(() => {})}>Refresh records</button></Modal>
+  return <>{!receiveFor && <><PageHeader title="Payments" subtitle="Invoices, received payments, credit and saved receipts · SQLite" action="Receive payment" disabled={!native.members.some(member => member.active)} onAction={() => open('receive')}/>
     <div className="finance-toolbar"><button className="secondary" disabled={!native.memberTrainers.some(a=>native.trainers.some(t=>t.id===a.trainerId && t.active && t.trainingFeeMinor>0))} onClick={() => open('training', native.memberTrainers.find(a=>native.trainers.some(t=>t.id===a.trainerId && t.active && t.trainingFeeMinor>0))?.memberId)}>Training invoice</button><button className="secondary" disabled={!native.members.length} onClick={() => open('invoice')}>New invoice</button>
       <button className="secondary" disabled={!native.payments.some(payment => payment.unallocatedMinor > 0)} onClick={() => { const payment = native.payments.find(payment => payment.unallocatedMinor > 0)!; open('allocate', payment.memberId, '', payment.id) }}>Allocate credit</button>
       <button className="secondary" disabled={!native.members.some(member => member.active) || !native.plans.some(plan => plan.active && plan.priceMinor > 0)} onClick={() => open('renew')}>Renew membership</button></div>
@@ -111,7 +114,8 @@ export function DesktopPaymentsPage() {
     </tr>)}</tbody></table>{!native.payments.length && <p className="foundation-empty">No payments recorded.</p>}</div>
     <h3 className="finance-section">Allocation history</h3>
     <div className="card table-card"><table><thead><tr><th>Receipt</th><th>Invoice</th><th>Amount</th><th>Status</th></tr></thead><tbody>{native.allocations.map(allocation => <tr key={allocation.id}><td className="finance-number">{native.payments.find(payment => payment.id === allocation.paymentId)?.receiptNumber ?? allocation.paymentId}</td><td className="finance-number">{native.invoices.find(invoice => invoice.id === allocation.invoiceId)?.number ?? allocation.invoiceId}</td><td>{money(allocation.amountMinor / 100)}</td><td>{allocation.reversedBy ? 'Released by payment reversal' : 'Applied'}</td></tr>)}</tbody></table>{!native.allocations.length && <p className="foundation-empty">No allocations saved.</p>}</div>
-    {workflow && <Modal title={titles[workflow]} onClose={() => { if (!busy) setWorkflow(null) }}><form className="modal-form" onSubmit={event => void submit(event)}><fieldset className="foundation-fields" disabled={busy}>
+    </>}
+    {workflow && <Modal title={titles[workflow]} onClose={() => { if (!busy) { setWorkflow(null); onClose?.() } }}><form className="modal-form" onSubmit={event => void submit(event)}><fieldset className="foundation-fields" disabled={busy}>
       {workflow !== 'reverse' && <label><span>Member</span><select value={form.memberId} onChange={event => {
         const memberId = event.target.value
         const due = workflow === 'receive' ? outstandingInvoices(capture, memberId) : []
@@ -121,7 +125,7 @@ export function DesktopPaymentsPage() {
       {workflow === 'invoice' && <><label><span>Membership period (optional)</span><select value={form.periodId} onChange={event => { const period = periods.find(period => period.id === event.target.value); setForm({ ...form, periodId: period?.id ?? '', amount: period ? amountText(period.priceMinor) : '', description: period ? 'Membership: ' + period.planName : '' }) }}><option value="">General member invoice</option>{periods.map(period => <option key={period.id} value={period.id}>{period.planName} · {period.startsOn} – {period.endsOn}</option>)}</select></label>
         <label><span>Description</span><input required maxLength={254} value={form.description} onChange={event => setForm({ ...form, description: event.target.value })}/></label></>}
       {workflow === 'allocate' && <label><span>Received payment</span><select required value={form.paymentId} onChange={event => setForm({ ...form, paymentId: event.target.value, amount: '' })}><option value="">Select saved credit</option>{payments.map(payment => <option key={payment.id} value={payment.id}>{payment.receiptNumber} · credit {money(payment.unallocatedMinor / 100)}</option>)}</select></label>}
-      {workflow === 'receive' && <><span className="form-note">Invoices to settle — membership first, then training</span>{invoices.map(i => <label className="invoice-payment-choice" key={i.id}><input type="checkbox" checked={invoiceIds.includes(i.id)} onChange={e => {
+      {workflow === 'receive' && <><span className="form-note">Joining and membership charges, then training</span>{invoices.map(i => <label className="invoice-payment-choice" key={i.id}><input type="checkbox" checked={invoiceIds.includes(i.id)} onChange={e => {
         const selected = e.target.checked ? [...invoiceIds, i.id] : invoiceIds.filter(id=>id!==i.id)
         const ordered = invoices.filter(invoice=>selected.includes(invoice.id))
         setInvoiceIds(ordered.map(i=>i.id)); setForm({...form, amount: ordered.length ? amountText(ordered.reduce((sum,i)=>sum+i.outstandingMinor,0)) : ''})
@@ -135,7 +139,7 @@ export function DesktopPaymentsPage() {
         <p>Invoice amount: {money((plan?.priceMinor ?? 0) / 100)}{latest && <><br/>Latest last valid day: {displayDate(latest.endsOn)}</>}</p>
         <label><span>Start date</span><input required type="date" min="1900-01-01" max="2200-12-31" value={form.startsOn} onChange={event => setForm({ ...form, startsOn: event.target.value })}/></label>
         <label><span>Last valid day (inclusive)</span><input required type="date" min={form.startsOn || '1900-01-01'} max="2200-12-31" value={form.endsOn} onChange={event => setForm({ ...form, endsOn: event.target.value })}/></label>
-        <p className="form-note">Choose both dates explicitly; the start must follow the latest membership. Saves dates and invoice together. No automatic renewal or admission/debt policy is assumed. Zero-price plans use the existing date-only entry.</p></>}
+        <p className="form-note">Choose both dates explicitly; the start must follow the latest membership. Saves dates and invoice together. Admission is charged only when registering a new member. Zero-price plans use the existing date-only entry.</p></>}
       {workflow === 'reverse' && <><p className="finance-number">{original?.receiptNumber}</p><p>{original?.memberName} · {money((original?.amountMinor ?? 0) / 100)} · {original?.method}</p>
         <p className="form-note">Reverses the full received amount and releases all its allocations. Original payment, receipt and audit history are retained. Invoice balances reopen; membership dates remain in place. This does not execute a bank/card refund.</p>
         <label><span>Reversal reason</span><input required maxLength={254} value={form.reason} onChange={event => setForm({ ...form, reason: event.target.value })}/></label></>}
