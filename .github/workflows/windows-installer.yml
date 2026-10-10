@@ -114,7 +114,7 @@ jobs:
           tagName: ${{ inputs.release_tag || github.ref_name }}
           releaseName: ArmStrong Fitness ${{ inputs.release_tag || github.ref_name }}
           releaseBody: Signed Windows update. Adds configurable admission fees, automatic membership and admission invoices on registration, visible unpaid balances, member Receive payment shortcuts, immediate payment after registration, and staff Pay salary shortcuts. Existing financial history and profile recovery are preserved. Requires the matching API with business schema 11; the backend admission migration is applied.
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           updaterJsonPreferNsis: true
           args: --config src-tauri/tauri.windows.conf.json --config src-tauri/tauri.windows-updater.conf.json --target x86_64-pc-windows-msvc --features desktop,custom-protocol,packaged-auth,windows-updater --bundles nsis --ci
