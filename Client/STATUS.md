@@ -7,7 +7,10 @@ Tauri and both lockfiles now agree on 0.1.8. Production migration 9 is already
 applied; the disposable test project now includes the same admission journal
 contract. Packaged builds, interface checks, 84 server unit tests and 22
 packaged-auth checks pass. The prior complete native suite passes 218 tests.
-Live isolated financial acceptance and signed Windows packaging are in progress.
+Live isolated financial acceptance passes against real Auth/Postgres with rollback.
+Desktop forms, finance, staff payouts, reports, backups and a separate-process
+restart pass; the harness permits 180 seconds during concurrent packaging.
+Signed Windows packaging remains in progress.
 The actual API still reports businessSchemaVersion 10 and needs deployment of
 this source; Render is configured for manual deploy and connection is requested.
 The user's unrelated AttendancePage formatting is preserved outside the release.

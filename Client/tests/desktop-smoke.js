@@ -64,12 +64,12 @@
       assert(data.members[0].phone === '0779999999', 'concurrent edit persisted');
       assert(data.periods.length === 2 && data.periods.some(period => period.planName === 'Monthly test'), 'historical membership persisted');
       assert(data.plans[0].name === 'Updated monthly test' && data.plans[0].priceMinor === 650075, 'plan edit persisted');
-      assert(data.pending === 28 && data.auditCount === 28, 'staff, attendance and gym audit/pending operations persisted');
+      assert(data.pending === 30 && data.auditCount === 30, 'staff, attendance and gym audit/pending operations persisted');
       assert(data.profile.name === 'Persisted desktop gym' && data.profile.phone === '0661234567' && data.profile.email === 'native@example.lk', 'all settings survive restart');
       assert(data.attendance.length === 1 && data.payments.some(payment => payment.amountMinor === 600050 && payment.status === 'Reversed') && data.payments.length === 4 && data.expenses.some(e=>e.amountMinor===125075) && data.expenses.some(e=>e.category==='Salary' && e.amountMinor===3500025), 'attendance and finance survive restart');
       assert(data.products[0].stock === 4 && data.sales[0].totalMinor === 40100, 'sale and stock survive restart');
-      assert(data.invoices.length === 3 && data.allocations.length === 4 && data.allocations.filter(a => a.reversedBy).length === 1, 'finance links survive restart');
-      assert(data.financialAccounts[0].outstandingMinor === 550075 && data.financialAccounts[0].creditMinor === 100000 && data.financialAccounts[0].netBalanceMinor === 450075, 'derived partial balance and overpayment persist');
+      assert(data.invoices.length === 4 && data.allocations.length === 4 && data.allocations.filter(a => a.reversedBy).length === 1, 'finance links survive restart');
+      assert(data.financialAccounts[0].outstandingMinor === 1150125 && data.financialAccounts[0].creditMinor === 100000 && data.financialAccounts[0].netBalanceMinor === 1050125, 'derived partial balance and overpayment persist');
       await click('Payments'); await click('Receipt');
       await until(() => document.querySelector('.finance-receipt'), 'saved receipt preview after restart');
       assert(document.querySelector('.finance-receipt').textContent.includes(data.payments[0].receiptNumber), 'stable receipt number shown after restart');
@@ -117,7 +117,7 @@
       await closeModal();
       data = await state();
       assert(data.members.length === 1 && data.periods.length === 1, 'failed forms add no records');
-      assert(data.plans[0].priceMinor === 600050 && data.pending === 4 && data.auditCount === 4, 'exact minor units and atomic audit/outbox writes');
+      assert(data.plans[0].priceMinor === 600050 && data.pending === 5 && data.auditCount === 5, 'exact minor units and atomic audit/outbox writes');
       await click('Memberships'); await click('Edit'); await field('Package name', 'Updated monthly test'); await field('Price', '6500.75'); await click('Save package changes');
       await until(closed, 'plan edit committed');
       await click('Members'); await click('Edit'); await field('Phone', '0772222222'); await click('Save member');
@@ -133,8 +133,13 @@
       await closeModal();
       data = await state();
       assert(data.periods[0].planName === 'Monthly test' && data.periods[0].priceMinor === 600050, 'history retains original name and price');
-      assert(data.pending === 7 && data.auditCount === 7, 'failed operations do not append audit/outbox');
-      await click('Payments'); await click('Receive payment'); await field('Amount', '6000.50'); await click('Save payment'); await until(closed, 'payment committed');
+      assert(data.pending === 8 && data.auditCount === 8, 'failed operations do not append audit/outbox');
+      assert(data.invoices.length === 1 && data.financialAccounts[0].outstandingMinor === 600050, 'registration posts the unpaid joining membership');
+      await click('Members'); await click('Receive payment');
+      assert(document.querySelector('.modal-form select').value === data.members[0].id, 'member shortcut opens the selected member');
+      // This scenario deliberately retains credit for the allocation checks below.
+      for (const checkbox of document.querySelectorAll('.invoice-payment-choice input')) if (checkbox.checked) checkbox.click();
+      await field('Amount', '6000.50'); await click('Save payment'); await until(closed, 'payment committed');
       await click('Expenses'); await click('Add expense'); await field('Description', 'Native electricity'); await field('Category', 'Utilities'); await field('Amount', '1250.75'); await field('Method', 'Bank'); await click('Save expense'); await until(closed, 'expense committed');
       await click('Sales & Inventory'); await click('Add product'); await field('Product name', 'Native water'); await field('SKU', 'WATER-1'); await field('Cost', '100.25'); await field('Selling price', '200.50'); await field('Reorder', '2'); await field('Opening stock', '5'); await click('Save product'); await until(closed, 'product committed');
       await click('New sale'); await field('Quantity', '6'); await click('Complete sale'); await until(()=>document.querySelector('.modal-form [role="alert"]'), 'oversell rejected'); await field('Quantity','2'); await click('Complete sale'); await until(closed, 'sale and stock committed');
@@ -149,7 +154,7 @@
       await click('Settings'); await click('Gym profile'); await field('Gym name','Persisted desktop gym'); await field('Location','Matale local test'); await field('Phone','0661234567'); await field('Email','native@example.lk'); await click('Save changes');
       await until(()=>!button('Saving…')&&button('Save changes'), 'profile committed');
       data = await state();
-      assert(data.pending === 14 && data.auditCount === 14, 'operations and gender commit with audit/outbox');
+      assert(data.pending === 16 && data.auditCount === 16, 'operations and gender commit with audit/outbox');
       assert(data.products[0].stock === 4 && data.sales[0].totalMinor === 40100, 'stock and money use native transaction');
       await click('Payments'); await click('New invoice'); await field('Description','Staff-entered finance test'); await field('Amount','10000.00'); await click('Save invoice'); await until(closed,'invoice committed');
       data = await state();
@@ -167,7 +172,7 @@
       assert(reprintedOriginal.currentStatus === 'Partly allocated','reprint shows current allocation status separately');
       await click('Reverse'); await field('Reversal reason','Incorrect received amount'); await click('Confirm full reversal'); await until(closed,'full reversal committed');
       data = await state();
-      assert(data.payments.find(p=>p.id===originalPayment.id).status === 'Reversed' && data.allocations[0].reversedBy && data.financialAccounts[0].outstandingMinor === 1000000 && data.financialAccounts[0].creditMinor === 0,'original retained and allocations released atomically');
+      assert(data.payments.find(p=>p.id===originalPayment.id).status === 'Reversed' && data.allocations[0].reversedBy && data.financialAccounts[0].outstandingMinor === 1600050 && data.financialAccounts[0].creditMinor === 0,'original retained and allocations released atomically');
       assert(!button('Reverse'),'duplicate reversal action unavailable');
       await click('Renew membership'); await field('Start date','2026-03-01'); await field('Last valid day','2026-03-31'); await click('Save renewal and invoice'); await until(closed,'explicit renewal and invoice committed');
       data = await state();
@@ -186,10 +191,10 @@
       const originalReceipt = await window.__TAURI__.core.invoke('payment_receipt',{paymentId:overpayment.id});
       await click('Allocate'); await field('Invoice',renewalInvoice.id); await field('Amount','1000.00'); await click('Save allocation'); await until(closed,'credit topup committed');
       data = await state();
-      assert(data.financialAccounts[0].outstandingMinor === 550075 && data.financialAccounts[0].creditMinor === 100000 && data.financialAccounts[0].netBalanceMinor === 450075,'partial renewal and residual credit reconciled');
+      assert(data.financialAccounts[0].outstandingMinor === 1150125 && data.financialAccounts[0].creditMinor === 100000 && data.financialAccounts[0].netBalanceMinor === 1050125,'partial renewal and residual credit reconciled');
       const reprintedOverpayment = await window.__TAURI__.core.invoke('payment_receipt',{paymentId:overpayment.id});
       assert(reprintedOverpayment.number === originalReceipt.number && JSON.stringify(reprintedOverpayment.snapshot) === JSON.stringify(originalReceipt.snapshot),'later allocation does not overwrite issue snapshot');
-      assert(data.pending === 20 && data.auditCount === 20,'finance workflows each commit one audit/outbox operation');
+      assert(data.pending === 22 && data.auditCount === 22,'finance workflows each commit one audit/outbox operation');
       console.log('ARMSTRONG_UI_SMOKE: finance forms, balances, renewal, reversal and saved receipt preview verified');
       await click('Staff'); await click('Add staff');
       await field('Full name','Desktop trainer'); await field('Mobile number','0771234567'); await field('NIC number','900000001V');
@@ -205,10 +210,10 @@
       }
       await field('Amount','5000.25');await click('Save payment');await until(closed,'training payment collected');
       data=await state();assert(data.trainers[0].unpaidTrainingMinor===500025,'only collected training fees become staff earnings');
-      await click('Staff');await click('Pay staff');assert(document.querySelector('.staff-payment-total').textContent.includes('35,000.25'),'salary plus training total reviewed');
+      await click('Staff');await click('Pay salary');assert(document.querySelector('.staff-payment-total').textContent.includes('35,000.25'),'salary plus training total reviewed');
       await click('Record staff payment');await until(closed,'staff payout committed');
       data=await state();assert(data.staffPayouts[0].salaryMinor===3000000 && data.staffPayouts[0].trainingMinor===500025 && data.trainers[0].unpaidTrainingMinor===0,'staff payment commits salary and training exactly once');
-      assert(data.pending===26 && data.auditCount===26,'staff workflows preserve atomic audit and outbox');
+      assert(data.pending===28 && data.auditCount===28,'staff workflows preserve atomic audit and outbox');
       await click('NFC Attendance');
       const scanner=document.querySelector('input[aria-label="NFC card"]');
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(scanner,'STAFF-TEST-CARD');scanner.dispatchEvent(new Event('input',{bubbles:true}));await sleep(80);await click('Record scan');

@@ -11,7 +11,7 @@ function run(command, args, options = {}) {
 function runDesktop(executable, env) {
   // Some desktop runtimes return zero even after app.exit(1). Require the
   // explicit result from the webview, including on the second process launch.
-  const result = spawnSync(executable, [], { env, timeout: 60_000, stdio: 'pipe', encoding: 'utf8' })
+  const result = spawnSync(executable, [], { env, timeout: 180_000, stdio: 'pipe', encoding: 'utf8' })
   process.stdout.write(result.stdout ?? '')
   process.stderr.write(result.stderr ?? '')
   if (result.error || result.status !== 0) throw new Error(`Desktop process failed: ${result.error ?? `exit ${result.status}, signal ${result.signal}`}`)
