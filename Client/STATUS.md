@@ -1,6 +1,6 @@
 # Status — 2026-10-11
 
-## Current update: version 0.1.9 validation and packaging
+## Current update: version 0.1.9 published
 
 Member-table Receive actions match the compact Edit buttons. The payment dialog
 uses 16-pixel invoice checkboxes and a bounded invoice list, with amount and method
@@ -9,9 +9,23 @@ Linux now poll synchronization and dashboard snapshots every five seconds while
 preserving authentication, offline retry and overlapping-request guards.
 
 Polling tests, rendered interface checks, native payment workflows and process
-restart checks pass. Layout checks pass at 960×640 and 1366×768. This update uses
-the existing schema 11 backend and requires no migration. Release packages are
-being built; publication is not yet claimed.
+restart checks pass. Layout checks pass at 960×640 and 1366×768. Windows CI passes
+212 native tests, 22 packaged Auth tests, native HTTPS, server contracts and UI
+checks. This update uses the existing schema 11 backend and requires no migration.
+
+[Release 0.1.9](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.9)
+is published as the latest updater release. The signed Windows installer is at
+`Client/dist-windows/v0.1.9/ArmStrong.Fitness_0.1.9_x64-setup.exe`, 224,893,054
+bytes, SHA-256 `4fd8cc096dd3a396cda776803b0ea15094d20ae8c2c149184b5f34ce479834f6`.
+Signature, archive allowlist, x64/static runtime, embedded WebView2, native-only
+frontend and public updater manifest checks pass. The Arch Linux package is at
+`Client/dist-linux/v0.1.9/armstrong-fitness-0.1.9-1-x86_64.pkg.tar.zst`, 9,289,218
+bytes, SHA-256 `ddd6335db75a7b6a98435464e3181b6ba985134c2892924cfefc3c9cdffbe472`.
+Archive, version, exact native payload, launcher/icon/README and build-host
+dependency checks pass. Both packages, checksums and verification reports are
+attached. Physical Windows installation and reader/printer testing remain
+separate acceptance checks. Source tag: `401f4cf461a1ccc9cc9bd828ce5044422e7c633d`;
+Windows workflow: `38094601082`.
 
 ## Current update: Linux version 0.1.8 built and verified (2026-10-11)
 

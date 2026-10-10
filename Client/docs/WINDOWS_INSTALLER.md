@@ -8,8 +8,10 @@ local changes for real synchronization after reconnect.
 
 ## Current packaging milestone
 
-Signed Windows version [0.1.8](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.8)
-is published for the application updater. It includes configurable admission
+Signed Windows version [0.1.9](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.9)
+is published for the application updater. It adds five-second automatic sync and
+dashboard refresh, compact member payment actions, smaller invoice checkboxes
+and shorter interface text. It includes configurable admission
 fees, automatic registration invoices, member dues/Receive payment shortcuts and
 Pay salary. Production migration 9 is applied and API health reports schema 11.
 The Windows CI build and installer signature/payload checks pass. The public

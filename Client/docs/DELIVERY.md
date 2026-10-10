@@ -1,5 +1,13 @@
 # Acceptance-build delivery
 
+Version [0.1.9](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.9)
+is published with signed Windows and Arch Linux x86_64 packages. It adds
+five-second automatic sync/dashboard refresh, compact Receive payment actions,
+smaller invoice checkboxes and shorter interface text. No new backend migration
+is needed. Local outputs are under `Client/dist-windows/v0.1.9/` and
+`Client/dist-linux/v0.1.9/`; the release contains checksums and verification
+reports. The transfer instructions below describe earlier acceptance deliveries.
+
 The approved account is `armstrong@gmail.com`, Administrator **ArmStrong**, gym
 **ArmStrong Fitness**. Production has onboarding and protocol-2 migrations 1–9.
 The installed app covers local gym operations and all-module synchronization,
