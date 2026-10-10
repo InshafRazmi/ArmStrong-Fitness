@@ -1,19 +1,28 @@
 # Status — 2026-10-11
 
-## Current update: version 0.1.8 rollout in progress (2026-10-11)
+## Current update: version 0.1.8 published (2026-10-11)
 
-User requested finishing the backend/API and Windows rollout. Application,
-Tauri and both lockfiles now agree on 0.1.8. Production migration 9 is already
-applied; the disposable test project now includes the same admission journal
-contract. Packaged builds, interface checks, 84 server unit tests and 22
-packaged-auth checks pass. The prior complete native suite passes 218 tests.
-Live isolated financial acceptance passes against real Auth/Postgres with rollback.
-Desktop forms, finance, staff payouts, reports, backups and a separate-process
-restart pass; the harness permits 180 seconds during concurrent packaging.
-Signed Windows packaging remains in progress.
-The actual API still reports businessSchemaVersion 10 and needs deployment of
-this source; Render is configured for manual deploy and connection is requested.
-The user's unrelated AttendancePage formatting is preserved outside the release.
+[Signed Windows release 0.1.8](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.8)
+is published and selected as the latest updater release. Production migration 9
+is applied; public API health reports businessSchemaVersion 11. All requested
+admission fee, registration invoices, unpaid dues, Receive payment and Pay salary
+changes are delivered. Existing rows and pending profile recovery are preserved.
+
+Windows workflow 38088507176 passes. The installer is 224,893,792 bytes, SHA-256
+`d3b2bbbf027df7f59a1adb663041eaae6a9885b2fb35eb965b549fd3140767ac`.
+Signature matches the app updater key; both updater platforms target the checked
+installer. NSIS integrity/eight-file contents, x64/static runtime, exact WebView2,
+admission feature and exclusion of browser demo/smoke assets pass. Public feed
+matches the verified manifest; the public installer returns HTTP 200/exact size.
+Checksums and VERIFICATION.json are attached to the release and saved locally in
+Client/dist-windows/v0.1.8. Source tag points to 6b0f10bb18f38f40c7159a62f6bd28e0a1cfd344.
+
+218 native tests, 22 packaged-auth checks, 84 server unit tests, interface and
+protocol contracts pass. Real Auth/Postgres financial integration passes with
+rollback. Desktop forms, finance, salary payout, reports, backups and separate
+process persistence pass. Physical Windows installation, NFC and printing remain
+separate hardware acceptance. No Authenticode certificate is configured.
+The unrelated AttendancePage formatting change remains uncommitted and preserved.
 
 ## Current update: production admission migration applied (2026-10-11)
 
@@ -39,8 +48,9 @@ Security advisors show no new findings. Existing informational private-table
 RLS/no-policy findings and pre-existing rls_auto_enable/Auth-password warnings
 are unchanged and were not expanded into this migration's scope.
 
-The database migration is complete. Matching API deployment (health schema 11),
-Windows update packaging/publishing and desktop acceptance remain pending.
+The database migration is complete and public API health now reports schema 11.
+Desktop forms and separate-process persistence checks pass. Windows update
+packaging/publishing is complete as recorded above.
 Existing published installers and the old source ZIP are unchanged.
 
 ## Current update: admission charges and payment shortcuts (2026-10-11 candidate)

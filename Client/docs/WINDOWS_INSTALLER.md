@@ -8,12 +8,14 @@ local changes for real synchronization after reconnect.
 
 ## Current packaging milestone
 
-Signed Windows version [0.1.5](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.5)
-is published for the application updater. It includes initial shared-data
-download before an unused computer's first upload and clearer revision-conflict
-and update errors. Existing frozen conflicts remain retained and require
-inspection. The 0.1.0 package described below is the previous build. Current
-artifact checks and Windows acceptance limits are recorded in STATUS.md.
+Signed Windows version [0.1.8](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.8)
+is published for the application updater. It includes configurable admission
+fees, automatic registration invoices, member dues/Receive payment shortcuts and
+Pay salary. Production migration 9 is applied and API health reports schema 11.
+The Windows CI build and installer signature/payload checks pass. The public
+updater feed matches the verified manifest. SHA256SUMS and VERIFICATION.json are
+attached to the release. Physical Windows installation and hardware interaction
+remain separate acceptance; older packages described below are historical builds.
 
 `npm run desktop:windows:check` validates the three public connection fields in
 `desktop-auth.production.json`. It refuses SQL credentials, secret/service keys,

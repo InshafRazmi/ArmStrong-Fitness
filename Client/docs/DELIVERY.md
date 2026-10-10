@@ -1,7 +1,7 @@
 # Acceptance-build delivery
 
 The approved account is `armstrong@gmail.com`, Administrator **ArmStrong**, gym
-**ArmStrong Fitness**. Production has onboarding and protocol-2 migrations 1–8.
+**ArmStrong Fitness**. Production has onboarding and protocol-2 migrations 1–9.
 The installed app covers local gym operations and all-module synchronization,
 with seven-day OS-vault offline access and native session renewal. Active
 Administrators can edit from any valid enrolled computer. Database migration 5
@@ -10,7 +10,7 @@ online sign-in to receive editing access.
 
 The current source adds Staff with NIC/mobile, fixed monthly salaries,
 per-member monthly training fees, trainer selection, combined collection and
-salary-plus-collected-fee payouts. Native schema 10 preserves earlier rows and
+salary-plus-collected-fee payouts. Native schema 11 preserves earlier rows and
 pending operations. Staff NFC/manual attendance, separate staff dashboard activity,
 Male/Female member profiles and daily counts, permanent operational member removal
 with retained history, and review/retry for blocked transactions are included.
@@ -19,7 +19,7 @@ Permanent staff deletion works from active/inactive lists, keeps history and
 final payouts in Show deleted staff, and prevents reactivation. NFC Attendance
 has a larger amber card panel and scan controls. Server migrations 6–8 are
 applied to production; existing application data fingerprints are unchanged.
-The current Render API still needs the updated source deployed.
+The current Render API independently reports businessSchemaVersion 11.
 
 This remains an acceptance build. General conflict review,
 large-database/legacy bootstrap and real Windows/network/hardware acceptance are
@@ -160,5 +160,6 @@ claim those steps.
 
 Production admission migration 9 was applied and verified on 2026-10-11. The
 129 existing business records retained their exact pre-migration fingerprint;
-RLS, grants and history protections were preserved. The remaining rollout steps
-are deploying API schema 11 and packaging/updating the editing desktops.
+RLS, grants and history protections were preserved. Signed Windows 0.1.8 is published and selected as the latest updater release.
+Public API health independently reports businessSchemaVersion 11. Editing
+desktops can now install or update to 0.1.8.
