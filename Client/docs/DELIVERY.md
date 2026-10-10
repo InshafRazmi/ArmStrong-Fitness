@@ -151,7 +151,9 @@ backfilled or repriced. Zero remains the admission default until configured.
 Before rolling out this candidate, apply server migration 9, deploy the matching
 API (health reports businessSchemaVersion 11), and package/update editing
 desktops with SQLite schema 11. Keep older recovery transaction bytes intact.
-The existing source ZIP and published installers do not contain this candidate.
+The regenerated standalone API source ZIP contains this candidate. Published
+installers remain on the previous release until signed packaging and API rollout
+are verified.
 Live PostgreSQL migration, deployment, Windows interaction and publishing are
 separate acceptance steps; local financial, restore and protocol checks do not
 claim those steps.
