@@ -12,7 +12,7 @@ libraries must be kept together; this build used glibc 2.44 and WebKitGTK 4.1.
 
 ```sh
 sudo pacman -Syu
-sudo pacman -U ./armstrong-fitness-0.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./armstrong-fitness-0.1.8-1-x86_64.pkg.tar.zst
 armstrong-fitness
 ```
 
@@ -36,14 +36,16 @@ payments and salary-plus-collected-fee payouts. It also includes compact login/
 dashboard layouts, staff NFC/manual attendance with its own dashboard panel,
 Male/Female member profiles and daily counts, permanent removal from both member
 lists while retaining history, and review/retry for retained sync transactions.
-Native schema 10 preserves existing records and queued transactions on upgrade.
+Native schema 11 preserves existing records and queued transactions on upgrade.
+Version 0.1.8 adds configurable admission fees, automatic membership and admission
+invoices at registration, visible dues, Receive payment and Pay salary shortcuts.
 The latest update aligns deletion confirmation checkboxes, adds Administrator
 permanent staff deletion from active/inactive lists with retained payment history, and displays larger male/female
 attendance counts at the top of a dashboard that fills the available height.
 The NFC page has a larger amber card, spacious reader panel and larger scan
 controls. Deleted staff remain in **Show deleted staff** for history and final
 payments; they cannot be edited or reactivated.
-Shared records require server migrations 6–8 and the matching API. Production
+Shared records require server migrations 6–9 and the matching schema 11 API. Production
 deployment status is recorded in the delivery guide. Upgrade every desktop sharing the gym. See
 [staff payments](STAFF.md) and [deployment](DELIVERY.md).
 All gym modules use the native HTTPS worker after online sign-in, with bounded
