@@ -91,7 +91,7 @@ After the new deployment, open Settings → Server synchronization, review the
 retained transaction and retry its original request. Actual desktop acceptance is separate.
 
 `server/armstrong-render-source.zip` is the verified standalone API source
-snapshot. It includes migrations 1–8, the business row manifest and vendored
+snapshot. It includes migrations 1–9, the admission settings business row manifest and vendored
 types. Extract its `server/` folder into a separate source checkout if needed.
 See [computer setup](../../server/docs/AUTOMATIC_COMPUTERS.md) and
 [business protocol](../../server/docs/BUSINESS_SYNC.md).

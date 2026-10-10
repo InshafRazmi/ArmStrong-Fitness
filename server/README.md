@@ -9,7 +9,7 @@ roles. See [business protocol](docs/BUSINESS_SYNC.md).
 
 ## Current verification
 
-Strict typing/provenance and 77 unit tests pass, with one sandbox subprocess
+Strict typing/provenance and 84 unit tests pass, with one sandbox subprocess
 skip. Ten real native SQLite transaction envelopes pass the shared row contract
 and request hash checks. The isolated all-module integration test passes with
 real Supabase Auth and PostgreSQL, including exact receipts/retries, ordered
@@ -17,7 +17,7 @@ read-only download, stale edits, closed-payment refusal, immutable history,
 cross-gym/secret/revocation denial and rollback. All fixtures are rolled back;
 test credentials never fall back to production.
 
-The approved Administrator/gym and migrations 1–4 are applied to production.
+The approved Administrator/gym and migrations 1–9 are applied to production.
 Existing unrelated records are preserved. Actual restricted-runtime TLS/catalog
 checks pass for business and computer-enrollment permissions. API startup
 verifies private tables, restricted grants and immutable guards before listening.
