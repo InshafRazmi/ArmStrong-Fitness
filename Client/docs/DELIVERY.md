@@ -98,17 +98,24 @@ See [computer setup](../../server/docs/AUTOMATIC_COMPUTERS.md) and
 
 ## Install Arch or build Windows
 
-The Arch x86_64 package in `Client/dist-linux/` was rebuilt on 2026-10-08 with
+The current Arch x86_64 package is
+`Client/dist-linux/v0.1.8/armstrong-fitness-0.1.8-1-x86_64.pkg.tar.zst`, also
+attached to the [0.1.8 release](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.8).
+It includes admission fees, registration invoices, dues and payment/salary
+shortcuts. Archive contents, exact native payload, dependency resolution and
+SHA256SUMS-LINUX are verified. See [Arch installation](ARCH_LINUX.md).
+
+The older Arch x86_64 package in `Client/dist-linux/` was rebuilt on 2026-10-08 with
 all the latest confirmed changes, including schema 10, permanent staff deletion,
 larger NFC card/controls, staff NFC attendance,
 gender counts, permanent operational removal and compact layouts. Package
 contents, current-release payload, library resolution and checksum are verified.
-Copy the package and `SHA256SUMS` from that directory:
+Copy the current package and `SHA256SUMS-LINUX` from `Client/dist-linux/v0.1.8/`:
 
 ```sh
-sha256sum -c SHA256SUMS
+sha256sum -c SHA256SUMS-LINUX
 sudo pacman -Syu
-sudo pacman -U ./armstrong-fitness-0.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./armstrong-fitness-0.1.8-1-x86_64.pkg.tar.zst
 armstrong-fitness
 ```
 

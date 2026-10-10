@@ -77,7 +77,8 @@ Package creation, archive contents and dynamic-library resolution are verified o
 the build host. Real Linux webview local forms, staff attendance, gender counts,
 finance receipts and process restart passed in an isolated database. Production login/keyring/network acceptance must
 still be completed in a normal desktop session.
-Verify the package checksum with `sha256sum -c SHA256SUMS` before installation.
+Verify the package checksum with `sha256sum -c SHA256SUMS-LINUX` before installation.
+The release includes a separate Linux checksum file beside the Arch package.
 
 Source rebuild:
 

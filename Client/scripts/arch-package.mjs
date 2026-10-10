@@ -38,7 +38,9 @@ try {
   run('makepkg', ['--nodeps', '--clean', '--force'], staging, { PKGDEST: output });
   const name = `armstrong-fitness-${version}-1-x86_64.pkg.tar.zst`;
   const bytes = await readFile(join(output, name));
-  await writeFile(join(output, 'SHA256SUMS'), `${createHash('sha256').update(bytes).digest('hex')}  ${name}\n`);
+  const checksums = `${createHash('sha256').update(bytes).digest('hex')}  ${name}\n`;
+  await writeFile(join(output, 'SHA256SUMS'), checksums);
+  await writeFile(join(output, 'SHA256SUMS-LINUX'), checksums);
   console.log(`Built ${name}. This is an acceptance build; remaining release gates are documented in ARCH_LINUX.md.`);
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'Arch build failed; details withheld.');

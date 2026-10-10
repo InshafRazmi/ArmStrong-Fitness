@@ -1,5 +1,22 @@
 # Status — 2026-10-11
 
+## Current update: Linux version 0.1.8 built and verified (2026-10-11)
+
+The Arch Linux x86_64 package is built at
+`Client/dist-linux/v0.1.8/armstrong-fitness-0.1.8-1-x86_64.pkg.tar.zst`
+and attached to the existing 0.1.8 GitHub release. It is 9,289,429 bytes, SHA-256
+`a9c1c49e9e6f0373271c0a812a0f9e296834afc7c93d16a036de4173686437db`.
+The builder now takes its version from package.json and keeps outputs under a
+versioned directory, preserving older packages. PKGBUILD and instructions use 0.1.8.
+Separate SHA256SUMS-LINUX, VERIFICATION-LINUX.json and BUILD-INFO-LINUX.txt are
+attached; the Windows artifacts and updater manifest are preserved.
+
+Locked offline native release compilation and packaged frontend checks pass.
+Archive integrity/allowlist, package version/architecture, exact stripped native
+payload, launcher/icon/README, build-host library resolution, schema 11/admission
+markers and exclusion of demo/smoke hooks pass. Physical package installation,
+production keyring login and hardware testing remain separate acceptance.
+
 ## Current update: version 0.1.8 published (2026-10-11)
 
 [Signed Windows release 0.1.8](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.8)
