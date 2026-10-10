@@ -27,12 +27,12 @@ function GymProfile() {
     } catch (error) { setError(errorText(error)) }
     finally { setBusy(false) }
   }
-  return <><p>Information used on receipts and reports.</p><form onSubmit={event => void save(event)}><fieldset className="foundation-fields" disabled={busy}><div className="form-grid">
+  return <><form onSubmit={event => void save(event)}><fieldset className="foundation-fields" disabled={busy}><div className="form-grid">
     <label><span>Gym name</span><input required maxLength={120} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })}/></label>
     <label><span>Location</span><input required maxLength={254} value={form.location} onChange={event => setForm({ ...form, location: event.target.value })}/></label>
     <label><span>Phone</span><input maxLength={40} value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })}/></label>
     <label><span>Email</span><input type="email" maxLength={254} value={form.email} onChange={event => setForm({ ...form, email: event.target.value })}/></label>
-    <label><span>Admission fee (LKR)</span><input required type="number" min="0" max="1000000000" step="0.01" value={(form.admissionMinor ?? 0) / 100} onChange={event => setForm({ ...form, admissionMinor: minorUnits(Number(event.target.value)) })}/><small>Charged once to new members. Existing charges keep their saved amount.</small></label>
+    <label><span>Admission fee (LKR)</span><input required type="number" min="0" max="1000000000" step="0.01" value={(form.admissionMinor ?? 0) / 100} onChange={event => setForm({ ...form, admissionMinor: minorUnits(Number(event.target.value)) })}/></label>
   </div>{error && <div role="alert" className="login-error">{error}</div>}<div className="settings-actions"><button className="primary">{busy ? 'Saving…' : 'Save changes'}</button><button type="button" className="secondary" onClick={() => { setForm({ ...desktop!.snapshot!.profile }); setError('') }}>Reload values</button></div></fieldset></form></>
 }
 function BackupActions() {
@@ -68,7 +68,7 @@ function BackupActions() {
     finally { setBusy(false) }
   }
   const keys = ['members', 'periods', 'payments', 'sales', 'expenses', 'pending', 'auditCount'] as const
-  return <><p>Export a consistent SQLite snapshot with schema version and checksum. Copy the exported file off this computer for independent recovery. Browser demo JSON cannot replace desktop storage.</p>
+  return <><p>Keep a backup copy outside this computer.</p>
     <div className="settings-actions"><button className="primary" disabled={busy} onClick={() => void exportFile()}>Export backup</button><button className="secondary" disabled={busy} onClick={() => file.current?.click()}>Restore backup</button><input hidden ref={file} type="file" accept=".armstrong-backup.json" onChange={event => void select(event.target.files?.[0])}/></div>
     {notice && <p role="status" className="storage-file-result">{notice}</p>}{error && <div role="alert" className="login-error">{error}</div>}
     {preview && <Modal title="Review SQLite replacement" onClose={() => { if (!busy) setPreview(null) }}>
@@ -93,14 +93,14 @@ export function DevicePreparation() {
   }
   return <section className="form-card">
     <h3>Approve this computer</h3>
-    <p>Account sign-in prepares this computer automatically when the server supports computer approval. This advanced action verifies the existing OS credential and shows details for older server versions or Administrator troubleshooting.</p>
+    <p>Computer approval details.</p>
     <button className="secondary" disabled={busy || restored} onClick={() => void prepare()}>{busy ? 'Opening credential storage…' : 'Prepare this computer'}</button>
     {error && <div role="alert" className="login-error">{error}</div>}
     {approval && <><p role="status">Credential verified in OS storage. Sign in online to check account and server approval.</p><details open><summary>Registration details</summary><div className="form-grid">
       <label><span>Device ID</span><input readOnly value={approval.deviceId}/></label>
       <label><span>SQLite path</span><input readOnly value={approval.sqlitePath}/></label>
       <label><span>Device secret SHA-256</span><input readOnly value={approval.secretSha256}/></label>
-    </div><p className="form-note">These details contain only the device identity and hash. The secret stays in OS credential storage. Preparing this computer does not enable synchronization.</p></details></>}
+    </div></details></>}
   </section>
 }
 function BusinessSyncPanel() {
@@ -132,8 +132,7 @@ function BusinessSyncPanel() {
     } catch(error) {setError(errorText(error))} finally {setBusy(false)}
   }
   return <>
-    <p>{sync?.available ? 'Gym records synchronize with your verified account. Changes made during an outage are retained and retried when the connection returns.' : 'Sign in online to synchronize gym records. Your offline changes are retained.'}</p>
-    <p>Members, memberships, attendance, payments and receipts, sales and stock, expenses, profile and audit are included. Active Administrators can edit from every enrolled computer. Staff, training invoices and staff payments are included.</p>
+    <p>{sync?.available ? 'Changes sync automatically when online.' : 'Sign in online to synchronize gym records. Your offline changes are retained.'}</p>
     {sync?.lastError && <p role="status" className="form-note">{sync.lastError}</p>}
     {snapshot?.restoreRequiresReconciliation && <p className="form-note">This restored database requires server reconciliation before synchronization can resume.</p>}
     <div className="summary-grid"><div><small>Storage</small><strong>SQLite</strong></div><div><small>Pending operations</small><strong>{snapshot?.pending ?? 0}</strong></div><div><small>Confirmed transactions</small><strong>{sync?.acknowledged ?? 0}</strong></div><div><small>Transactions to review</small><strong>{sync?.conflicts.length ?? 0}</strong></div></div>

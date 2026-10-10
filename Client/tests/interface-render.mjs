@@ -48,7 +48,7 @@ try {
       assert.ok(!markup.includes('Auto-sync on reconnection') && markup.includes('last 28 days') && markup.includes('Payments + retail sales'))
       assert.ok(markup.includes('524.45'), 'today received amounts include native payments and sales')
     }
-    if (page.name === 'Members') assert.ok(markup.includes('SQLite member') && markup.includes('Historical plan') && markup.includes('Membership dates') && markup.includes('Archive / Deactivate') && markup.includes('Show archived members') && markup.includes('authenticated Administrator') && markup.includes('Receive payment') && markup.includes('Due to pay') && markup.includes('Remaining days') && markup.includes('<b>29 days</b>'))
+    if (page.name === 'Members') assert.ok(markup.includes('SQLite member') && markup.includes('Historical plan') && markup.includes('Membership dates') && markup.includes('Archive / Deactivate') && markup.includes('Show archived members') && markup.includes('aria-label="Receive payment"') && markup.includes('>Receive</button>') && !markup.includes('Removal is restricted to the authenticated Administrator.') && markup.includes('Due to pay') && markup.includes('Remaining days') && markup.includes('<b>29 days</b>'))
     if (page.name === 'Payments') assert.ok(markup.includes('Recorded') && markup.includes('123.45') && markup.includes('Stored membership invoice') && markup.includes('New invoice') && markup.includes('Renew membership') && markup.includes('Reverse') && markup.includes('Receipt') && markup.includes('876.55'))
     if (page.name === 'Expenses') assert.ok(markup.includes('Stored electricity') && markup.includes('23.45') && markup.includes('Void / Reverse') && markup.includes('Effective expenses'))
     if (page.name === 'Sales & Inventory') assert.ok(markup.includes('Stored bottle') && markup.includes('Add product'))
@@ -61,13 +61,13 @@ try {
     const markup = renderToStaticMarkup(h(GymContext.Provider, { value }, h(DesktopSettingsPanel, { tab })))
     assert.ok(!markup.includes('>Ready<') && !markup.includes('>Active<'), tab+' no fake capability labels')
     if (tab === 'Gym profile') {
-      for (const field of ['Gym name','Location','Phone','Email','Admission fee (LKR)','Charged once to new members','Stored gym','gym@example.test']) assert.ok(markup.includes(field), field+' from native profile')
+      for (const field of ['Gym name','Location','Phone','Email','Admission fee (LKR)','Stored gym','gym@example.test']) assert.ok(markup.includes(field), field+' from native profile')
       assert.ok(markup.includes('Save changes') && !markup.includes('disabled=""'))
     } else if (tab === 'Backup & restore') {
       assert.ok(markup.includes('type="file"') && markup.includes('.armstrong-backup.json') && !markup.includes('disabled=""'))
     } else if (tab === 'NFC reader') assert.ok(markup.includes('Unverified'))
     else if (tab === 'Users & roles') assert.ok(markup.includes('Authentication is not configured') && markup.includes('Use test records only'))
-    else if (tab === 'Server synchronization') assert.ok(markup.includes('Prepare this computer') && markup.includes('Account sign-in prepares this computer automatically') && markup.includes('Sync unavailable'))
+    else if (tab === 'Server synchronization') assert.ok(markup.includes('Prepare this computer') && markup.includes('Sync unavailable'))
     else if (tab === 'Application updates') assert.ok(markup.includes('signed Windows updates') && markup.includes('gym records stay in their separate local database') && markup.includes('Check for updates'))
     else assert.ok(markup.includes('Unverified') || markup.includes('No authenticated backend'), tab+' accurately reports its capability')
   }
@@ -87,7 +87,7 @@ try {
   console.log('PASS remaining membership days, expiry day, scheduled and unassigned members')
   const businessValue = {...value,desktop:{...value.desktop,snapshot:{...native,businessSync:{available:true,pending:1,acknowledged:9,conflicts:[{id:'batch-1',reason:'Server refused the transaction: business_revision_conflict. Local history is retained.'}],lastError:'Unconfirmed changes are retained.',lastSuccessOn:null}}}}
   const businessMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:businessValue},h(DesktopSettingsPanel,{tab:'Server synchronization'})))
-  for (const text of ['payments and receipts','sales and stock','Confirmed transactions','Transactions to review','Local history is retained','Review retained transaction','Sync gym records now']) assert.ok(businessMarkup.includes(text),text)
+  for (const text of ['Confirmed transactions','Transactions to review','Local history is retained','Review retained transaction','Sync gym records now']) assert.ok(businessMarkup.includes(text),text)
   assert.ok(!businessMarkup.includes('Other modules are saved locally') && !businessMarkup.includes('Last server confirmation:'))
   console.log('PASS all-module sync status and retained conflict display')
   const retainedPreview = {batchId:'retained',fingerprint:'native-fingerprint',reason:'business_revision_conflict',changes:[{table:'gym_settings',id:'1',action:'Add',name:'Armstrong Fitness'},{table:'audit',id:'audit-1',action:'Add'}]}

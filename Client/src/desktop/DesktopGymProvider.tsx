@@ -3,6 +3,7 @@ import { GymContext, type GymContextValue } from '../context/GymContext'
 import type { ToastMessage } from '../types/domain'
 import * as api from './api'
 import { desktopData, emptyDesktopData } from './adapter'
+import { startPolling } from './polling'
 export const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
 export function DesktopGymProvider({ children }: { children: ReactNode }) {
   const [native, setNative] = useState<api.Snapshot | null>(null)
@@ -62,15 +63,15 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!memberSyncAvailable) return
     const wake = () => { void synchronize() }
-    const first = setTimeout(wake, 0)
-    const timer = setInterval(wake, 30_000)
+    const stopPolling = startPolling(async () => { await synchronize() })
     window.addEventListener('online', wake)
-    return () => { clearTimeout(first); clearInterval(timer); window.removeEventListener('online', wake) }
+    return () => { stopPolling(); window.removeEventListener('online', wake) }
   }, [memberSyncAvailable, synchronize])
   useEffect(() => {
-    void refresh().catch(() => {})
-    const timer = setInterval(() => { void refresh().catch(() => {}) }, 60_000)
-    return () => { clearInterval(timer); generation.current++ }
+    const stopPolling = startPolling(async () => {
+      if (!syncRunning.current && !renewing.current) await refresh()
+    })
+    return () => { stopPolling(); generation.current++ }
   }, [refresh])
   useEffect(() => {
     if (!authStatus?.authenticated || !authStatus.expiresAt) return

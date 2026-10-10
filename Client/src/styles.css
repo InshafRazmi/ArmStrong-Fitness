@@ -123,9 +123,13 @@ body{min-width:320px}
 .staff-salary-choice input{width:18px;height:18px;accent-color:var(--amber)}
 .staff-member-list .list-row{justify-content:space-between;gap:20px}
 .staff-expenses-link{margin:16px 0}
-.invoice-payment-choice{border:1px solid var(--line);border-radius:10px;align-items:center;padding:12px;flex-direction:row!important;gap:12px!important;display:flex!important}
-.invoice-payment-choice input{width:18px;height:18px;accent-color:var(--amber);flex-shrink:0}
-.invoice-payment-choice span{font-size:12px;line-height:1.6}
+.modal-form .payment-member-field,.invoice-payment-section{grid-column:1/-1;min-width:0}
+.invoice-payment-heading{display:block;margin-bottom:6px;color:var(--muted);font-size:10px}
+.invoice-payment-list{display:grid;gap:5px;max-height:160px;overflow-y:auto}
+.modal-form .foundation-fields .invoice-payment-choice{display:flex;flex-direction:row;align-items:center;gap:8px;padding:7px 8px;border:1px solid var(--line);border-radius:7px;cursor:pointer}
+.modal-form .invoice-payment-choice input[type=checkbox]{flex:0 0 16px;width:16px;min-width:16px;max-width:16px;height:16px;margin:0;padding:0;accent-color:var(--amber)}
+.modal-form .invoice-payment-choice span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:10px;line-height:1.4}
+.invoice-payment-choice b{flex-shrink:0;font-size:10px;line-height:1.4;white-space:nowrap;color:var(--amber)}
 
 /* Spacious NFC card and scan controls; activity scrolls inside its panel. */
 .attendance-tabs{display:flex;gap:8px;margin-bottom:12px}
@@ -175,3 +179,6 @@ body{min-width:320px}
 @media(max-height:700px){.attendance-workspace .scanner{padding:24px;min-height:540px}.reader-stage{min-height:210px}.attendance-workspace .list-row{min-height:40px}}
 @media(max-height:800px){.attendance-workspace .scanner{min-height:500px;padding:24px}.reader-stage{min-height:190px}.attendance-workspace .scanner h2{margin-top:8px;font-size:24px}}
 @media(max-width:1000px){.attendance-workspace{grid-template-columns:minmax(300px,1fr) minmax(0,1fr);gap:16px}.attendance-workspace .scanner{padding:24px 20px}.attendance-workspace .reader-device{width:240px;height:156px}.attendance-workspace .scan-form{grid-template-columns:1fr}}
+
+.members-table .member-actions{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+.members-table .member-actions .secondary.compact{display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap}

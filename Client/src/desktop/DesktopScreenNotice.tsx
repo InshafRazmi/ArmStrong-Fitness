@@ -1,7 +1,7 @@
 import { useGym } from '../context/GymContext'
 import type { Page } from '../types/domain'
 const notes: Partial<Record<Page, string>> = {
-  'Sales & Inventory': 'Products, sales and stock movements are stored in SQLite. Sale corrections/returns are not implemented.',
+  'Sales & Inventory': 'Sale corrections and returns are unavailable.',
 }
 export function DesktopScreenNotice({ page }: { page: Page }) {
   const { mode } = useGym()

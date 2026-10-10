@@ -6,6 +6,42 @@ import { desktopData, desktopMembers, emptyDesktopData } from '../src/desktop/ad
 import { colomboToday, membershipDaysRemaining, membershipEndDate } from '../src/utils/membership.ts'
 import { attendanceTotals } from '../src/utils/attendance.ts'
 import { updateCheckError } from '../src/desktop/update-errors.ts'
+import { startPolling } from '../src/desktop/polling.ts'
+
+test('live polling uses five-second ticks, skips slow requests and stops cleanly', async () => {
+  const callbacks = new Map()
+  const delays = []
+  let timerId = 0
+  const timers = {
+    setTimeout: (callback, delay) => { delays.push(delay); callbacks.set(++timerId, callback); return timerId },
+    setInterval: (callback, delay) => { delays.push(delay); callbacks.set(++timerId, callback); return timerId },
+    clearTimeout: id => callbacks.delete(id), clearInterval: id => callbacks.delete(id),
+  }
+  let calls = 0, finish
+  const stop = startPolling(() => { calls++; return new Promise(resolve => { finish = resolve }) }, undefined, timers)
+  assert.deepEqual(delays, [0, 5000])
+  callbacks.get(1)()
+  const tick = callbacks.get(2)
+  tick(); tick()
+  assert.equal(calls, 1, 'slow requests never overlap or accumulate')
+  finish(); await Promise.resolve()
+  tick()
+  assert.equal(calls, 2, 'next tick refreshes after completion')
+  stop(); finish(); await Promise.resolve(); tick()
+  assert.equal(calls, 2, 'no requests after unmount/logout cleanup')
+  assert.equal(callbacks.size, 0)
+})
+
+test('a failed live refresh releases its slot so later ticks can recover', async () => {
+  let tick, calls = 0
+  const stop = startPolling(async () => { calls++; if (calls === 1) throw new Error('Temporary outage') }, undefined, {
+    setTimeout: () => 1, clearTimeout: () => {},
+    setInterval: callback => { tick = callback; return 2 }, clearInterval: () => {},
+  })
+  tick(); await Promise.resolve(); await Promise.resolve(); tick()
+  assert.equal(calls, 2)
+  stop()
+})
 
 test('unavailable release metadata explains recovery without hiding signature errors', () => {
   const message = updateCheckError('Could not fetch a valid release JSON from the remote')

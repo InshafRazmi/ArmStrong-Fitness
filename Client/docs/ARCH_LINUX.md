@@ -12,7 +12,7 @@ libraries must be kept together; this build used glibc 2.44 and WebKitGTK 4.1.
 
 ```sh
 sudo pacman -Syu
-sudo pacman -U ./armstrong-fitness-0.1.8-1-x86_64.pkg.tar.zst
+sudo pacman -U ./armstrong-fitness-0.1.9-1-x86_64.pkg.tar.zst
 armstrong-fitness
 ```
 

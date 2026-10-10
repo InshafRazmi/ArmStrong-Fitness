@@ -168,7 +168,7 @@ export function MembersPage() {
                             action="Add member"
                             onAction={openAdd}
                      />
-                     {desktop && <p className="form-note">{desktop.snapshot!.removalAuthorization.allowed ? 'Removal is restricted to the authenticated Administrator.' : desktop.snapshot!.removalAuthorization.reason}</p>}
+                     {desktop && !desktop.snapshot!.removalAuthorization.allowed && <p className="form-note">{desktop.snapshot!.removalAuthorization.reason}</p>}
                      <div className="toolbar">
                             {desktop && <button className="secondary" onClick={() => setShowArchived(!showArchived)}>{showArchived ? 'Show active members' : 'Show archived members'}</button>}
                             <label className="search grow">
@@ -247,7 +247,8 @@ export function MembersPage() {
                                                         </td>
                                                         {desktop && <td><span className={(desktop.snapshot!.financialAccounts.find(a => a.memberId === m.id)?.outstandingMinor ?? 0) > 0 ? 'tag amber' : 'tag green'}>{money((desktop.snapshot!.financialAccounts.find(a => a.memberId === m.id)?.outstandingMinor ?? 0) / 100)}</span></td>}
                                                         <td>
-                                                               {desktop && m.active !== false && <button className="primary compact" onClick={() => setReceiveFor(m.id)}>Receive payment</button>}
+                                                               <div className="member-actions">
+                                                               {desktop && m.active !== false && <button className="secondary compact" aria-label="Receive payment" title="Receive payment" onClick={() => setReceiveFor(m.id)}><Icon name="money" size={12}/>Receive</button>}
                                                                <button
                                                                       className="secondary compact"
                                                                       disabled={m.active === false}
@@ -263,6 +264,7 @@ export function MembersPage() {
                                                                {m.active !== false && <button className="secondary compact" onClick={() => setRemoval({ member: m, kind: 'archive' })}>Archive / Deactivate</button>}
                                                                <button className="secondary compact" onClick={() => setRemoval({ member: m, kind: 'delete' })}>Delete permanently</button>
                                                                </>}
+                                                               </div>
                                                         </td>
                                                  </tr>
                                           ))}
@@ -334,7 +336,6 @@ export function MembersPage() {
                                                  const trainer = desktop.snapshot!.trainers.find(t => t.id === event.target.value);
                                                  setForm({ ...form, trainerId: trainer?.id ?? '', trainerVersion: trainer?.version ?? null });
                                           }}><option value="">None — no personal training</option>{desktop.snapshot!.trainers.filter(t => t.active || t.id === editing?.trainerId).map(t => <option key={t.id} value={t.id} disabled={!t.active}>{t.name} · {money(t.trainingFeeMinor / 100)} / month{!t.active ? ' (Inactive — select another staff or None)' : ''}</option>)}</select></label>}
-                                          {desktop && adding && form.trainerId && <p className="form-note">Monthly training fee: {money((desktop.snapshot!.trainers.find(t => t.id === form.trainerId)?.trainingFeeMinor ?? 0) / 100)}. The first training invoice starts {displayDate(form.planId ? form.startsOn : today)}. The gym collects membership and training payments together.</p>}
                                           {adding && <>
                                                  <label className="membership-package-field">
                                                         <span>Membership package</span>
@@ -349,9 +350,8 @@ export function MembersPage() {
                                                  </label>
                                                  {form.planId ? <>
                                                         <label><span>Start date</span><input required type="date" min="1900-01-01" max="2200-12-31" value={form.startsOn} onChange={event => setForm({ ...form, startsOn: event.target.value })}/></label>
-                                                        <label><span>Expiry (automatic)</span><input type="date" value={expiry} readOnly aria-describedby="membership-date-note"/></label>
-                                                        <p className="form-note" id="membership-date-note">{form.durationMonths} month{form.durationMonths === 1 ? '' : 's'} from the start date. Membership is valid through the expiry date.</p>
-                                                 </> : <p className="form-note">{plans.length ? 'Select a package to set membership dates automatically.' : 'Add an active package in Memberships to register with membership dates.'}</p>}
+                                                        <label><span>Expiry (automatic)</span><input type="date" value={expiry} readOnly/></label>
+                                                 </> : !plans.length && <p className="form-note">No active membership packages.</p>}
                                           </>}
                                           {editing && !desktop && <label><span>Expiry</span><input type="date" value={form.expiry} onChange={event => setForm({ ...form, expiry: event.target.value })}/></label>}
                                           <label className="nfc-form-field">
@@ -415,7 +415,7 @@ export function MembersPage() {
                                                                       : "Scan card"}
                                                         </button>
                                                  </div>
-                                                 <small
+                                                 {(scanning || scanComplete) && <small
                                                         className={
                                                                scanComplete
                                                                       ? "scan-message success"
@@ -423,15 +423,12 @@ export function MembersPage() {
                                                         }
                                                  >
                                                         {scanning
-                                                               ? "Tap the card on the reader. The UID will be captured automatically."
-                                                               : scanComplete
-                                                                 ? "✓ Card captured successfully"
-                                                                 : "Manual entry remains available."}
-                                                 </small>
+                                                               ? "Tap the card on the reader."
+                                                               : "✓ Card captured"}
+                                                 </small>}
                                           </label>
                                           {editing && !desktop && <label><span>Plan</span><select value={form.plan} onChange={event => setForm({ ...form, plan: event.target.value })}>{plans.map(plan => <option key={plan.id}>{plan.name}</option>)}</select></label>}
-                                          {desktop && !editing && <><p className="form-note">Membership: {money((plans.find(p => p.id === form.planId)?.price ?? 0))} · Admission: {money((desktop.snapshot!.profile.admissionMinor ?? 0) / 100)}. Joining charges are saved as due until payment is received.</p><label><span>Payment after registration</span><select value={receiveNow ? 'receive' : 'unpaid'} onChange={event => setReceiveNow(event.target.value === 'receive')}><option value="unpaid">Save as unpaid</option><option value="receive">Save and receive payment</option></select></label></>}
-                                          {desktop && <p className="form-note">{editing ? 'Changing the trainer applies to future training invoices. Existing invoices and membership dates are kept.' : form.trainerId ? 'Saving creates membership and first-month training invoices. Collect both together in Payments.' : 'The member, membership and admission charges are saved together. Receive payment now or later.'}</p>}
+                                          {desktop && !editing && <><p className="form-note">Membership: {money((plans.find(p => p.id === form.planId)?.price ?? 0))} · Admission: {money((desktop.snapshot!.profile.admissionMinor ?? 0) / 100)}</p><label><span>Payment after registration</span><select value={receiveNow ? 'receive' : 'unpaid'} onChange={event => setReceiveNow(event.target.value === 'receive')}><option value="unpaid">Save as unpaid</option><option value="receive">Save and receive payment</option></select></label></>}
                                           {error && <div className="login-error" role="alert">{error}</div>}
                                           <button
                                                  className="primary"

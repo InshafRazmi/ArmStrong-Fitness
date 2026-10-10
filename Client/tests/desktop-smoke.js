@@ -5,7 +5,7 @@
     for (let i = 0; i < 100; i++) { if (check()) return; await sleep(100); }
     throw new Error(`Timed out: ${label}. Page: ${document.body.innerText.slice(-2400)}`);
   }
-  const button = text => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === text);
+  const button = text => [...document.querySelectorAll('button')].find(button => (button.textContent.trim() === text || button.getAttribute('aria-label') === text));
   async function click(text) { await until(() => button(text) && !button(text).disabled, text); button(text).click(); await sleep(80); }
   async function field(label, value) {
     const element = [...document.querySelectorAll('.modal-form label, .form-card label')].find(labelElement => labelElement.textContent.includes(label))?.querySelector('input,select');

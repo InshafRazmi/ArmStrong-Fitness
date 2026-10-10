@@ -1,6 +1,6 @@
 # Packages the prebuilt native app. No source/env/database is included.
 pkgname=armstrong-fitness
-pkgver=0.1.8
+pkgver=0.1.9
 pkgrel=1
 pkgdesc='ArmStrong Fitness desktop gym management (acceptance build)'
 arch=('x86_64')

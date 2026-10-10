@@ -1,5 +1,18 @@
 # Status — 2026-10-11
 
+## Current update: version 0.1.9 validation and packaging
+
+Member-table Receive actions match the compact Edit buttons. The payment dialog
+uses 16-pixel invoice checkboxes and a bounded invoice list, with amount and method
+fields below it. Unnecessary interface instructions were removed. Windows and
+Linux now poll synchronization and dashboard snapshots every five seconds while
+preserving authentication, offline retry and overlapping-request guards.
+
+Polling tests, rendered interface checks, native payment workflows and process
+restart checks pass. Layout checks pass at 960×640 and 1366×768. This update uses
+the existing schema 11 backend and requires no migration. Release packages are
+being built; publication is not yet claimed.
+
 ## Current update: Linux version 0.1.8 built and verified (2026-10-11)
 
 The Arch Linux x86_64 package is built at
