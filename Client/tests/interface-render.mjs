@@ -48,7 +48,7 @@ try {
       assert.ok(!markup.includes('Auto-sync on reconnection') && markup.includes('last 28 days') && markup.includes('Payments + retail sales'))
       assert.ok(markup.includes('524.45'), 'today received amounts include native payments and sales')
     }
-    if (page.name === 'Members') assert.ok(markup.includes('SQLite member') && markup.includes('Historical plan') && markup.includes('Membership dates') && markup.includes('Archive / Deactivate') && markup.includes('Show archived members') && markup.includes('aria-label="Receive payment"') && markup.includes('>Receive</button>') && !markup.includes('Removal is restricted to the authenticated Administrator.') && markup.includes('Due to pay') && markup.includes('Remaining days') && markup.includes('<b>29 days</b>'))
+    if (page.name === 'Members') assert.ok(markup.includes('SQLite member') && markup.includes('Historical plan') && markup.includes('Membership dates') && !markup.includes('Archive / Deactivate') && !markup.includes('Show archived members') && markup.includes('Delete permanently') && markup.includes('class="primary compact" aria-label="Receive payment"') && markup.includes('>Receive</button>') && !markup.includes('Removal is restricted to the authenticated Administrator.') && markup.includes('Due to pay') && markup.includes('Remaining days') && markup.includes('<b>29 days</b>'))
     if (page.name === 'Payments') assert.ok(markup.includes('Recorded') && markup.includes('123.45') && markup.includes('Stored membership invoice') && markup.includes('New invoice') && markup.includes('Renew membership') && markup.includes('Reverse') && markup.includes('Receipt') && markup.includes('876.55'))
     if (page.name === 'Expenses') assert.ok(markup.includes('Stored electricity') && markup.includes('23.45') && markup.includes('Void / Reverse') && markup.includes('Effective expenses'))
     if (page.name === 'Sales & Inventory') assert.ok(markup.includes('Stored bottle') && markup.includes('Add product'))
@@ -75,7 +75,25 @@ try {
   const staffSnapshot = {...native, trainers: [{id:'staff-1',version:1,name:'Salary recipient',phone:'0771234567',nic:'123456789V',salaryMinor:5000000,trainingFeeMinor:150000,active:true,assignedMembers:0,unpaidTrainingMinor:0}]}
   const staffMarkup = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,desktop:{...value.desktop,snapshot:staffSnapshot}}},h(PageContent,{page:'Staff',navigate:unexpected})))
   assert.ok(staffMarkup.includes('Salary recipient') && staffMarkup.includes('Pay salary'))
+  assert.ok(staffMarkup.includes('Delete permanently'))
   console.log('PASS staff salary shortcut')
+  const staffAttendance = [
+    {id:'out',staffId:'staff-1',name:'Salary recipient',source:'NFC',type:'Check-out',businessOn:native.today,occurredAt:native.today+'T01:00:00Z'},
+    {id:'in',staffId:'staff-1',name:'Salary recipient',source:'NFC',type:'Check-in',businessOn:native.today,occurredAt:native.today+'T00:30:00Z'},
+    {id:'repeat',staffId:'staff-1',name:'Salary recipient',source:'NFC',type:'Check-in',businessOn:native.today,occurredAt:native.today+'T01:30:00Z'},
+    {id:'yesterday',staffId:'staff-2',name:'Earlier attendee',source:'Manual',type:'Check-in',businessOn:'1900-01-01',occurredAt:'1900-01-01T00:00:00Z'},
+  ]
+  const staffDashboard = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,desktop:{...value.desktop,snapshot:{...staffSnapshot,staffAttendance}}}},h(PageContent,{page:'Dashboard',navigate:unexpected})))
+  assert.ok(staffDashboard.includes('Staff attendance') && staffDashboard.includes('1 staff today') && staffDashboard.includes('Staff <b>1</b>') && !staffDashboard.includes('Earlier attendee'))
+  assert.ok(staffDashboard.indexOf('07:00') < staffDashboard.indexOf('06:30'), 'recent staff events are newest first')
+  const { Topbar } = await server.ssrLoadModule('/src/layout/Topbar.tsx')
+  for (const syncing of [false,true]) {
+    for (const online of [false,true]) {
+      const bar = renderToStaticMarkup(h(GymContext.Provider,{value:{...value,online,syncing,desktop:{...value.desktop,authStatus:{configured:true,authenticated:true}}}},h(Topbar,{title:'Dashboard',onSelect:unexpected,onLogout:unexpected})))
+      assert.ok(bar.includes(online?'>ONLINE<':'>OFFLINE<') && !bar.includes('SYNCING'), 'background activity does not replace connectivity status')
+    }
+  }
+  console.log('PASS dashboard staff totals/recent attendance and stable Online/Offline indicator')
 
   const memberCases = {...native, members: [0,1,2,3].map(index=>({...native.members[0],id:`member-${index}`})), periods: [
     {...native.periods[0], memberId:'member-0', startsOn:'2026-10-01', endsOn:native.today, status:'Expiring'},
@@ -176,21 +194,21 @@ try {
   const { ExpenseVoidDialog } = await server.ssrLoadModule('/src/desktop/ExpenseVoidDialog.tsx')
   const { StaffRemovalDialog } = await server.ssrLoadModule('/src/desktop/StaffRemovalDialog.tsx')
   const member=desktopMembers(native,true)[0]
-  for (const kind of ['archive','delete']) {
-    const markup=renderToStaticMarkup(h(GymContext.Provider,{value},h(MemberRemovalDialog,{member:{...member,canDelete:true},kind,onClose:unexpected})))
+  {
+    const markup=renderToStaticMarkup(h(GymContext.Provider,{value},h(MemberRemovalDialog,{member:{...member,canDelete:true},onClose:unexpected})))
     assert.ok(markup.includes('Confirmation') && markup.includes('type="checkbox"') && markup.includes('required=""'))
-    assert.ok(markup.includes('authenticated Administrator') && markup.includes('disabled=""'),kind+' locked without authentication')
-    assert.ok(markup.includes(kind==='archive'?'Existing dates, NFC assignment, invoices, payments and all history remain':'Audit and pending operation history remain'))
+    assert.ok(markup.includes('authenticated Administrator') && markup.includes('disabled=""'),'deletion locked without authentication')
+    assert.ok(markup.includes('Past payments, receipts, attendance and memberships remain') && !markup.includes('archive'))
   }
   const voidMarkup=renderToStaticMarkup(h(GymContext.Provider,{value},h(ExpenseVoidDialog,{expense:desktopData(native).expenses[0],onClose:unexpected})))
   assert.ok(voidMarkup.includes('Required void reason') && voidMarkup.includes('maxLength="254"') && voidMarkup.includes('type="checkbox"') && voidMarkup.includes('authenticated Administrator') && voidMarkup.includes('disabled=""'))
   const authorizedValue={...value,desktop:{...value.desktop,snapshot:{...native,removalAuthorization:{allowed:true,userId:'verified',user:'Verified administrator',reason:''}}}}
-  for (const kind of ['archive', 'delete']) {
-    const markup = renderToStaticMarkup(h(GymContext.Provider, {value: authorizedValue}, h(MemberRemovalDialog, {member, kind, onClose: unexpected})))
+  {
+    const markup = renderToStaticMarkup(h(GymContext.Provider, {value: authorizedValue}, h(MemberRemovalDialog, {member, onClose: unexpected})))
     assert.ok(markup.includes('class="confirmation-choice"') && /<button class="primary" disabled="">/.test(markup), 'Authorized removal still waits for explicit checkbox confirmation')
   }
   const staffRemoval = renderToStaticMarkup(h(GymContext.Provider, {value: authorizedValue}, h(StaffRemovalDialog, {staff:{id:'staff-1',name:'Saved trainer',version:1,assignedMembers:2},onClose:unexpected})))
-  assert.ok(staffRemoval.includes('class="confirmation-choice"') && staffRemoval.includes('Salary payments, training invoices, attendance and unpaid earnings remain') && staffRemoval.includes('2 current member assignment(s)') && /<button class="primary" disabled="">Confirm staff deletion/.test(staffRemoval))
+  assert.ok(staffRemoval.includes('class="confirmation-choice"') && staffRemoval.includes('Salary payments, training invoices, attendance and unpaid earnings remain') && staffRemoval.includes('2 current member assignment(s)') && /<button class="primary" disabled="">Confirm permanent deletion/.test(staffRemoval))
   const authorizedVoid=renderToStaticMarkup(h(GymContext.Provider,{value:authorizedValue},h(ExpenseVoidDialog,{expense:desktopData(native).expenses[0],onClose:unexpected})))
   assert.ok(!authorizedVoid.includes('disabled=""'), 'verified administrator can confirm after filling reason/confirmation')
   const voidSnapshot={...native,expenses:[{...native.expenses[0],status:'Voided',effectiveAmountMinor:0,voidReason:'Duplicate electricity entry',voidedBy:'Verified administrator',voidedAt:'2026-10-03T02:00:00Z'}]}

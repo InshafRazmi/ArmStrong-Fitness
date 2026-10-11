@@ -50,7 +50,7 @@ pub use operations::{
 pub use recovery::BackupEnvelope;
 pub use reports::ReportRange;
 
-const SCHEMA_VERSION: i64 = 11;
+const SCHEMA_VERSION: i64 = 12;
 type Result<T> = std::result::Result<T, String>;
 const ACTOR: &str = "local-test-operator (unauthenticated)";
 fn id() -> String {
@@ -134,7 +134,7 @@ impl Store {
         conn.busy_timeout(Duration::from_secs(5))
             .map_err(db_error)?;
         conn.execute_batch(
-            "PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;",
+            "PRAGMA foreign_keys=OFF; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;",
         )
         .map_err(db_error)?;
         let tx = conn
@@ -210,8 +210,14 @@ impl Store {
             tx.execute_batch(include_str!("../migrations/011_admission.sql"))
                 .map_err(db_error)?;
         }
+        if version <= 11 {
+            tx.execute_batch(include_str!("../migrations/012_staff_nic_reuse.sql"))
+                .map_err(db_error)?;
+        }
         integrity(&tx)?;
         tx.commit().map_err(db_error)?;
+        conn.execute_batch("PRAGMA foreign_keys=ON")
+            .map_err(db_error)?;
         let integrity: String = conn
             .query_row("PRAGMA quick_check", [], |r| r.get(0))
             .map_err(db_error)?;
@@ -475,6 +481,17 @@ fn integrity(conn: &Connection) -> Result<()> {
         .is_some()
     {
         return Err("Database has broken foreign keys. Preserve storage for recovery.".into());
+    }
+    let version: i64 = conn
+        .pragma_query_value(None, "user_version", |r| r.get(0))
+        .map_err(db_error)?;
+    if version >= 12 {
+        let duplicate: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM trainers t WHERE NOT EXISTS(SELECT 1 FROM staff_deletions d WHERE d.id=t.id) GROUP BY nic HAVING count(*)>1)", [], |r| r.get(0)).map_err(db_error)?;
+        if duplicate {
+            return Err(
+                "Duplicate staff NIC in current profiles. Preserve storage for recovery.".into(),
+            );
+        }
     }
     Ok(())
 }

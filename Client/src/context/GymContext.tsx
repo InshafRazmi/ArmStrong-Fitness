@@ -8,7 +8,7 @@ export interface DesktopData {
   retryBusinessTransaction: (input: {requestId: string;batchId: string;fingerprint: string}) => Promise<void>
   recoverInitialGymProfile: (input: import('../desktop/api').InitialProfileRecoveryInput) => Promise<void>
   recordStaffAttendance: (input: {requestId: string; staffOrCard: string; source: "NFC" | "Manual"}) => Promise<void>
-  recordNfcAttendance: (input: {requestId: string; memberOrCard: string; source: "NFC"}) => Promise<{entity?: "Staff" | "Member"; duplicate?: boolean}>
+  recordNfcAttendance: (input: {requestId: string; memberOrCard: string; source: "NFC"}) => Promise<import('../desktop/api').NfcAttendanceOutcome>
   saveTrainer: (input: import('../desktop/api').TrainerInput) => Promise<void>
   deleteStaff: (input: import('../desktop/api').StaffRemovalInput) => Promise<void>
   createTrainingCharge: (input: import('../desktop/api').TrainingChargeInput) => Promise<void>
@@ -20,7 +20,6 @@ export interface DesktopData {
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   unlockOffline: () => Promise<void>
-  archiveMember: (input: MemberRemovalInput) => Promise<void>
   deleteMember: (input: MemberRemovalInput) => Promise<void>
   voidExpense: (input: ExpenseVoidInput) => Promise<void>
   createInvoice: (input: InvoiceInput) => Promise<void>

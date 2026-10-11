@@ -604,6 +604,166 @@ fn inactive_staff_can_be_permanently_deleted_and_cannot_be_deleted_twice() {
 }
 
 #[test]
+fn deleted_staff_nic_and_card_can_be_reused_without_moving_payroll_or_attendance() {
+    let mut f = Fixture::new();
+    let member = f.register();
+    f.store
+        .receive_combined_payment(f.payment(&member, 1100075))
+        .unwrap();
+    f.store.pay_staff(f.payout()).unwrap();
+    let mut card = Fixture::staff_input();
+    card.id = Some(f.staff.clone());
+    card.version = Some(1);
+    card.nfc_id = Some("REUSABLE-STAFF-CARD".into());
+    f.store.save_trainer(card).unwrap();
+    let old_scan = f
+        .store
+        .record_nfc_attendance(AttendanceInput {
+            request_id: id(),
+            member_or_card: "REUSABLE-STAFF-CARD".into(),
+            source: "NFC".into(),
+        })
+        .unwrap();
+    assert_eq!(old_scan["name"], "Synthetic trainer");
+    assert_eq!(old_scan["type"], "Check-in");
+    let history = f.store.snapshot().unwrap();
+    assert!(f
+        .store
+        .save_trainer(Fixture::staff_input())
+        .unwrap_err()
+        .contains("Synthetic trainer"));
+    f.admin();
+    f.store
+        .delete_staff(StaffRemovalInput {
+            request_id: id(),
+            staff_id: f.staff.clone(),
+            version: 2,
+        })
+        .unwrap();
+    let mut fresh = Fixture::staff_input();
+    fresh.name = "Rejoined staff".into();
+    fresh.nfc_id = Some("REUSABLE-STAFF-CARD".into());
+    let new_id = f.store.save_trainer(fresh.clone()).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_ne!(new_id, f.staff);
+    assert_eq!(f.store.save_trainer(fresh).unwrap()["id"], new_id);
+    let scan = f
+        .store
+        .record_nfc_attendance(AttendanceInput {
+            request_id: id(),
+            member_or_card: "REUSABLE-STAFF-CARD".into(),
+            source: "NFC".into(),
+        })
+        .unwrap();
+    assert_ne!(scan["id"], old_scan["id"]);
+    let saved = f.store.snapshot().unwrap();
+    for key in [
+        "invoices",
+        "payments",
+        "trainingCharges",
+        "staffPayouts",
+        "expenses",
+    ] {
+        assert_eq!(saved[key], history[key], "Rejoining changed old {key}");
+    }
+    assert_eq!(saved["staffAttendance"][0]["staffId"], new_id);
+    assert_eq!(saved["staffAttendance"][1]["staffId"], f.staff);
+    assert!(f
+        .store
+        .save_trainer(Fixture::staff_input())
+        .unwrap_err()
+        .contains("Rejoined staff"));
+    assert!(f
+        .store
+        .conn
+        .execute(
+            "INSERT INTO trainers VALUES(?1,'Duplicate','0771234567','900000001V',0,0,0,1)",
+            [id()]
+        )
+        .is_err());
+    let backup = f.store.backup_envelope().unwrap();
+    let preview = f.store.preview_restore(backup).unwrap();
+    f.store
+        .restore_backup(preview["token"].as_str().unwrap().into())
+        .unwrap();
+    assert_eq!(f.store.snapshot().unwrap()["trainers"], saved["trainers"]);
+    let reopened = Store::open(&f.path).unwrap();
+    assert_eq!(
+        reopened.snapshot().unwrap()["staffAttendance"],
+        saved["staffAttendance"]
+    );
+    if let Ok(path) = std::env::var("ARMSTRONG_STAFF_REJOIN_FIXTURE_PATH") {
+        let requests = rows(
+            &f.store.conn,
+            "SELECT json(request_json) FROM business_batches ORDER BY ordinal",
+        )
+        .unwrap();
+        std::fs::write(path, serde_json::to_vec(&requests).unwrap()).unwrap();
+    }
+}
+
+#[test]
+fn schema_eleven_upgrade_keeps_profiles_history_and_frozen_queue_unchanged() {
+    let path = std::env::temp_dir().join(format!("armstrong-staff-nic-upgrade-{}.sqlite3", id()));
+    let conn = Connection::open(&path).unwrap();
+    for migration in [
+        include_str!("../migrations/001_foundation.sql"),
+        include_str!("../migrations/002_local_operations.sql"),
+        include_str!("../migrations/003_finance.sql"),
+        include_str!("../migrations/004_removal.sql"),
+        include_str!("../migrations/005_member_sync.sql"),
+        include_str!("../migrations/006_member_conflicts.sql"),
+        include_str!("../migrations/007_business_sync.sql"),
+        include_str!("../migrations/008_staff_training.sql"),
+        include_str!("../migrations/009_attendance_profiles.sql"),
+        include_str!("../migrations/010_staff_removal.sql"),
+        include_str!("../migrations/011_admission.sql"),
+    ] {
+        conn.execute_batch(migration).unwrap();
+    }
+    conn.execute("INSERT INTO metadata VALUES('device_id',?1)", [id()])
+        .unwrap();
+    conn.execute_batch("INSERT INTO trainers VALUES('old-staff','Existing staff','0771234567','900000001V',3000000,0,1,1); INSERT INTO staff_nfc_cards VALUES('old-card','old-staff','EXISTING-CARD','2026-10-01T00:00:00Z',NULL); INSERT INTO staff_attendance VALUES('old-event','old-staff','old-card','Existing staff','EXISTING-CARD','Check-in','NFC','2026-10-01','2026-10-01T00:00:00Z');").unwrap();
+    let staff = rows(
+        &conn,
+        "SELECT json_object('id',id,'nic',nic,'name',name,'version',version) FROM trainers",
+    )
+    .unwrap();
+    let activity = rows(&conn,"SELECT json_object('id',id,'trainer_id',trainer_id,'card_id',card_id) FROM staff_attendance").unwrap();
+    let dirty = rows(&conn,"SELECT json_object('table',table_name,'id',record_id,'after',after_json) FROM business_dirty ORDER BY table_name,record_id").unwrap();
+    drop(conn);
+    let migrated = Store::open(&path).unwrap();
+    assert_eq!(
+        rows(
+            &migrated.conn,
+            "SELECT json_object('id',id,'nic',nic,'name',name,'version',version) FROM trainers"
+        )
+        .unwrap(),
+        staff
+    );
+    assert_eq!(rows(&migrated.conn,"SELECT json_object('id',id,'trainer_id',trainer_id,'card_id',card_id) FROM staff_attendance").unwrap(),activity);
+    assert_eq!(rows(&migrated.conn,"SELECT json_object('table',table_name,'id',record_id,'after',after_json) FROM business_dirty ORDER BY table_name,record_id").unwrap(),dirty);
+    assert_eq!(
+        migrated
+            .conn
+            .pragma_query_value(None, "foreign_keys", |r| r.get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+    assert!(migrated
+        .conn
+        .execute(
+            "INSERT INTO trainers VALUES('duplicate','Other','0771234567','900000001V',0,0,1,1)",
+            []
+        )
+        .is_err());
+    drop(migrated);
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
 fn staff_removal_denies_unauthorized_stale_and_failed_outbox_without_partial_changes() {
     let mut f = Fixture::new();
     f.register();

@@ -21,14 +21,14 @@ export function StaffRemovalDialog({ staff, onClose }: { staff: Trainer; onClose
     } catch (error) { setError(errorText(error)) }
     finally { setBusy(false) }
   }
-  return <Modal title="Delete staff" onClose={() => { if (!busy) onClose() }}>
+  return <Modal title="Permanently delete staff" onClose={() => { if (!busy) onClose() }}>
     <p>{staff.name}</p>
     <p className="form-note">Permanently remove this profile from active and inactive staff lists, revoke its NFC card and clear current member assignments. Salary payments, training invoices, attendance and unpaid earnings remain. Use Show deleted staff to review retained history and settle remaining earnings. This profile cannot be reactivated.</p>
     <p className="form-note">{staff.assignedMembers} current member assignment(s) will be cleared. Existing invoices keep their recorded trainer and amounts.</p>
     {!authorization.allowed && <p role="note" className="foundation-warning">{authorization.reason}</p>}
     <form className="modal-form" onSubmit={event => void submit(event)}><fieldset className="foundation-fields" disabled={busy}>
       <label className="confirmation-choice"><input required type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} aria-label="I confirm deleting this staff profile"/><span><b>Confirmation</b>I confirm permanently deleting {staff.name}.</span></label>
-      <button className="primary" disabled={!authorization.allowed || !confirmed}>{busy ? 'Saving…' : 'Confirm staff deletion'}</button>
+      <button className="primary" disabled={!authorization.allowed || !confirmed}>{busy ? 'Saving…' : 'Confirm permanent deletion'}</button>
     </fieldset>{error && <div role="alert" className="login-error">{error}</div>}</form>
   </Modal>
 }

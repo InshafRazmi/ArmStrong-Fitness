@@ -131,7 +131,7 @@ export function validateState(s: State) {
     const ordered = periods.filter(p => p.member_id === member).sort((a, b) => String(a.starts_on).localeCompare(String(b.starts_on)));
     for (let i = 0; i < ordered.length; i++) if (String(ordered[i].ends_on) < String(ordered[i].starts_on) || (i && String(ordered[i - 1].ends_on) >= String(ordered[i].starts_on))) conflict('membership_overlap');
   }
-  unique(rows('trainers').map(r=>r.nic));
+  unique(rows('trainers').filter(r=>!get('staff_deletions',r.id)).map(r=>r.nic));
   const payments = rows('payments'), allocations = rows('payment_allocations'), releases = rows('allocation_reversals');
   unique(payments.filter(r => r.reverses_id !== null).map(r => r.reverses_id));
   unique(rows('invoices').filter(r => r.membership_period_id !== null).map(r => r.membership_period_id));

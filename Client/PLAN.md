@@ -1,5 +1,21 @@
 # Core release plan
 
+## Authorized version 0.1.10 release — 2026-10-11
+
+The user requests completing and publishing the latest version. Commit and push
+the staff/NFC/dashboard changes, build and verify signed Windows and Arch Linux
+0.1.10 packages, deploy the schema-12 API and verify the public updater/download.
+Server migration 10 and the user-authorized ArmStrong Fitness data reset are
+already applied. Preserve the protected cloud backup, unrelated gyms, earlier
+releases and local records. Previously revoked desktops require the documented
+fresh profile with their old data directory retained as a backup; do not silently
+erase installed databases. The existing AttendancePage formatting is retained
+in the feature file and included in the authorized source release.
+
+Resolve the isolated live-test Auth lock by applying schema DDL before the fixture
+transaction; every synthetic business fixture must still roll back. Render
+deployment access is being requested while packaging work continues.
+
 ## First-sign-in retained profile repair — 2026-10-09
 
 The current screenshot includes the initial verified sign-in user reference,

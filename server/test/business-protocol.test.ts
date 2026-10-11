@@ -8,6 +8,18 @@ const member = { id: memberId, name: 'Member', phone: '0771234567', email: '', n
 const plan = { id: planId, name: 'Monthly', duration_months: 1, price_minor: 600_000, active: 1, version: 1 };
 function batch(changes: unknown[]) { return { protocolVersion: 2, operationId: randomUUID(), deviceId: randomUUID(), actorSubject: null, operationIds: [], changes }; }
 const change = (table: string, after: any, before: any = null) => ({ table, id: String(after.id ?? after.payment_id ?? after.invoice_id ?? after.expense_id), before, after });
+test('staff NIC stays reserved while inactive and is reusable only after permanent deletion', () => {
+  const staff={id:randomUUID(),name:'Original staff',phone:'0771234567',nic:'900000001V',salary_minor:1000,training_fee_minor:0,active:0,version:1}
+  const rejoined={...staff,id:randomUUID(),name:'New staff profile',active:1}
+  const actor={id:randomUUID(),subject:randomUUID(),email:'admin@example.invalid',display_name:'Administrator',active:0,version:1}
+  const state=stateFrom([{table_name:'trainers',record_id:staff.id,data:staff},{table_name:'users',record_id:actor.id,data:actor}])
+  assert.throws(()=>applyChanges(state,parseBatch(batch([change('trainers',rejoined)])).changes),/business_unique_conflict/)
+  const deletion={id:staff.id,deleted_at:'2026-10-11T00:00:00Z',actor_user_id:actor.id}
+  applyChanges(state,parseBatch(batch([change('staff_deletions',deletion),change('trainers',rejoined)])).changes)
+  assert.equal(state.get('trainers')!.size,2)
+  assert.deepEqual(state.get('trainers')!.get(staff.id),staff)
+  assert.throws(()=>applyChanges(state,parseBatch(batch([change('trainers',{...staff,active:1,version:2},staff)])).changes),/deleted_staff_immutable/)
+})
 test('business row contracts are identical in native and server packages', { skip: !existsSync(new URL('../../Client/src-tauri/business-schema.json', import.meta.url)) && 'Standalone API source; native contract checked by desktop CI' }, () => {
   assert.equal(readFileSync(new URL('../src/business-schema.json', import.meta.url), 'utf8'), readFileSync(new URL('../../Client/src-tauri/business-schema.json', import.meta.url), 'utf8'));
 });

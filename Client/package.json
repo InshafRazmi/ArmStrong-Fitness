@@ -1,7 +1,7 @@
 {
   "name": "armstrong-gym-ui",
   "private": true,
-  "version": "0.1.9",
+  "version": "0.1.10",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,7 @@
     "desktop:windows:build": "node scripts/windows-installer.mjs",
     "desktop:arch:build": "node scripts/arch-package.mjs",
     "test:desktop": "node tests/desktop-smoke.mjs",
-    "test:ui": "node tests/desktop-adapter.test.mjs && node tests/interface-render.mjs"
+    "test:ui": "node tests/desktop-adapter.test.mjs && node tests/interface-render.mjs && node tests/nfc-feedback.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/plugin-process": "2.3.0",

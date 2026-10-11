@@ -75,9 +75,9 @@ pub(super) fn assign_staff_card(
     if current.as_deref().unwrap_or("") == uid {
         return Ok(());
     }
-    let duplicate: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM nfc_cards WHERE uid=?1 AND revoked_at IS NULL) OR EXISTS(SELECT 1 FROM staff_nfc_cards WHERE uid=?1 AND revoked_at IS NULL AND trainer_id<>?2)",params![uid,staff],|r|r.get(0)).map_err(db_error)?;
-    if !uid.is_empty() && duplicate {
-        return Err("This NFC card is already assigned to a member or staff".into());
+    let duplicate: Option<(String, String)> = tx.query_row("SELECT 'member',m.name FROM nfc_cards c JOIN members m ON m.id=c.member_id WHERE c.uid=?1 AND c.revoked_at IS NULL UNION ALL SELECT 'staff',t.name FROM staff_nfc_cards c JOIN trainers t ON t.id=c.trainer_id WHERE c.uid=?1 AND c.revoked_at IS NULL AND c.trainer_id<>?2 LIMIT 1",params![uid,staff],|r|Ok((r.get(0)?,r.get(1)?))).optional().map_err(db_error)?;
+    if let Some((kind, owner)) = duplicate.filter(|_| !uid.is_empty()) {
+        return Err(format!("This NFC card is already assigned to {kind}: {owner}. Edit that profile and clear its NFC card before reusing it."));
     }
     let now = Utc::now().to_rfc3339();
     tx.execute(

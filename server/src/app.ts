@@ -21,7 +21,7 @@ export function createApp(service: Service, verify: (header: unknown) => Promise
   app.post('/v1/members/push', async request => service.push(await scope(request), request.body));
   app.get('/v1/members/changes', async request => service.pull(await scope(request), cursor((request.query as any).after)));
   if (service.pushBusiness && service.pullBusiness) {
-    app.get('/v2/health', async () => ({ status: 'ok', service: 'armstrong-gym-api', protocolVersion: 2, businessSchemaVersion: 11 }));
+    app.get('/v2/health', async () => ({ status: 'ok', service: 'armstrong-gym-api', protocolVersion: 2, businessSchemaVersion: 12 }));
     app.post('/v2/business/push', { bodyLimit: REQUEST_LIMIT }, async request => service.pushBusiness!(await scope(request), request.body));
     app.get('/v2/business/changes', async request => service.pullBusiness!(await scope(request), cursor((request.query as any).after)));
   }

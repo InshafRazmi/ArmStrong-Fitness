@@ -327,7 +327,7 @@ impl Store {
             None,
             json!({"id":event,"memberId":member_id,"cardId":card_id,"name":name,"cardUid":card_uid,"type":kind,"source":input.source,"businessOn":day,"occurredAt":instant}),
         )?;
-        let result = json!({"id":event,"duplicate":false});
+        let result = json!({"id":event,"duplicate":false,"name":name,"type":kind});
         receipt(&tx, "attendance", &input.request_id, &input, &result)?;
         tx.commit().map_err(db_error)?;
         Ok(result)

@@ -1,5 +1,53 @@
 # Status — 2026-10-11
 
+## Current update: version 0.1.10 release in progress
+
+Staff can now be permanently deleted with payroll and attendance history
+retained; a deleted staff member's NIC can be reused, with duplicate messages
+identifying the existing staff owner. The production schema guard now enforces
+uniqueness among current staff, and a rollback-only live probe confirmed that a
+current duplicate is refused while a deleted member's NIC can be reused. The
+cause of the earlier “staff already exists” message was a database unique index
+that reserved the NIC even after deletion; the new deferred guard checks current
+staff profiles instead. Dashboard attendance includes staff, and Receive payment
+uses the same compact primary-button treatment as Pay salary. Member deactivation
+and archive actions are absent. The sync indicator stays Online during a sync
+attempt and turns Offline after connection/sync failure. A successful unique NFC
+attendance save gets a separate animated confirmation and short two-tone sound;
+duplicate scans do not replay it.
+
+The user-authorized production reset was completed for ArmStrong Fitness only.
+All 175 business records (including invoices, payment receipts, attendance,
+audit and finance history), 93 sync operations/changes and 190 references were
+removed; legacy member history was empty. The login and gym registration remain,
+all six old device registrations are revoked, and sync sequences are reset.
+The two other gyms were verified unchanged. Before deletion, every live target
+row matched the protected backup exactly; the backup is
+`production-recovery/armstrong-before-production-reset-20261011.json` (mode
+0600, SHA-256
+`820adea6e36b6da7b1fa75ff595806309d6017c7bcd638b54222b7f2110f253f`).
+Production migration 10 is applied and its runtime checksum ledger matches
+source `f204fbc9a7de034b5091034b1c199a04b39c7fe319c98923a819b2343b44d57a`.
+
+Checks pass: frontend production and desktop builds; all 25 adapter tests and
+rendered UI/NFC feedback checks; backend typecheck and 85/86 unit tests (one
+existing skip); Rust library tests (220 passed, three ignored) and strict
+Clippy. The isolated real Auth/Postgres staff-rejoin test now passes. Its earlier
+timeout was caused by holding schema DDL locks on `auth.users` during online
+identity verification; migration 10 is applied to the isolated project before
+the test transaction, and every synthetic fixture still rolls back. Current
+0.1.10 native desktop forms and a separate process-restart check also pass.
+Production's SQL uniqueness/reuse behavior was separately verified using
+synthetic rows that rolled back.
+
+The user explicitly requests publication. App/Cargo/Tauri/Arch versions are
+0.1.10 and the Windows workflow builds a draft signed release for verification.
+Render deployment access is pending; production sync requires the matching
+schema-12 API. Previously revoked computers need the documented fresh local
+profile, retaining their old data directory as a backup, in
+[production reset](docs/PRODUCTION_RESET.md). Existing published 0.1.9 installers
+are preserved.
+
 ## Current update: version 0.1.9 published
 
 Member-table Receive actions match the compact Edit buttons. The payment dialog

@@ -532,6 +532,11 @@ fn verify_file(path: &Path, version: i64) -> Result<()> {
             .execute_batch(include_str!("../migrations/011_admission.sql"))
             .map_err(db_error)?;
     }
+    if version >= 12 {
+        expected
+            .execute_batch(include_str!("../migrations/012_staff_nic_reuse.sql"))
+            .map_err(db_error)?;
+    }
     if schema(&conn)? != schema(&expected)? {
         return Err("Backup contains an unrecognized schema, index or trigger".into());
     }

@@ -1,5 +1,13 @@
 # Acceptance-build delivery
 
+Version 0.1.10 is the current release candidate: permanent staff deletion with
+NIC reuse, staff dashboard attendance, matching payment shortcuts, stable online
+status and NFC success animation/sound. It requires server migration 10 and the
+schema-12 API. The production data reset is complete; previously enrolled
+computers need the [one-time fresh profile](PRODUCTION_RESET.md), with their old
+local data directory retained as a backup. Packaging/publication and API rollout
+are in progress. See [current status](../STATUS.md).
+
 Version [0.1.9](https://github.com/InshafRazmi/ArmStrong-Fitness/releases/tag/v0.1.9)
 is published with signed Windows and Arch Linux x86_64 packages. It adds
 five-second automatic sync/dashboard refresh, compact Receive payment actions,

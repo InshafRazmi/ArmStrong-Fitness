@@ -183,15 +183,16 @@ impl Store {
             return Ok(previous);
         }
         let staff_id = input.id.clone().unwrap_or_else(id);
-        let duplicate: bool = tx
+        let duplicate: Option<(String, bool)> = tx
             .query_row(
-                "SELECT EXISTS(SELECT 1 FROM trainers WHERE nic=?1 AND id<>?2)",
+                "SELECT name,active FROM trainers t WHERE nic=?1 AND id<>?2 AND NOT EXISTS(SELECT 1 FROM staff_deletions d WHERE d.id=t.id) LIMIT 1",
                 params![nic, staff_id],
-                |r| r.get(0),
+                |r| Ok((r.get(0)?,r.get(1)?)),
             )
+            .optional()
             .map_err(db_error)?;
-        if duplicate {
-            return Err("A staff member with this NIC number already exists".into());
+        if let Some((owner, active)) = duplicate {
+            return Err(format!("A staff member with this NIC number already exists: {owner} ({}). Edit the existing profile, or permanently delete it before creating a new one.", if active { "Active" } else { "Inactive" }));
         }
         if input.id.is_some() {
             let changed=tx.execute("UPDATE trainers SET name=?1,phone=?2,nic=?3,salary_minor=?4,training_fee_minor=?5,active=?6,version=version+1 WHERE id=?7 AND version=?8",params![name,phone,nic,input.salary_minor,input.training_fee_minor,input.active,staff_id,input.version]).map_err(db_error)?;

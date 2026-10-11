@@ -26,7 +26,7 @@ test('LIVE Supabase Auth/PostgreSQL: native staff billing, combined collection, 
   let phase='connection and isolated fixture';
   try {
     db=await pool.connect();await db.query('BEGIN');
-    assert.equal((await db.query("SELECT count(*)::int AS n FROM pg_catalog.pg_indexes WHERE schemaname='armstrong' AND indexname='trainer_nic_per_gym'")).rows[0].n,1,'Apply staff migration to isolated project first');
+    assert.equal((await db.query("SELECT count(*)::int AS n FROM pg_catalog.pg_trigger WHERE tgrelid='armstrong.business_records'::regclass AND tgname='staff_nic_unique'")).rows[0].n,1,'Apply staff NIC migration to isolated project first');
     const gym=randomUUID(),device=batches[0].deviceId,second=randomUUID(),secret=randomBytes(32).toString('hex');
     await db.query("INSERT INTO armstrong.gyms(id,name) VALUES($1,'Synthetic staff acceptance')",[gym]);
     await db.query("INSERT INTO armstrong.staff(gym_id,user_id,display_name,role) VALUES($1,$2,'Synthetic Administrator','Administrator')",[gym,identity.userId]);
@@ -69,7 +69,8 @@ test('LIVE Supabase Auth/PostgreSQL: native staff billing, combined collection, 
     await db.query('ROLLBACK TO SAVEPOINT staff_sql_guard');
     await db.query('SAVEPOINT staff_nic_guard');
     const copiedTrainerId=randomUUID();
-    await assert.rejects(db.query("INSERT INTO armstrong.business_records(gym_id,table_name,record_id,data) VALUES($1,'trainers',$2,$3)",[gym,copiedTrainerId,JSON.stringify({...trainer,id:copiedTrainerId})]),/unique/);
+    await db.query('SET CONSTRAINTS ALL IMMEDIATE');
+    await assert.rejects(db.query("INSERT INTO armstrong.business_records(gym_id,table_name,record_id,data) VALUES($1,'trainers',$2,$3)",[gym,copiedTrainerId,JSON.stringify({...trainer,id:copiedTrainerId})]),/NIC number already exists/);
     await db.query('ROLLBACK TO SAVEPOINT staff_nic_guard');
     const persisted=(await db.query("SELECT data FROM armstrong.business_records WHERE gym_id=$1 AND table_name='training_charges'",[gym])).rows[0].data;
     assert.equal(persisted.fee_minor,500025,'Past training rate remains unchanged by staff edits');

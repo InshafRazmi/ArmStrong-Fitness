@@ -31,8 +31,12 @@ export async function verifyBusinessReadiness(client: { query(sql: string, value
       AND pg_catalog.pg_get_constraintdef(oid) LIKE '%admission_settings%') AS admission_contract,
     (SELECT count(*)=2 FROM pg_catalog.pg_indexes WHERE schemaname='armstrong'
       AND indexname IN ('active_attendance_card_per_gym','active_staff_card_per_gym')) AS attendance_card_guards,
-    EXISTS(SELECT 1 FROM pg_catalog.pg_indexes WHERE schemaname='armstrong'
-      AND indexname='trainer_nic_per_gym') AS staff_nic_guard,
+    (EXISTS(SELECT 1 FROM pg_catalog.pg_index ix JOIN pg_catalog.pg_class idx ON idx.oid=ix.indexrelid
+        WHERE idx.relnamespace='armstrong'::regnamespace AND idx.relname='trainer_nic_lookup' AND NOT ix.indisunique)
+      AND EXISTS(SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid='armstrong.business_records'::regclass
+        AND tgname='staff_nic_unique' AND tgdeferrable AND tginitdeferred AND tgenabled='O')
+      AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_index ix JOIN pg_catalog.pg_class idx ON idx.oid=ix.indexrelid
+        WHERE idx.relnamespace='armstrong'::regnamespace AND idx.relname='trainer_nic_per_gym' AND ix.indisunique)) AS staff_nic_guard,
     (SELECT count(*)=2 FROM pg_catalog.pg_constraint WHERE conrelid='armstrong.business_records'::regclass
       AND conname IN ('business_record_key_matches','business_identity_reference_only') AND convalidated) AS history_guards,
     (SELECT count(*)=3 FROM pg_catalog.pg_trigger WHERE NOT tgisinternal AND tgenabled<>'D'

@@ -47,6 +47,7 @@ export interface RegisterMemberInput extends Pick<Member, 'name' | 'phone' | 'em
 export interface PeriodInput { memberId: string; planId: string; startsOn: string; endsOn: string }
 export interface ProductInput { requestId: string; id?: string; version?: number; name: string; sku: string; costMinor: number; priceMinor: number; reorderLevel: number; openingStock: number }
 export interface WriteOutcome { id?: string; duplicate?: boolean }
+export interface NfcAttendanceOutcome extends WriteOutcome { entity: 'Staff' | 'Member'; name?: string; type?: 'Check-in' | 'Check-out' }
 export interface FileResult { path: string; sha256?: string; rows?: number }
 export interface DeviceApproval { deviceId: string; sqlitePath: string; secretSha256: string }
 export interface DesktopAuthStatus { requiresLogin: boolean; configured: boolean; authenticated: boolean; canWrite: boolean; userName: string | null; role: string | null; expiresAt: string | null; offlineUntil?: string | null; offline?: boolean; reason: string }
@@ -84,7 +85,7 @@ export const saveProfile = (input: Profile) => invoke<WriteOutcome>('save_gym_pr
 export const saveProduct = (input: ProductInput) => invoke<WriteOutcome>('save_product', { input })
 export const recordAttendance = (input: { requestId: string; memberOrCard: string; source: 'NFC' | 'Manual' }) => invoke<WriteOutcome>('record_attendance', { input })
 export const recordStaffAttendance = (input: { requestId: string; staffOrCard: string; source: 'NFC' | 'Manual' }) => invoke<WriteOutcome>('record_staff_attendance', { input })
-export const recordNfcAttendance = (input: { requestId: string; memberOrCard: string; source: 'NFC' }) => invoke<WriteOutcome & {entity: 'Staff' | 'Member'}>('record_nfc_attendance', { input })
+export const recordNfcAttendance = (input: { requestId: string; memberOrCard: string; source: 'NFC' }) => invoke<NfcAttendanceOutcome>('record_nfc_attendance', { input })
 export const recordPayment = (input: { requestId: string; memberId: string; amountMinor: number; method: 'Cash' | 'Card' | 'Transfer' }) => invoke<WriteOutcome>('record_payment', { input })
 export const recordExpense = (input: { requestId: string; title: string; category: string; amountMinor: number; method: 'Cash' | 'Card' | 'Bank' }) => invoke<WriteOutcome>('record_expense', { input })
 export const adjustStock = (input: { requestId: string; productId: string; amount: number }) => invoke<WriteOutcome>('adjust_stock', { input })

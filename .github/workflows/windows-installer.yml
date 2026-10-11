@@ -113,7 +113,7 @@ jobs:
           tauriScript: cargo tauri
           tagName: ${{ inputs.release_tag || github.ref_name }}
           releaseName: ArmStrong Fitness ${{ inputs.release_tag || github.ref_name }}
-          releaseBody: Signed Windows update. Adds five-second automatic synchronization and dashboard refresh, compact member payment actions and invoice checkboxes, and shorter interface text. Financial history and native outage retry safeguards are preserved. Requires the existing schema 11 API; no new backend migration is needed.
+          releaseBody: Signed Windows update. Adds staff attendance to the dashboard, stable Online/Offline status, matching Receive payment and Pay salary buttons, successful NFC scan animation and sound, and NIC reuse after permanent staff deletion. Member archive/deactivate actions are removed. Requires server migration 10 and the schema 12 API. The approved production data reset requires a fresh local profile on previously enrolled computers; see Client/docs/PRODUCTION_RESET.md.
           releaseDraft: true
           prerelease: false
           updaterJsonPreferNsis: true

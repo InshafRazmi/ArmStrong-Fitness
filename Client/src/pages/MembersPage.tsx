@@ -49,9 +49,9 @@ export function MembersPage() {
        }, [Boolean(desktop)]);
        const plans = data.plans.filter(plan => plan.status === 'Active');
        const requestId = useRef('');
-       const [showArchived, setShowArchived] = useState(false);
-       const [removal, setRemoval] = useState<{ member: Member; kind: 'archive' | 'delete' } | null>(null);
-       const memberRows = desktop && showArchived ? desktopMembers(desktop.snapshot!, true).filter(member => !member.active) : data.members;
+       const [showHistory, setShowHistory] = useState(false);
+       const [removal, setRemoval] = useState<Member | null>(null);
+       const memberRows = desktop && showHistory ? desktopMembers(desktop.snapshot!, true).filter(member => !member.active) : data.members;
        const [periodMember, setPeriodMember] = useState<Member | null>(null);
        const [busy, setBusy] = useState(false);
        const [error, setError] = useState("");
@@ -170,7 +170,7 @@ export function MembersPage() {
                      />
                      {desktop && !desktop.snapshot!.removalAuthorization.allowed && <p className="form-note">{desktop.snapshot!.removalAuthorization.reason}</p>}
                      <div className="toolbar">
-                            {desktop && <button className="secondary" onClick={() => setShowArchived(!showArchived)}>{showArchived ? 'Show active members' : 'Show archived members'}</button>}
+                            {desktop && desktop.snapshot!.members.some(member => !member.active) && <button className="secondary" onClick={() => setShowHistory(!showHistory)}>{showHistory ? 'Show current members' : 'Show past members'}</button>}
                             <label className="search grow">
                                    <Icon name="search" size={17} />
                                    <input
@@ -248,7 +248,7 @@ export function MembersPage() {
                                                         {desktop && <td><span className={(desktop.snapshot!.financialAccounts.find(a => a.memberId === m.id)?.outstandingMinor ?? 0) > 0 ? 'tag amber' : 'tag green'}>{money((desktop.snapshot!.financialAccounts.find(a => a.memberId === m.id)?.outstandingMinor ?? 0) / 100)}</span></td>}
                                                         <td>
                                                                <div className="member-actions">
-                                                               {desktop && m.active !== false && <button className="secondary compact" aria-label="Receive payment" title="Receive payment" onClick={() => setReceiveFor(m.id)}><Icon name="money" size={12}/>Receive</button>}
+                                                               {desktop && m.active !== false && <button className="primary compact" aria-label="Receive payment" title="Receive payment" onClick={() => setReceiveFor(m.id)}><Icon name="money" size={12}/>Receive</button>}
                                                                <button
                                                                       className="secondary compact"
                                                                       disabled={m.active === false}
@@ -261,8 +261,7 @@ export function MembersPage() {
                                                                       Edit
                                                                </button>
                                                                {desktop && <><button className="secondary compact" onClick={() => setPeriodMember(m)}>{m.active === false ? 'Membership history' : 'Membership dates'}</button>
-                                                               {m.active !== false && <button className="secondary compact" onClick={() => setRemoval({ member: m, kind: 'archive' })}>Archive / Deactivate</button>}
-                                                               <button className="secondary compact" onClick={() => setRemoval({ member: m, kind: 'delete' })}>Delete permanently</button>
+                                                               <button className="secondary compact danger-action" onClick={() => setRemoval(m)}>Delete permanently</button>
                                                                </>}
                                                                </div>
                                                         </td>
@@ -270,9 +269,9 @@ export function MembersPage() {
                                           ))}
                                    </tbody>
                             </table>
-                            {!rows.length && <p className="foundation-empty">{q ? "No matching members." : showArchived ? "No archived members." : "No active members recorded. Add your first member."}</p>}
+                            {!rows.length && <p className="foundation-empty">{q ? "No matching members." : showHistory ? "No past members." : "No members recorded. Add your first member."}</p>}
                      </div>
-                     {removal && <MemberRemovalDialog member={removal.member} kind={removal.kind} onClose={() => setRemoval(null)}/>}
+                     {removal && <MemberRemovalDialog member={removal} onClose={() => setRemoval(null)}/>}
                      {(adding || editing) && (
                             <Modal
                                    title={

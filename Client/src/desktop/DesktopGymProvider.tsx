@@ -11,6 +11,8 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState('')
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [syncing, setSyncing] = useState(false)
+  const [networkOnline, setNetworkOnline] = useState(() => globalThis.navigator?.onLine ?? true)
+  const [syncFailed, setSyncFailed] = useState(false)
   const syncRunning = useRef(false)
   const renewing = useRef(false)
   const generation = useRef(0)
@@ -39,13 +41,22 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
     try {
       await api.desktopRenewSession()
       const outcome = await api.synchronizeMembers()
+      if (outcome.state === 'failed' || outcome.state === 'blocked') setSyncFailed(true)
+      else if (outcome.state === 'complete' || outcome.state === 'yielded') setSyncFailed(false)
       if (manual) notify(outcome.reason, outcome.state === 'complete' ? 'success' : outcome.state === 'failed' || outcome.state === 'blocked' ? 'error' : 'info')
       await refresh()
     } catch (error) {
+      setSyncFailed(true)
       if (manual) notify(errorText(error), 'error')
       await refresh().catch(() => {})
     } finally { syncRunning.current = false; setSyncing(false) }
   }, [refresh, notify])
+  useEffect(() => {
+    const on = () => setNetworkOnline(true)
+    const off = () => setNetworkOnline(false)
+    window.addEventListener('online', on); window.addEventListener('offline', off)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [])
   useEffect(() => {
     if (!authStatus?.configured) return
     const renew = async () => {
@@ -95,7 +106,7 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
     return id
   }
   const value: GymContextValue = {
-    mode: 'desktop', data: native ? desktopData(native) : emptyDesktopData(), online: Boolean(memberSyncAvailable && (native?.businessSync ?? native?.memberSync)?.lastSuccessOn && !(native?.businessSync ?? native?.memberSync)?.lastError && Date.now() - Date.parse((native?.businessSync ?? native?.memberSync)!.lastSuccessOn!) < 90_000), syncing, toasts, notify,
+    mode: 'desktop', data: native ? desktopData(native) : emptyDesktopData(), online: Boolean(networkOnline && !syncFailed && memberSyncAvailable && (native?.businessSync ?? native?.memberSync)?.lastSuccessOn && !(native?.businessSync ?? native?.memberSync)?.lastError && Date.now() - Date.parse((native?.businessSync ?? native?.memberSync)!.lastSuccessOn!) < 90_000), syncing, toasts, notify,
     desktop: {
       authStatus,
       login: async (email, password) => { const status = await api.desktopLogin(email, password); await refresh(); if (status.reason) notify(status.reason, 'info') },
@@ -125,7 +136,6 @@ export function DesktopGymProvider({ children }: { children: ReactNode }) {
         notify(result.retryOperationId ? 'Local member version retained. A fresh retry is pending server confirmation.' : 'Recorded server member version applied in SQLite. Review history retained.')
         await afterCommit()
       },
-      archiveMember: input => commit(() => api.archiveMember(input), 'Member archived in SQLite. History retained.'),
       deleteMember: input => commit(() => api.deleteMember(input), 'Member permanently removed. Past payments and attendance retained.'),
       voidExpense: input => commit(() => api.voidExpense(input), 'Expense void committed in SQLite. Original retained.'),
       createInvoice: input => commit(() => api.createInvoice(input), 'Invoice saved in SQLite.'),

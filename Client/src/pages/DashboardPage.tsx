@@ -13,7 +13,7 @@ export function DashboardPage({navigate}:{navigate:(p:Page)=>void}) {
   const today = desktop?.snapshot?.today ?? colomboToday()
   const recentAttendance = data.attendance.filter(row => row.date === today && !row.voidsId).slice(0, 4)
   const memberCounts = attendanceTotals(data.attendance.map(row=>({...row,personId:row.memberId})),today)
-  const staffRows = (desktop?.snapshot?.staffAttendance ?? []).filter(row => row.businessOn === today)
+  const staffRows = (desktop?.snapshot?.staffAttendance ?? []).filter(row => row.businessOn === today).sort((a,b) => b.occurredAt.localeCompare(a.occurredAt))
   const staffCount = attendanceTotals(staffRows.map(row=>({...row,personId:row.staffId,date:row.businessOn})),today).total
   const expiringMembers = data.members.filter(row => row.status === 'Expiring').sort((a, b) => a.expiry.localeCompare(b.expiry))
   const income = desktop?.snapshot
@@ -29,7 +29,7 @@ export function DashboardPage({navigate}:{navigate:(p:Page)=>void}) {
   const bars = desktop ? counts.map(count=>count/Math.max(1,...counts)*116) : [28,41,31,46,52,64,43,68,74,55,70,82,63,88,94,72,84,100,76,91,106,88,79,98,112,92,116,83]
   return <div className="dashboard-page"><div className="kpi-grid">
     <Kpi label="Total Members" value={String(data.members.length)} note="Stored locally" icon="users"/>
-    <div className="card kpi attendance-kpi"><div className="icon-box"><Icon name="signal"/></div><div><span>Today’s Attendance</span><strong>{memberCounts.total}</strong><div className="kpi-attendance-counts"><span>Male <b>{memberCounts.male}</b></span><span>Female <b>{memberCounts.female}</b></span></div>{memberCounts.unspecified > 0 && <small>Unspecified {memberCounts.unspecified}</small>}</div></div>
+    <div className="card kpi attendance-kpi"><div className="icon-box"><Icon name="signal"/></div><div><span>Today’s Attendance</span><strong>{memberCounts.total}</strong><div className="kpi-attendance-counts"><span>Male <b>{memberCounts.male}</b></span><span>Female <b>{memberCounts.female}</b></span><span>Staff <b>{staffCount}</b></span></div>{memberCounts.unspecified > 0 && <small>Unspecified {memberCounts.unspecified}</small>}</div></div>
     <Kpi label="Expiring Soon" value={String(expiringMembers.length)} note="Action required" icon="card"/>
     <Kpi label="Today’s Income" value={money(income)} note={desktop?'Payments + retail sales':'Payments recorded'} icon="money"/>
   </div><div className="dashboard-grid">

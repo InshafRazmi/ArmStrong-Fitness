@@ -20,3 +20,4 @@ server/armstrong-*-source.zip.sha256
 Client/dist-linux/
 Client/dist-windows/
 server/supabase/.temp/
+production-recovery/

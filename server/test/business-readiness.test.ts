@@ -24,6 +24,6 @@ test('protocol-2 deployment health identifies all-module routes without account 
   try {
     const result = await app.inject({ url:'/v2/health' });
     assert.equal(result.statusCode,200);
-    assert.deepEqual(result.json(),{status:'ok',service:'armstrong-gym-api',protocolVersion:2,businessSchemaVersion:11});
+    assert.deepEqual(result.json(),{status:'ok',service:'armstrong-gym-api',protocolVersion:2,businessSchemaVersion:12});
   } finally { await app.close(); }
 });
